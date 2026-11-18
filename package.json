@@ -1,0 +1,23 @@
+{
+  "name": "hermandad-citas",
+  "version": "1.1.0",
+  "description": "Sistema de gestión de citas – Instituto de Caridad Hermandad de Dolores (Ingeniería de Software, UDD)",
+  "private": true,
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "test": "node --test",
+    "test:postgres-embebido": "node scripts/verificar-postgres-embebido.js",
+    "start:json": "node src/server.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "pg": "^8.13.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16"
+  }
+}
