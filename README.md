@@ -128,11 +128,14 @@ La prueba nativa PostgreSQL conserva el comando original con `PSQL_TEST_ARGS`; c
 ## Verificar
 
 ```bash
-npm test
+npm test                      # pruebas automáticas
+npm run humo                  # recorre toda la página con cada rol y avisa si alguna se cae
 npm run test:postgres-embebido
 ```
 
-En la entrega: **55 pruebas correctas y 1 omitida** (requiere servidor PostgreSQL externo). La comprobación adicional usa PostgreSQL embebido PGlite y valida los repositorios SQL, credenciales, bloques, duración, doble reserva, usuarios, lugares, especialidades, equipo multisedes y modificación de bloques. No sustituye la validación de despliegue con un servidor PostgreSQL externo.
+Validación local del 18 de noviembre de 2026 en macOS. **97 pruebas aprobadas, 0 fallidas y 1 omitida** (requiere servidor PostgreSQL externo). La comprobación adicional usa PostgreSQL embebido PGlite y valida los repositorios SQL, credenciales, bloques, duración, doble reserva, usuarios, lugares, especialidades, equipo multisedes y modificación de bloques. No sustituye la validación de despliegue con un servidor PostgreSQL externo.
+
+La matriz quedó con **37 casos aprobados, 1 fallido (CP-28) y 8 pendientes de ejecución**. CP-23 aprobó las exportaciones y CP-36 aprobó la encuesta voluntaria de agendamiento.
 
 También se revisaron en navegador el ingreso por rol, calendario y panel flotante, reportes, pacientes, registro de llegada y variante Telemedicina, en escritorio a 1440 y 1280 píxeles. Se validó la estructura de Excel, la firma PNG y la renderización de PDF.
 
