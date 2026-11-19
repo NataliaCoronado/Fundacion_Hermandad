@@ -24,10 +24,11 @@ test("reportes: sección Encuestas con agendamiento y atención por separado, nu
     await s.c.encuestas.registrarAgendamiento({ idCita: 2, nota: 5 });
     await s.c.agendamiento.registrarAsistencia(1, true);
     await s.c.encuestas.registrar({ rut: "11111111-1", nota: 3 });
-    const h = await (await s.get(`/admin/reportes?${AÑO}`)).text();
-    assert.match(h, /<h2 class="report-section">Encuestas<\/h2>/);
-    assert.match(h, /Encuesta de agendamiento · cómo fue reservar · 2 respuesta\(s\), promedio 4,5 de 5/);
-    assert.match(h, /Encuesta de atención · después de la consulta · 1 respuesta\(s\), promedio 3 de 5/);
+    const h = await (await s.get(`/admin/reportes?${AÑO}&seccion=encuestas`)).text();
+    assert.match(h, /class="act" aria-current="page">Encuestas<\/a>/);
+    assert.match(h, /Encuesta de agendamiento[\s\S]*?Hubo 2 respuesta\(s\), con promedio 4,5 de 5/);
+    assert.match(h, /Encuesta de atención[\s\S]*?Hubo 1 respuesta\(s\), con promedio 3 de 5/);
+    assert.match(h, /Cómo leerlo/);
     assert.match(h, /data-chart="encuesta-agendamiento"/);
     assert.match(h, /data-chart="encuesta-atencion"/);
   } finally { await s.cerrar(); }
@@ -39,9 +40,10 @@ test("reportes: las encuestas siguen el filtro del reporte (otro lugar u otro pe
     await s.c.encuestas.registrarAgendamiento({ idCita: 1, nota: 4 });
     const sedeCita = (await s.c.catalogo.profesional((await s.c.catalogo.bloque((await s.c.citaRepo.buscarPorId(1)).idBloque)).idProfesional)).idPoliclinico;
     const otraSede = (await s.c.catalogo.policlinicos()).find((x) => x.id !== sedeCita).id;
-    assert.match(await (await s.get(`/admin/reportes?${AÑO}&sede=${sedeCita}`)).text(), /cómo fue reservar · 1 respuesta\(s\)/);
-    assert.match(await (await s.get(`/admin/reportes?${AÑO}&sede=${otraSede}`)).text(), /cómo fue reservar · sin respuestas en el período/);
-    assert.match(await (await s.get("/admin/reportes?desde=2025-01-01&hasta=2025-01-31&periodo=rango")).text(), /cómo fue reservar · sin respuestas en el período/);
+    const agend = (h) => /data-chart="encuesta-agendamiento"[\s\S]*?<\/section>/.exec(h)[0];
+    assert.match(agend(await (await s.get(`/admin/reportes?${AÑO}&sede=${sedeCita}&seccion=encuestas`)).text()), /Hubo 1 respuesta\(s\)/);
+    assert.match(agend(await (await s.get(`/admin/reportes?${AÑO}&sede=${otraSede}&seccion=encuestas`)).text()), /Aún no hay respuestas en el período/);
+    assert.match(agend(await (await s.get("/admin/reportes?desde=2025-01-01&hasta=2025-01-31&periodo=rango&seccion=encuestas")).text()), /Aún no hay respuestas en el período/);
   } finally { await s.cerrar(); }
 });
 

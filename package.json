@@ -10,6 +10,7 @@
     "test:postgres-embebido": "node scripts/verificar-postgres-embebido.js",
     "start:json": "node src/server.js",
     "humo": "node scripts/humo.js",
+    "datos:demo": "node scripts/datos-demo.js",
     "respaldo": "node scripts/respaldo.js",
     "restaurar": "node scripts/respaldo.js restaurar"
   },

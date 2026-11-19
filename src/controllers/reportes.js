@@ -187,13 +187,41 @@ function crearReportesController(c) {
         filas: e.notas.map((x) => ({ nombre: `Nota ${x.nota}${x.nota === 5 ? ` (${alta})` : x.nota === 1 ? ` (${baja})` : ""}`, n: x.n })),
       })),
     ];
+    const META = {
+      sexo: { titulo: "Pacientes atendidos según sexo", desc: "Cada figura es un grupo. El número es la cantidad de pacientes distintos atendidos y el porcentaje, su parte del total." },
+      edad: { titulo: "Pacientes atendidos por tramo de edad", desc: "Cada barra es un tramo de edad. Mientras más larga, más pacientes distintos de esa edad se atendieron." },
+      nacionalidad: { titulo: "Pacientes atendidos por nacionalidad", desc: "Cada barra es una nacionalidad. Mientras más larga, más pacientes distintos atendidos." },
+      adultos: { titulo: "Adultos y niños", desc: "Compara adultos con niños y adolescentes. «Edad sin registrar» son fichas de pacientes a las que les falta la fecha de nacimiento." },
+      demanda: { titulo: "Profesionales con más reservas", desc: "Cada barra es un profesional y su largo, las reservas que tuvo en el período. Se muestran los 8 con más reservas; el resto está en «Ver datos y descargar».", top: 8, ordenar: true },
+      ocupacion: { titulo: "Ocupación de los profesionales (%)", desc: "De los cupos publicados, qué porcentaje se reservó. 100 % es agenda llena; un valor bajo significa horas sin usar. Se muestran los 8 con más ocupación.", top: 8, ordenar: true, sufijo: " %", max: 100 },
+      espera: { titulo: "Pacientes en lista de espera", desc: "Cantidad de pacientes esperando una hora hoy, por especialidad. No depende del período elegido arriba.", ordenar: true },
+      especialidad: { titulo: "Reservas por especialidad", desc: "Cada barra es una especialidad y su largo, las reservas del período. Muestra dónde está la mayor demanda.", top: 8, ordenar: true },
+      atencion: { titulo: "Qué pasó con las reservas", desc: "Reparte las reservas del período: atendidas, ausencias (el paciente no llegó), sin registro todavía y canceladas.", colores: ["#2e7a4f", "#c0843a", "#9fb3bb", "#c9d5d9"] },
+      evolucion: { titulo: "Reservas por semana", desc: "Cada columna es una semana y su altura, las citas activas de esa semana. Sirve para ver si la demanda sube o baja.", tipo: "columnas" },
+      lugares: { titulo: "Consultas realizadas por lugar", desc: "Cada barra es un policlínico (o Telemedicina) y su largo, las consultas efectivamente realizadas.", ordenar: true },
+      perdida: { titulo: "Horas perdidas por ausencias (%)", desc: "De las horas agendadas con resultado, qué porcentaje se perdió porque el paciente no llegó. Mientras más bajo, mejor.", sufijo: " %", ordenar: true },
+      "encuesta-agendamiento": { titulo: "Encuesta de agendamiento: ¿qué tan fácil fue reservar?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy fácil, 1 = muy difícil). ${a.encuestasPorTipo.agendamiento.respuestas ? `Hubo ${a.encuestasPorTipo.agendamiento.respuestas} respuesta(s), con promedio ${String(a.encuestasPorTipo.agendamiento.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
+      "encuesta-atencion": { titulo: "Encuesta de atención: ¿cómo fue la consulta?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy buena, 1 = mala). ${a.encuestasPorTipo.atencion.respuestas ? `Hubo ${a.encuestasPorTipo.atencion.respuestas} respuesta(s), con promedio ${String(a.encuestasPorTipo.atencion.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
+    };
+    g.forEach((x) => {
+      const m = META[x.id] || {};
+      const { ordenar, ...resto } = m;
+      Object.assign(x, resto);
+      if (ordenar) x.filas = [...x.filas].sort((p, q) => q.n - p.n);
+    });
     const contexto = `${desde} a ${hasta} · Lugar: ${ctx.sedes.get(+filtro.idPoliclinico)?.nombre || "Toda la red"} · Especialidad: ${filtro.especialidad || "Todas"} · Profesional: ${ctx.profs.get(+filtro.idProfesional)?.nombre || "Todos"}`;
     return { filtro, periodo, a, ctx, g, contexto };
   }
+  const filasGrafico = (g) => (g.top ? g.filas.slice(0, g.top) : g.filas);
+  const corta = (t, n) => (String(t).length > n ? String(t).slice(0, n - 1) + "…" : String(t));
+  const fSemana = (t) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(t));
+    return m ? `${Number(m[3])} ${["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(m[2]) - 1]}` : String(t);
+  };
   const svg = (g) => {
-    const rows = g.filas,
-      max = Math.max(1, ...rows.map((x) => x.n)),
-      h = Math.max(190, rows.length * 30 + 30);
+    const rows = filasGrafico(g),
+      suf = g.sufijo || "",
+      max = g.max || Math.max(1, ...rows.map((x) => x.n));
     if (g.siluetas) {
       const total = rows.reduce((s, x) => s + x.n, 0);
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 270" role="img" aria-label="${esc(g.titulo)}">${rows
@@ -202,11 +230,28 @@ function crearReportesController(c) {
             cx = w * i + w / 2;
           return `<g class="chart-bar" tabindex="0" data-category="${esc(x.nombre)}: ${x.n} pacientes" transform="translate(${cx - 35},20)"><title>${esc(x.nombre)}: ${x.n} pacientes únicos atendidos</title><circle cx="35" cy="24" r="20" fill="${i === 0 ? "#4f9ea6" : i === 1 ? "#7996c5" : "#bdcbd3"}"/><path d="M14 54 Q35 45 56 54 L65 124 L49 124 L47 195 L34 195 L33 132 L29 195 L16 195 L20 124 L5 124 Z" fill="${i === 0 ? "#4f9ea6" : i === 1 ? "#7996c5" : "#bdcbd3"}"/><text x="35" y="220" text-anchor="middle" font-size="12" fill="#234959">${esc(x.nombre)}</text><text x="35" y="243" text-anchor="middle" font-size="15" font-weight="600" fill="#234959">${x.n} · ${total ? Math.round((x.n / total) * 100) : 0}%</text></g>`;
         })
-        .join(
-          "",
-        )}${!rows.length ? '<text x="280" y="130" text-anchor="middle" font-size="13" fill="#728994">Sin pacientes atendidos en este período</text>' : ""}</svg>`;
+        .join("")}${!rows.length ? '<text x="280" y="130" text-anchor="middle" font-size="13" fill="#728994">Sin pacientes atendidos en este período</text>' : ""}</svg>`;
     }
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 ${h}" role="img" aria-label="${esc(g.titulo)}">${rows.map((x, i) => `<g class="chart-bar" tabindex="0" data-category="${esc(x.nombre)}: ${x.n}"><title>${esc(x.nombre)}: ${x.n}</title><text x="5" y="${i * 30 + 24}" font-size="11" fill="#5b7480">${esc(x.nombre.slice(0, 31))}</text><rect x="235" y="${i * 30 + 11}" width="${(x.n / max) * 330}" height="17" rx="3" fill="${["#368e99", "#6b8fb9", "#9a9abb", "#7ba891"][i % 4]}"/><text x="${240 + (x.n / max) * 330}" y="${i * 30 + 24}" font-size="11" fill="#285162">${x.n}</text></g>`).join("")}${!rows.length ? '<text x="320" y="95" text-anchor="middle" font-size="13" fill="#728994">Sin datos para el período</text>' : ""}</svg>`;
+    if (!rows.length)
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 120" role="img" aria-label="${esc(g.titulo)}"><text x="320" y="64" text-anchor="middle" font-size="13" fill="#728994">Sin datos para el período</text></svg>`;
+    if (g.tipo === "columnas") {
+      const W = 640, H = 260, L = 40, T = 22, B = 44, paso = (W - L - 10) / rows.length, ancho = Math.min(46, paso * 0.62);
+      const y = (v) => T + (H - T - B) * (1 - v / max);
+      const guias = [0, 0.5, 1].map((f) => `<line x1="${L}" x2="${W - 10}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="#e3ecef"/><text x="${L - 6}" y="${y(max * f) + 4}" text-anchor="end" font-size="10" fill="#728994">${Math.round(max * f)}</text>`).join("");
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(g.titulo)}">${guias}${rows
+        .map((x, i) => {
+          const cx = L + paso * i + paso / 2, top = y(x.n);
+          return `<g class="chart-bar" tabindex="0" data-category="Semana del ${esc(fSemana(x.nombre))}: ${x.n}"><title>Semana del ${esc(fSemana(x.nombre))}: ${x.n}</title><rect x="${(cx - ancho / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${ancho.toFixed(1)}" height="${Math.max(0, y(0) - top).toFixed(1)}" rx="3" fill="#368e99"/><text x="${cx.toFixed(1)}" y="${(top - 6).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="600" fill="#234959">${x.n}</text>${rows.length <= 8 || i % 2 === 0 ? `<text x="${cx.toFixed(1)}" y="${H - 22}" text-anchor="middle" font-size="10" fill="#5b7480">${esc(fSemana(x.nombre))}</text>` : ""}</g>`;
+        })
+        .join("")}</svg>`;
+    }
+    const fila = 34, h = rows.length * fila + 16, X0 = 210, ancho = 330;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 ${h}" role="img" aria-label="${esc(g.titulo)}">${rows
+      .map((x, i) => {
+        const w = Math.max(x.n > 0 ? 3 : 0, (x.n / max) * ancho), yy = i * fila + 8;
+        return `<g class="chart-bar" tabindex="0" data-category="${esc(x.nombre)}: ${x.n}${esc(suf)}"><title>${esc(x.nombre)}: ${x.n}${esc(suf)}</title><text x="${X0 - 12}" y="${yy + 17}" text-anchor="end" font-size="12" fill="#234959">${esc(corta(x.nombre, 30))}</text><rect x="${X0}" y="${yy + 3}" width="${ancho}" height="20" rx="4" fill="#eef3f5"/><rect x="${X0}" y="${yy + 3}" width="${w.toFixed(1)}" height="20" rx="4" fill="${g.colores?.[i] || "#368e99"}"/><text x="${(X0 + w + 8).toFixed(1)}" y="${yy + 18}" font-size="12" font-weight="600" fill="#234959">${x.n}${esc(suf)}</text></g>`;
+      })
+      .join("")}</svg>`;
   };
   return {
     agendaJson: async ({ consulta: q }) => {
@@ -216,6 +261,16 @@ function crearReportesController(c) {
     ver: async ({ usuario: u, consulta: q }) => {
       const d = await datos(q),
         { filtro: f, a, ctx, g, contexto, periodo } = d;
+      const SECCIONES = [
+        ["resumen", "Resumen", "Lo esencial del período: cómo terminaron las reservas y cómo evoluciona la demanda.", ["atencion", "evolucion"]],
+        ["pacientes", "Pacientes", "Quiénes se atienden: sexo, edad y nacionalidad. Cada paciente se cuenta una sola vez.", ["sexo", "edad", "nacionalidad", "adultos"]],
+        ["demanda", "Demanda y ocupación", "Qué profesionales y especialidades concentran las reservas y cuánto se usan los cupos.", ["demanda", "ocupacion", "especialidad", "espera"]],
+        ["lugares", "Por lugar", "Cómo le va a cada policlínico y a Telemedicina.", ["lugares", "perdida"]],
+        ["encuestas", "Encuestas", "Qué opinan los pacientes de reservar su hora y de la atención recibida.", ["encuesta-agendamiento", "encuesta-atencion"]],
+        ["agenda", "Agenda detallada", "Actividad de las agendas día a día, con el detalle de cada reserva.", null],
+      ];
+      const seccion = SECCIONES.some((x) => x[0] === q.get("seccion")) ? q.get("seccion") : "resumen";
+      const actual = SECCIONES.find((x) => x[0] === seccion);
       const qs = new URLSearchParams({
         desde: f.desde,
         hasta: f.hasta,
@@ -231,21 +286,11 @@ function crearReportesController(c) {
           formato,
         });
       const chart = (x) =>
-        `<section class="work-panel" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div>${svg(x)}<div class="chart-detail" aria-live="polite">Selecciona una categoría para consultar su valor.</div><details><summary>Ver datos del gráfico</summary>${tabla(
+        `<section class="work-panel graf-r" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div><p class="como-leer"><b>Cómo leerlo:</b> ${esc(x.desc || "")}</p>${svg(x)}<div class="chart-detail" aria-live="polite">Toca una barra para ver su valor.</div><details class="datos-r"><summary>Ver datos y descargar</summary>${tabla(
           ["Categoría", "Valor"],
-          x.filas.map((r) => [r.nombre, r.n]),
-        )}</details><div class="chart-actions">${V.btn("PDF", enlace(x.id, "pdf"), true)}${V.btn("Excel", enlace(x.id, "xlsx"), true)}${V.btn("PNG", enlace(x.id,"png"), true)}</div></section>`;
-      return {
-        html: V.page(
-          u,
-          "Reportes",
-          V.cab(
-            "Reportes institucionales",
-            "Indicadores agregados de la red y de sus lugares de atención.",
-            V.btn("Reporte completo PDF", enlace("todos", "pdf"), true) +
-              V.btn("Reporte completo Excel", enlace("todos", "xlsx")),
-          ) +
-            `<form class="filters">${V.select("sede", "Lugar", [{ id: "", nombre: "Toda la red" }, ...ctx.listaSedes], f.idPoliclinico || "")}${V.select("esp", "Especialidad", [{ id: "", nombre: "Todas" }, ...V.opcionesTexto(await c.catalogo.especialidades())], f.especialidad || "")}${V.select("prof", "Profesional", [{ id: "", nombre: "Todos" }, ...ctx.listaProfs], f.idProfesional || "")}${V.select(
+          x.filas.map((r) => [r.nombre, `${r.n}${x.sufijo || ""}`]),
+        )}<div class="chart-actions">${V.btn("PDF", enlace(x.id, "pdf"), true)}${V.btn("Excel", enlace(x.id, "xlsx"), true)}${V.btn("PNG", enlace(x.id, "png"), true)}</div></details></section>`;
+      const formulario = `<form class="filters"><input type="hidden" name="seccion" value="${seccion}">${V.select("sede", "Lugar", [{ id: "", nombre: "Toda la red" }, ...ctx.listaSedes], f.idPoliclinico || "")}${V.select("esp", "Especialidad", [{ id: "", nombre: "Todas" }, ...V.opcionesTexto(await c.catalogo.especialidades())], f.especialidad || "")}${V.select("prof", "Profesional", [{ id: "", nombre: "Todos" }, ...ctx.listaProfs], f.idProfesional || "")}${V.select(
               "periodo",
               "Período",
               [
@@ -259,22 +304,29 @@ function crearReportesController(c) {
               periodo,
               (x) => x.id,
               (x) => x.nombre,
-            )}${V.input("desde", "Desde", f.desde, "date")}${V.input("hasta", "Hasta", f.hasta, "date")}<button type="submit">Aplicar filtros</button></form><p class="report-note">${esc(contexto)}<br>Pérdida = ausencias registradas ÷ (atenciones realizadas + ausencias registradas) × 100. Los registros incompletos se muestran separados.</p><div class="metric-strip"><div><b>${a.caracterizacion.atendidos}</b>Pacientes únicos atendidos</div><div><b>${a.resumen.asistio}</b>Consultas realizadas</div><div><b>${a.resumen.ocupacion ?? "—"}%</b>Ocupación de cupos publicados</div><div><b>${a.resumen.tasaInasistencia ?? "—"}%</b>Pérdida de horas</div></div>${require("../views/panelAgenda").panel(await agenda(f), qs.toString())}<details class="inst"><summary>Indicadores institucionales: caracterización, demanda y atención</summary>${[
-              [1, "Caracterización de pacientes"],
-              [2, "Demanda por profesional"],
-              [3, "Estadísticas de atención"],
-              [4, "Encuestas"],
-            ]
-              .map(
-                ([n, t]) =>
-                  `<h2 class="report-section">${t}</h2><div class="chart-grid">${g
-                    .filter((x) => x.seccion === n)
-                    .map(chart)
-                    .join("")}</div>`,
-              )
-              .join(
-                "",
-              )}</details><p class="report-note">La lista de espera muestra el estado vigente al momento de la consulta. ${V.btn("Supervisar lista de espera", "/admin/espera", true)}</p>`,
+            )}${V.input("desde", "Desde", f.desde, "date")}${V.input("hasta", "Hasta", f.hasta, "date")}<button type="submit">Aplicar filtros</button></form>`;
+      const tabs = `<nav class="tabs-r" aria-label="Secciones del reporte">${SECCIONES.map(
+        ([k, t]) =>
+          `<a href="/admin/reportes?${esc(new URLSearchParams({ ...Object.fromEntries(qs), periodo, seccion: k }).toString())}"${k === seccion ? ' class="act" aria-current="page"' : ""}>${t}</a>`,
+      ).join("")}</nav>`;
+      const resumenKpis = `<div class="metric-strip"><div><b>${a.caracterizacion.atendidos}</b>Pacientes únicos atendidos</div><div><b>${a.resumen.asistio}</b>Consultas realizadas</div><div><b>${a.resumen.ocupacion ?? "—"}%</b>Ocupación de cupos publicados</div><div><b>${a.resumen.tasaInasistencia ?? "—"}%</b>Pérdida de horas</div></div>`;
+      const cuerpo =
+        seccion === "agenda"
+          ? require("../views/panelAgenda").panel(await agenda(f), qs.toString())
+          : `${seccion === "resumen" ? resumenKpis : ""}<div class="chart-grid">${actual[3].map((id) => chart(g.find((x) => x.id === id))).join("")}</div>${seccion === "demanda" ? `<p class="report-note">${V.btn("Supervisar lista de espera", "/admin/espera", true)}</p>` : ""}`;
+      return {
+        html: V.page(
+          u,
+          "Reportes",
+          `<style>.tabs-r{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--borde);margin:0 0 6px}.tabs-r a{padding:11px 16px;font-weight:600;font-size:.9rem;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px}.tabs-r a:hover{color:var(--navy)}.tabs-r a.act{color:var(--teal-t);border-bottom-color:var(--teal)}.tab-desc{color:var(--muted);margin:10px 0 18px;font-size:.92rem}.como-leer{background:#f4f9fa;border-left:3px solid var(--teal);border-radius:4px;padding:9px 12px;margin:0 0 14px;font-size:.84rem;color:#35525e;line-height:1.5}.graf-r svg{width:100%;height:auto;display:block}.graf-r .chart-heading h3{font-size:1.02rem;margin:0 0 10px}.datos-r{margin-top:10px;border-top:1px solid var(--borde);padding-top:8px}.datos-r summary{font-size:.84rem;color:var(--muted);cursor:pointer}.datos-r .chart-actions{justify-content:flex-start;margin-top:12px}.chart-grid{align-items:start}</style>` +
+          V.cab(
+            "Reportes institucionales",
+            "Indicadores agregados de la red y de sus lugares de atención.",
+            V.btn("Reporte completo PDF", enlace("todos", "pdf"), true) +
+              V.btn("Reporte completo Excel", enlace("todos", "xlsx")),
+          ) +
+            `${formulario}` +
+            `<p class="report-note">${esc(contexto)}<br>Pérdida = ausencias registradas ÷ (atenciones realizadas + ausencias registradas) × 100. Los registros incompletos se muestran separados.</p>${tabs}<p class="tab-desc">${esc(actual[2])}</p>${cuerpo}`,
         ),
       };
     },

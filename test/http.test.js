@@ -251,7 +251,7 @@ test('personal: adjuntar y descargar un documento, editar ficha, liberar cupos; 
     assert.strictEqual((await post(s.base, '/admin/agendas/publicar', t, { idProfesional: '1', desde: '2026-11-23', hasta: '2026-11-24', accion: 'bloquear' })).status, 403);
     assert.match(await (await post(s.base, '/admin/agendas/publicar', a, { idProfesional: '1', desde: '2026-11-23', hasta: '2026-11-24', accion: 'bloquear' })).text(), /5 cupo\(s\) bloqueado/);
     assert.match(await (await post(s.base, '/admin/agendas/publicar', a, { idProfesional: '1', desde: '2026-11-24', hasta: '2026-11-23', accion: 'publicar' })).text(), /Revisa las fechas/);
-    assert.match(await (await fetch(`${s.base}/admin/reportes`, { headers: { Cookie: a } })).text(), /Caracterización de pacientes/);
+    assert.match(await (await fetch(`${s.base}/admin/reportes`, { headers: { Cookie: a } })).text(), /Qué pasó con las reservas/);
     assert.match((await fetch(`${s.base}/admin/reportes/profesionales.csv`, { headers: { Cookie: a } })).headers.get('content-type'), /text\/csv/);
     assert.strictEqual((await fetch(`${s.base}/tens/bot`, { headers: { Cookie: t } })).status, 404);
     assert.ok(!(await (await fetch(`${s.base}/tens/panel`, { headers: { Cookie: t } })).text()).includes('/tens/bot'));
