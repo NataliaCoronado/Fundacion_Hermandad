@@ -500,13 +500,14 @@ ${tabla(
 )}
 <h2>Bandeja simulada</h2>
 ${tabla(
-  ["Fecha", "Dirección", "Teléfono", "Texto", "Botones"],
+  ["Fecha", "Canal", "Dirección", "Destino", "Texto", "Botones"],
   [...bandeja]
     .reverse()
     .map((m) => [
       m.fecha,
+      m.canal || "WhatsApp",
       m.direccion,
-      m.telefono,
+      m.telefono || m.correo || "—",
       m.texto,
       (m.botones || []).join(" | "),
     ]),
