@@ -26,6 +26,17 @@ Administración entra directamente a **Agendas y cupos**. TENS/TONS y Gestión d
 
 Contraseña de las tres cuentas: `demo1234`. Las cuentas creadas desde Administración no reciben esta contraseña; se habilitan mediante el enlace seguro de un solo uso. En PostgreSQL, `CLAVE_DEMO=demo1234` habilita las claves de las tres cuentas de ejemplo.
 
+## Modalidad de entrega: demostración local reproducible
+
+Para la entrega del 23 de noviembre el sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desplegará en la nube en la etapa siguiente).
+
+- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
+- **Instalación:** `npm ci`
+- **Configuración:** ninguna para la demostración. Si quieres cambiar opciones, copia `.env.example` como `.env` (el `.env` nunca se sube al repositorio).
+- **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001). Cuentas de prueba en la tabla de más abajo.
+- **Datos:** todos los datos son **ficticios**. La mensajería funciona en modo simulado y no envía nada real; el guion está en `DEMO_MENSAJES.md`.
+- **Verificación:** `npm test`.
+
 ## Administración
 
 Los cuatro módulos principales son Agendas y cupos, Equipo de salud, Policlínicos y especialidades, y Reportes. La barra lateral conserva el estilo y la identidad institucional del proyecto original. Usuarios y Auditoría se encuentran en **Configuración / perfil**.
