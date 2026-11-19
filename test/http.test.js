@@ -291,3 +291,27 @@ test('administración: cupos en serie, liberación masiva, filtros de reportes y
     assert.ok(!/Paciente demo|11111111/.test(await (await fetch(`${base}/admin/reportes`, { headers: { Cookie: a } })).text()));
   } finally { await new Promise((r) => srv.close(r)); }
 });
+
+test('recepción: sin permiso para terminar la atención no se registra la asistencia (igual que en Agenda)', async () => {
+  const s = await levantar();
+  try {
+    // Administración dejó restringida esa acción para la cuenta TENS/TONS.
+    (s.c.operacion.meta.usuarios.u2 ||= {}).puedeTerminarAtencion = false;
+    const { cookie } = await ingresar(s.base, 'tens@ejemplo.cl');
+    const r = await post(s.base, '/tens/recepcion', cookie, { idCita: '1', asistio: '1' });
+    assert.match(await r.text(), /No tienes permiso para terminar la atención/);
+    assert.strictEqual((await s.c.citaRepo.buscarPorId(1)).asistencia, null, 'la asistencia no quedó registrada');
+    // Registrar una inasistencia sí está permitido, como en Agenda.
+    await post(s.base, '/tens/recepcion', cookie, { idCita: '1', asistio: '0' });
+    assert.strictEqual((await s.c.citaRepo.buscarPorId(1)).asistencia, 'NO_ASISTIO');
+  } finally { await s.cerrar(); }
+});
+
+test('recepción: con el permiso otorgado la asistencia se registra', async () => {
+  const s = await levantar();
+  try {
+    const { cookie } = await ingresar(s.base, 'tens@ejemplo.cl');
+    await post(s.base, '/tens/recepcion', cookie, { idCita: '1', asistio: '1' });
+    assert.strictEqual((await s.c.citaRepo.buscarPorId(1)).asistencia, 'ASISTIO');
+  } finally { await s.cerrar(); }
+});

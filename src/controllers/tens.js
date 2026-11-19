@@ -425,6 +425,9 @@ function crearTensController(c) {
     registrarAsistencia: async ({ cuerpo, usuario }) => {
       try {
         await citaDeMiSede(usuario, cuerpo.idCita);
+        // Misma regla que en Agenda: cerrar la atención como realizada exige el permiso del usuario.
+        if (cuerpo.asistio === "1" && usuario.puedeTerminarAtencion === false)
+          throw new Error("No tienes permiso para terminar la atención.");
         await agendamiento.registrarAsistencia(
           cuerpo.idCita,
           cuerpo.asistio === "1",
