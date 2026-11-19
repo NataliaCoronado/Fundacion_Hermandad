@@ -165,6 +165,10 @@ La matriz quedó con **37 casos aprobados, 1 fallido (CP-28) y 8 pendientes de e
 
 También se revisaron en navegador el ingreso por rol, calendario y panel flotante, reportes, pacientes, registro de llegada y variante Telemedicina, en escritorio a 1440 y 1280 píxeles. Se validó la estructura de Excel, la firma PNG y la renderización de PDF.
 
+## Despliegue en la nube
+
+Pendiente para la etapa siguiente. El diseño propuesto, con las restricciones que impone el código y las decisiones que faltan, está en [`docs/diseno-despliegue-nube.md`](docs/diseno-despliegue-nube.md).
+
 ## Estructura y compatibilidad
 
 Se conserva la arquitectura MVC y Repository del proyecto original, sus pruebas y el portal de pacientes. Las extensiones están en `src/controllers/operacion.js`, `src/controllers/reportes.js`, `src/services/OperacionService.js`, `src/services/ExportacionService.js` y las vistas `operacion*`. No se eliminaron rutas ni servicios anteriores; las rutas principales usan las vistas nuevas y las rutas operativas tienen control central de alcance por sede.
