@@ -175,7 +175,9 @@ test('portal: paciente existente: sin sesión no ve sus datos ni se le pide veri
   } finally { await s.cerrar(); }
 });
 
-test('portal: resumen y comprobante muestran el nombre completo aunque no haya sesión', async () => {
+// Conocer un RUT no debe revelar de quién es (RNF03). Antes el resumen, el comprobante en pantalla y el PDF
+// mostraban el nombre completo de una ficha ajena sin verificar la identidad.
+test('portal: sin verificar la identidad el nombre de una ficha ajena va enmascarado, pero la reserva se registra', async () => {
   const s = await levantar();
   try {
     const p = s.cliente();
@@ -184,12 +186,16 @@ test('portal: resumen y comprobante muestran el nombre completo aunque no haya s
     await p.req(`/agendar/datos?t=${t}&bloque=${bloque}`);
     await p.req('/agendar/datos', { t }, true);
     const rev = await p.texto(`/agendar/revisar?t=${t}`);
-    assert.match(rev, /Paciente de prueba B/);
+    assert.doesNotMatch(rev, /Paciente de prueba B/, 'el resumen no revela el nombre');
+    assert.match(rev, /P\*\*\*/, 'lo muestra enmascarado');
     const conf = await p.texto('/agendar/confirmar', { t });
     assert.match(conf, /reservada correctamente/);
-    assert.match(conf, /Paciente de prueba B/);
+    assert.doesNotMatch(conf, /Paciente de prueba B/, 'el comprobante en pantalla tampoco');
     const pdf = Buffer.from(await (await p.req(`/agendar/comprobante.pdf?t=${t}`)).arrayBuffer()).toString('latin1');
-    assert.ok(pdf.includes('Paciente de prueba B'), 'el PDF lleva el nombre completo');
+    assert.match(pdf, /^%PDF/);
+    assert.ok(!pdf.includes('Paciente de prueba B'), 'el PDF tampoco');
+    // No verificar la identidad no impide reservar: eso sigue igual.
+    assert.ok((await s.c.citaRepo.buscarPorRut('22222222-2')).some((x) => x.idBloque === bloque && x.estadoReserva === 'ACTIVA'));
   } finally { await s.cerrar(); }
 });
 

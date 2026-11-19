@@ -105,11 +105,14 @@ function crearReservaController(c) {
   async function resumen(f) {
     const ficha = await catalogo.paciente(f.rut);
     const x = await ctxBloque(f.idBloque);
-    const nombre = ficha ? ficha.nombre : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
+    // Conocer un RUT no basta para ver de quién es: sin verificar la identidad, el nombre de una ficha
+    // existente se muestra enmascarado, igual que en el paso de datos (RNF03). La reserva se registra igual.
+    const identificado = !ficha || f.verificado;
+    const nombre = ficha ? (identificado ? ficha.nombre : vistas.mascaraNombre(ficha.nombre)) : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
     const contacto = ficha && !f.actualizar ? ficha : { ...(f.nuevo || {}), ...(f.actualizar || {}) };
     const canal = !f.comunicaciones ? null : contacto.tieneWhatsapp && contacto.telefono ? "WhatsApp" : contacto.correo ? "Correo" : null;
     return {
-      nombre, rut: f.rut, nuevo: !ficha, actualiza: !!f.actualizar, lugar: x.sede.nombre, tele: !!x.sede.telemedicina, idSede: x.sede.id,
+      nombre, identificado, rut: f.rut, nuevo: !ficha, actualiza: !!f.actualizar, lugar: x.sede.nombre, tele: !!x.sede.telemedicina, idSede: x.sede.id,
       esp: x.esp, prof: x.prof.nombre, fecha: x.b.fecha, hora: x.b.hora, docs: f.docs.map((d) => ({ tipo: d.tipo, nombre: d.archivo.nombre })), cambio: f.cambioDatos || "", canal,
     };
   }
@@ -298,7 +301,8 @@ function crearReservaController(c) {
     comprobante: guard(async ({ f }) => {
       if (!f.confirmada) return { redirigir: "/agendar" };
       try {
-        return { binario: await pdfDeCita(f.confirmada.idCita, true), mime: "application/pdf", nombreArchivo: "comprobante-reserva.pdf" };
+        // El comprobante descargable es la misma fuga por otra vía: también va enmascarado.
+        return { binario: await pdfDeCita(f.confirmada.idCita, f.confirmada.r.identificado !== false), mime: "application/pdf", nombreArchivo: "comprobante-reserva.pdf" };
       } catch (e) {
         if (e.message !== "CITA_NO_ENCONTRADA") throw e;
         return { redirigir: "/paciente/consulta" }; // la cita ya no está vigente: se revisa en Consultar mi reserva
