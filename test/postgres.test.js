@@ -1,6 +1,4 @@
 'use strict';
-// Prueba de los repositorios PostgreSQL contra una base real (esquema + datos de ejemplo + credencial).
-// Solo corre si existe PSQL_TEST_ARGS, p. ej.:  PSQL_TEST_ARGS="-h localhost -U postgres" npm test
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
@@ -26,22 +24,18 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   const tens = (await c.catalogo.usuarios()).find((u) => u.rol === 'TENS_TONS');
   assert.strictEqual(c.modo, 'postgresql');
 
-  // catálogo y sesión
   assert.strictEqual((await c.catalogo.policlinicos()).length, 7);
   assert.strictEqual((await c.catalogo.profesionales()).length, 47);
   assert.strictEqual((await c.auth.iniciarSesion('admin@ejemplo.cl', 'demo1234')).usuario.rol, 'ADMINISTRACION');
   await assert.rejects(() => c.auth.iniciarSesion('admin@ejemplo.cl', 'mala'), /CREDENCIALES_INVALIDAS/);
 
-  // citas existentes y reglas
   assert.strictEqual((await c.citaRepo.listar()).length, 2);
   assert.strictEqual((await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).length, 78);
   const cita = await c.agendamiento.agendar({ rut: C, idBloque: 3, idUsuario: tens.id });
   assert.strictEqual(cita.estadoReserva, 'ACTIVA');
   await assert.rejects(() => c.agendamiento.agendar({ rut: A, idBloque: 3, idUsuario: tens.id }), /BLOQUE_OCUPADO/);
-  // el disparador de la base también lo impide aunque se salte el servicio (RNF04)
   await assert.rejects(() => c.citaRepo.crear({ rut: A, idBloque: 3, idUsuario: tens.id }), /BLOQUE_OCUPADO/);
 
-  // confirmación, cancelación y reoferta
   await c.confirmacion.registrarContacto({ idCita: cita.id, resultado: 'No contestó', responsable: 'x', idUsuario: tens.id });
   assert.strictEqual((await c.citaRepo.buscarPorId(cita.id)).estadoConfirmacion, 'PENDIENTE');
   await c.confirmacion.registrarContacto({ idCita: cita.id, resultado: 'Confirmó', responsable: 'x', idUsuario: tens.id });
@@ -52,16 +46,13 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   assert.deepStrictEqual([cancelada.estadoReserva, cancelada.origenCancelacion], ['CANCELADA', 'WHATSAPP']);
   assert.ok((await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).some((b) => b.id === 3));
 
-  // asistencia y encuesta
   await c.agendamiento.registrarAsistencia(1, true);
   assert.strictEqual((await c.citaRepo.buscarPorId(1)).asistencia, 'ASISTIO');
   await c.encuestas.registrar({ rut: A, nota: 5 });
 
-  // paciente nuevo, bloque nuevo y lista de espera
   const rut = await c.pacientes.crear({ rut: '12345678-5', nombres: 'Ana', apellidos: 'Prueba', fechaNacimiento: '1990-01-01', genero: 'FEMENINO', telefono: '+56911112222', direccion: 'Calle 1', idComuna: 1, consentimiento: true, tieneWhatsapp: true, idUsuario: tens.id });
   assert.strictEqual((await c.catalogo.paciente(rut)).nombre, 'Ana Prueba');
 
-  // adulto responsable: viene de los datos de ejemplo, se cambia al editar y se puede quitar
   assert.deepStrictEqual((await c.catalogo.paciente(C)).responsable, { nombre: 'Responsable de prueba', relacion: 'Madre', rut: '44444444-4', telefono: '+56944444444' });
   const fichaC = { nombres: 'Paciente de prueba', apellidos: 'C', fechaNacimiento: '2015-09-09', genero: 'FEMENINO', nacionalidad: 'Venezolana', telefono: '+56933333333', direccion: 'Dirección nueva 9', idComuna: 1 };
   await c.pacientes.actualizar(C, { ...fichaC, respNombre: 'Tía Prueba', respRelacion: 'Tía', respRut: '44444444-4', respTelefono: '+56944444555' });
@@ -71,13 +62,11 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   assert.strictEqual((await c.catalogo.paciente(rut)).responsable, null);
   await assert.rejects(() => c.pacientes.actualizar('99999999-9', fichaC), /PACIENTE_NO_ENCONTRADO/);
 
-  // caracterización: usa fecha de nacimiento, género y nacionalidad de la base
   const carac = await c.reportes.caracterizacion();
   assert.ok(carac.ninos >= 1 && carac.mayores >= 1);
   assert.ok(carac.nacionalidades.some((x) => x.nombre === 'Venezolana'));
   assert.ok((await c.reportes.porProfesional()).length >= 47);
 
-  // liberar y bloquear cupos sin cita (los reservados no cambian)
   const libres24 = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).filter((b) => b.idProfesional === 1).length;
   assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: '2026-11-24', hasta: '2026-11-24', publicar: false }), libres24);
   assert.strictEqual((await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).filter((b) => b.idProfesional === 1).length, 0);
@@ -96,14 +85,11 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   const asignada = await c.espera.asignar({ idSolicitud: vig[0].id, idBloque: vig[0].cupos[0].id, idUsuario: tens.id });
   assert.strictEqual(asignada.estadoReserva, 'ACTIVA');
 
-  // cambio de agenda: ausencia del profesional 1 el 24/11 (cierra cupos libres)
   const r = await c.cambios.ausencia({ idProfesional: 1, fecha: '2026-11-24', motivo: 'Licencia', idUsuario: admUser.id });
   assert.strictEqual(r.bloquesCerrados, 4);
   assert.ok(!(await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).some((b) => b.idProfesional === 1));
-  // reemplazo se guarda en la cita
   await c.cambios.reemplazo({ idProfesional: 1, idReemplazo: 1 + 0, fecha: '2026-11-23', motivo: 'x', idUsuario: admUser.id }).catch((e) => assert.match(e.message, /REEMPLAZO_IGUAL/));
 
-  // profesional inactivo y reportes
   await c.catalogo.setProfesionalActivo(2, false);
   assert.strictEqual((await c.catalogo.profesional(2)).activo, false);
   const csv = await c.reportes.csvResumen();

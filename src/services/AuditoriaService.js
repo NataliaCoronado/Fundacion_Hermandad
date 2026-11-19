@@ -1,6 +1,5 @@
 "use strict";
 const { textoLocal } = require("../util/tiempo");
-// Bitácora de operaciones administrativas (quién, qué, cuándo). Sin datos clínicos.
 class AuditoriaService {
   constructor(extras) {
     this.extras = extras;

@@ -1,7 +1,4 @@
 'use strict';
-// Adaptador de PRUEBA con el mismo contrato que src/db/pool.js, pero usando el comando psql.
-// Sirve para verificar el SQL de los repositorios PostgreSQL sin instalar el paquete "pg".
-// Se activa con la variable PSQL_TEST_ARGS (por ejemplo: "-h /tmp/pg -p 5433 -U postgres").
 const { spawnSync } = require('node:child_process');
 
 const literal = (v) => {

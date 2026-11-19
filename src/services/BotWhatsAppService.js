@@ -6,9 +6,6 @@ const MAX_INTENTOS = 3;
 const BOTONES = ['Confirmar', 'Cancelar mi hora'];
 const AYUDA = 'Para responder use los botones: Confirmar o Cancelar mi hora.';
 
-// Bot de reglas FIJAS (sin IA y sin texto libre). Calendario: recordatorio 1 semana antes y la víspera a las 10:00;
-// si no hay respuesta, un reintento la víspera a las 14:00; después la cita pasa a "sin respuesta" y TENS/TONS llama (RF27).
-// El silencio no cancela ni confirma.
 class BotWhatsAppService {
   constructor({ citaRepo, catalogo, extras, transporte, agendamiento }) {
     Object.assign(this, { citaRepo, catalogo, extras, transporte, agendamiento });
@@ -28,7 +25,6 @@ class BotWhatsAppService {
     return `Aún no recibimos su respuesta para la hora del ${hora}. Si no responde, le llamaremos por teléfono.`;
   }
 
-  // Crea (sin duplicar) los mensajes que faltan para citas activas sin confirmar. No crea los que ya pasaron.
   async programar(ahora = textoLocal()) {
     const existentes = this.extras.listar('mensajes');
     for (const cita of await this.citaRepo.listar()) {
@@ -43,7 +39,6 @@ class BotWhatsAppService {
     }
   }
 
-  // Envía los mensajes cuya hora ya llegó. "ahora" se puede simular para la demostración.
   async procesar(ahora = textoLocal()) {
     await this.programar(ahora);
     let enviados = 0; let omitidos = 0; let errores = 0;
@@ -56,7 +51,6 @@ class BotWhatsAppService {
         await this.avisarSinWhatsapp(cita, d);
         continue;
       }
-      // RF07: los recordatorios solo salen con el consentimiento de comunicaciones del paciente.
       if (!this.consiente(d.pac.rut)) {
         await this.extras.actualizar('mensajes', m.id, { estado: 'OMITIDO' }); omitidos++;
         await this.avisarSinWhatsapp(cita, d, 'SIN_CONSENTIMIENTO');
@@ -66,7 +60,6 @@ class BotWhatsAppService {
       try {
         enviado = await this.transporte.enviar({ telefono: d.pac.telefono, idCita: cita.id, texto: this.texto(m.tipo, d), botones: BOTONES, iniciado: true });
       } catch (e) {
-        // Un fallo del proveedor no detiene el ciclo: se reintenta más tarde y, al agotar los intentos, se avisa para llamar.
         const intentos = (m.intentos || 0) + 1;
         if (intentos >= MAX_INTENTOS) {
           await this.extras.actualizar('mensajes', m.id, { estado: 'ERROR', intentos, detalle: e.message });
@@ -77,11 +70,8 @@ class BotWhatsAppService {
         errores++;
         continue;
       }
-      // Con el proveedor real se guarda el identificador de Meta: así el webhook asocia el estado de entrega y la
-      // respuesta del paciente a este recordatorio y a su cita.
       await this.extras.actualizar('mensajes', m.id, { estado: 'ENVIADO', enviadoEn: ahora, proveedorId: this.transporte.simulado === false ? enviado?.id ?? null : null });
       enviados++;
-      // Último intento del bot: la cita queda para llamada, pero sigue reservada.
       if (m.tipo === 'REINTENTO' && cita.estadoConfirmacion === 'PENDIENTE') await this.citaRepo.actualizar({ ...cita, estadoConfirmacion: 'SIN_RESPUESTA' });
     }
     return { enviados, omitidos, errores };
@@ -98,7 +88,6 @@ class BotWhatsAppService {
     await this.extras.agregar('notificaciones', { tipo, fecha: textoLocal(), idPoliclinico: d.prof ? d.prof.idPoliclinico : null, leida: false, texto });
   }
 
-  // Respuesta del paciente (botón). Cualquier otra cosa recibe siempre la misma ayuda: no hay texto libre ni IA.
   async responder({ idCita, boton }) {
     const cita = await this.citaRepo.buscarPorId(idCita);
     if (!cita) throw new Error('CITA_NO_ENCONTRADA');

@@ -2,7 +2,6 @@
 const { normalizarRut } = require("../util/rut");
 const { hoy } = require("../util/tiempo");
 
-// CU-06: lista de espera asistida. Nunca asigna cupos sola: TENS/TONS decide a quién ofrecerlo (D6).
 class EsperaService {
   constructor(catalogo, agendamiento) {
     this.catalogo = catalogo;
@@ -39,7 +38,6 @@ class EsperaService {
     });
   }
 
-  // Solicitudes vigentes con los cupos que hoy calzan con su sede y especialidad.
   async vigentes() {
     const lista = (await this.catalogo.espera()).filter((e) =>
       ["EN_ESPERA", "CUPO_OFRECIDO"].includes(e.estado),

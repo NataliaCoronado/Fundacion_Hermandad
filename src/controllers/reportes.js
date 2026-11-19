@@ -5,7 +5,6 @@ const { hoy, sumarDias, lunesDe } = require("../util/tiempo");
 const { fechaValida } = require("../services/OperacionService");
 const Exportar = require("../services/ExportacionService");
 function crearReportesController(c) {
-  // Panel "Actividad de agenda": reservas reales del período, sin datos de pacientes.
   const ESTADO = (x) =>
     x.estadoReserva !== "ACTIVA" ? "CAN" : x.asistencia === "ASISTIO" ? "ATE" : x.asistencia === "NO_ASISTIO" ? "NOA" : x.estadoConfirmacion === "CONFIRMADA" ? "CON" : "PEN";
   async function agenda(filtro) {
@@ -22,7 +21,6 @@ function crearReportesController(c) {
       const k = `${sedeDe(bl)}|${espDe(bl)}`, v = cupos.get(k) || [sedeDe(bl), espDe(bl), 0, 0];
       v[2]++; if (ocupados.has(bl.id)) v[3]++; cupos.set(k, v);
     }
-    // Período anterior de igual largo, solo como conteo por fecha para comparar.
     const dias = Math.round((Date.parse(filtro.hasta) - Date.parse(filtro.desde)) / 864e5) + 1;
     const prevHasta = sumarDias(filtro.desde, -1), prevDesde = sumarDias(filtro.desde, -dias);
     const p = await c.reportes.base({ ...filtro, desde: prevDesde, hasta: prevHasta });
@@ -179,8 +177,6 @@ function crearReportesController(c) {
           n: x.tasaInasistencia || 0,
         })),
       },
-      // RF22: dos encuestas distintas, nunca sumadas. El título lleva respuestas y promedio para que viajen
-      // también en las descargas.
       ...[
         ["encuesta-agendamiento", "Encuesta de agendamiento · cómo fue reservar", a.encuestasPorTipo.agendamiento, ["muy fácil", "muy difícil"]],
         ["encuesta-atencion", "Encuesta de atención · después de la consulta", a.encuestasPorTipo.atencion, ["muy buena", "mala"]],

@@ -1,8 +1,4 @@
 "use strict";
-// Prueba de humo de toda la página: levanta el sistema con datos ficticios, entra con cada rol y recorre las
-// páginas siguiendo sus enlaces, buscando errores del servidor (500) y rastros de fallo en el HTML.
-// No reemplaza a `npm test` ni a la matriz: responde una sola pregunta, "¿hay alguna página caída?".
-// Uso: npm run humo
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -10,15 +6,13 @@ const { crearContenedor } = require("../src/contenedor");
 const { crearServidor } = require("../src/server");
 
 const MAX_POR_ROL = 250;
-// La exportación PNG usa un binario propio de cada sistema operativo (@resvg). Si node_modules trae el de otro
-// sistema, esas rutas responden 500 aunque la página esté bien: se informa aparte y no como página caída.
 let pngDisponible = true;
 try { require("@resvg/resvg-js"); } catch { pngDisponible = false; }
 const SOSPECHAS = /Ocurrió un error inesperado|>undefined|undefined<|\[object Object\]|>NaN</;
 
 (async () => {
   process.env.DIR_DOCUMENTOS = fs.mkdtempSync(path.join(os.tmpdir(), "humo-"));
-  process.env.BOT_WHATSAPP = "1";            // incluir también las pantallas del bot
+  process.env.BOT_WHATSAPP = "1";
   const c = crearContenedor({ demo: true });
   await c.inicializar();
   const srv = crearServidor(c);

@@ -8,18 +8,14 @@ const { crearLimitador } = require("../util/limitador");
 const { comprobantePdf } = require("../services/ComprobanteService");
 const { MAX_BYTES } = require("../services/DocumentoService");
 
-const TTL_MS = 20 * 60_000; // el flujo de reserva vive 20 minutos (se renueva en cada paso)
+const TTL_MS = 20 * 60_000;
 const LIMITE = 10;
 const VENTANA_MS = 60_000;
 const TIPOS_PORTAL = ["Cartola FONASA", "Credencial CESFAM", "Orden médica / derivación", "Certificado", "Otro"];
 const REQUISITOS = ["Cartola FONASA", "Credencial CESFAM"];
-// Los adjuntos esperan en memoria hasta confirmar: tope global para que muchos flujos abiertos no agoten la RAM.
 const maxBytesFlujos = () => Number(process.env.MAX_MB_ADJUNTOS_EN_ESPERA || 150) * 1024 * 1024;
 const FIRMAS = [Buffer.from("%PDF"), Buffer.from([0xff, 0xd8, 0xff]), Buffer.from([0x89, 0x50, 0x4e, 0x47])];
 
-// Reserva web del paciente (canal WEB). El avance se guarda en el servidor con un token aleatorio,
-// así el RUT nunca viaja en la dirección de la página. Se apaga con RESERVA_WEB=0.
-// Pasos: buscar (RUT, lugar, especialidad o profesional) → calendario → datos y documentos → confirmar → comprobante.
 function crearReservaController(c) {
   const { catalogo, agendamiento, pacientes, documentos, operacion: op, cuentas, auditoria, encuestas } = c;
   const flujos = new Map();
@@ -42,7 +38,6 @@ function crearReservaController(c) {
     return fn({ ...a, t, f });
   };
 
-  // Oferta del portal: lugares activos, profesionales activos con sus lugares y especialidades.
   const espsDe = (p) => (p.especialidades?.length ? p.especialidades : [p.especialidad]);
   async function oferta() {
     const sedes = (await catalogo.policlinicos()).filter((s) => s.activo !== false);
@@ -56,7 +51,6 @@ function crearReservaController(c) {
     for (const p of profs) for (const l of p.lugares) espsPorLugar[l] = [...new Set([...(espsPorLugar[l] || []), ...p.esps])];
     return { sedes, profs, espsPorLugar };
   }
-  // Horas libres que cumplen la búsqueda (solo futuras).
   async function libres(f) {
     let bs = await agendamiento.bloquesDisponibles({
       idPoliclinico: f.lugar === "red" ? undefined : f.lugar,
@@ -77,7 +71,6 @@ function crearReservaController(c) {
     const que = f.modo === "esp" ? f.esp : (await catalogo.profesional(f.prof))?.nombre;
     return `${que} · ${lugar}`;
   };
-  // Cuenta con sesión: el titular y sus familiares vinculados.
   async function datosCuenta(paciente) {
     if (!paciente) return null;
     return { ...paciente, familiares: await cuentas.familiares(paciente.rut) };
@@ -91,7 +84,6 @@ function crearReservaController(c) {
     const ficha = await catalogo.paciente(f.rut);
     const x = await ctxBloque(f.idBloque);
     const cita = `${x.esp} · ${x.prof.nombre} · ${x.b.fecha} ${x.b.hora} · ${x.sede.nombre}`;
-    // Con sesión (titular o familiar vinculado) ve y edita sus datos; sin sesión usa la ficha guardada sin mostrarla.
     const modo = !ficha ? "nuevo" : f.verificado ? "existente" : "existente-sin-sesion";
     const docs = ficha && f.verificado ? await docsDe(f.rut) : [];
     return {
@@ -105,8 +97,6 @@ function crearReservaController(c) {
   async function resumen(f) {
     const ficha = await catalogo.paciente(f.rut);
     const x = await ctxBloque(f.idBloque);
-    // Conocer un RUT no basta para ver de quién es: sin verificar la identidad, el nombre de una ficha
-    // existente se muestra enmascarado, igual que en el paso de datos (RNF03). La reserva se registra igual.
     const identificado = !ficha || f.verificado;
     const nombre = ficha ? (identificado ? ficha.nombre : vistas.mascaraNombre(ficha.nombre)) : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
     const contacto = ficha && !f.actualizar ? ficha : { ...(f.nuevo || {}), ...(f.actualizar || {}) };
@@ -118,7 +108,6 @@ function crearReservaController(c) {
   }
 
   return {
-    // Paso 1: la página principal del portal abre aquí. ?lugar=ID deja un policlínico preseleccionado.
     inicio: async ({ usuario, paciente, consulta }) => {
       if (!activo()) return apagado(usuario);
       const f = sesion(consulta.get("t"));
@@ -155,7 +144,6 @@ function crearReservaController(c) {
       return { redirigir: `/agendar/calendario?t=${t}` };
     },
 
-    // Paso 2: calendario mensual con los días disponibles y las horas del día elegido.
     calendario: guard(async ({ t, f, consulta, usuario }) => {
       const bs = await libres(f);
       const dias = new Map();
@@ -188,7 +176,6 @@ function crearReservaController(c) {
       return { html: vistas.calendario({ t, resumen: await resumenBusqueda(f), mes, antes, despues, dias: delMes, dia, grupos, usuario }) };
     }),
 
-    // Paso 3: datos del paciente y documentos.
     datos: guard(async ({ t, f, consulta, usuario }) => {
       const pedido = Number(consulta.get("bloque"));
       if (pedido) {
@@ -204,8 +191,6 @@ function crearReservaController(c) {
       const entrada = Object.fromEntries(Object.entries(d).filter(([, v]) => typeof v === "string"));
       try {
         const docs = [];
-        // Los adjuntos se guardan siempre, con o sin cuenta. Si el paciente ya existía y no inició sesión,
-        // quedan marcados para que el personal confirme la identidad al revisarlos.
         for (const i of [1, 2, 3]) {
           const a = d[`doc${i}`];
           if (!a || typeof a === "string") continue;
@@ -224,7 +209,6 @@ function crearReservaController(c) {
           pacientes.validar(datos);
           f.actualizar = datos;
         } else f.actualizar = null;
-        // Sin sesión, los cambios de contacto no se aplican directo: llegan al policlínico como solicitud.
         f.cambioDatos = ficha && !f.verificado ? String(d.cambioDatos || "").trim().slice(0, 300) : "";
         if (docs.length) {
           const enEspera = [...flujos.values()].filter((x) => x !== f).reduce((n, x) => n + x.docs.reduce((m, y) => m + y.archivo.datos.length, 0), 0);
@@ -240,7 +224,6 @@ function crearReservaController(c) {
       return { redirigir: `/agendar/revisar?t=${t}` };
     }),
 
-    // Paso 4: resumen y confirmación.
     revisar: guard(async ({ t, f, usuario }) => {
       if (!f.idBloque) return { redirigir: `/agendar/calendario?t=${t}` };
       if (!(await catalogo.paciente(f.rut)) && !f.nuevo) return { redirigir: `/agendar/datos?t=${t}` };
@@ -262,8 +245,6 @@ function crearReservaController(c) {
           await pacientes.actualizar(f.rut, f.actualizar);
           op.aud(portal, "Datos actualizados desde el portal", "Pacientes", f.rut, ficha, await catalogo.paciente(f.rut), x.sede.id);
         }
-        // Paciente nuevo o con sesión: identificado. Si no, la reserva y lo que adjuntó se guardan igual,
-        // pero el consentimiento no se registra a nombre de otra persona y los cambios quedan para revisión.
         const identificado = !ficha || f.verificado;
         if (identificado) op.registrarConsentimiento(f.rut, { canal: "Portal web", comunicaciones: f.comunicaciones, usuario: portal });
         const cita = await agendamiento.agendar({ rut: f.rut, idBloque: f.idBloque, canal: "WEB" });
@@ -281,7 +262,6 @@ function crearReservaController(c) {
         let envio = "";
         if (r.canal) {
           let m = await op.comunicar(portal, cita, r.canal, "Comprobante de reserva");
-          // Se intenta enviar de inmediato; si falla, la reserva no se afecta y el ciclo automático reintenta.
           try { m = await c.despachador.enviar(m); } catch (e) { console.error(e); }
           envio = {
             Enviado: `Te enviamos el comprobante por ${r.canal}.`,
@@ -298,9 +278,6 @@ function crearReservaController(c) {
         return { estado: 400, html: vistas.revisar({ t, r: await resumen(f), usuario, mensaje: error(e) }) };
       }
     }),
-    // RF36: encuesta voluntaria sobre la experiencia de reservar, distinta de la encuesta posterior a la atención
-    // (RF30). Se responde con el token de la reserva recién hecha y no pide el RUT: así conocer un RUT no permite
-    // responder a nombre de otra persona, y solo se ofrece con una reserva ya completada.
     encuestaAgendamiento: guard(async ({ t, f, usuario }) => {
       if (!f.confirmada) return { redirigir: "/agendar" };
       return { html: vistas.encuestaAgendamiento({ t, respondida: !!f.encuestaAgendamiento, usuario }) };
@@ -318,11 +295,10 @@ function crearReservaController(c) {
     comprobante: guard(async ({ f }) => {
       if (!f.confirmada) return { redirigir: "/agendar" };
       try {
-        // El comprobante descargable es la misma fuga por otra vía: también va enmascarado.
         return { binario: await pdfDeCita(f.confirmada.idCita, f.confirmada.r.identificado !== false), mime: "application/pdf", nombreArchivo: "comprobante-reserva.pdf" };
       } catch (e) {
         if (e.message !== "CITA_NO_ENCONTRADA") throw e;
-        return { redirigir: "/paciente/consulta" }; // la cita ya no está vigente: se revisa en Consultar mi reserva
+        return { redirigir: "/paciente/consulta" };
       }
     }),
     pdfDeCita,
@@ -332,7 +308,6 @@ function crearReservaController(c) {
     const cita = await c.citaRepo.buscarPorId(idCita);
     const x = cita && (await ctxBloque(cita.idBloque));
     const p = cita && (await catalogo.paciente(cita.rut));
-    // Cita cancelada, borrada o ficha ya no disponible: no hay comprobante que emitir.
     if (!cita || cita.estadoReserva === "CANCELADA" || !x || !p) throw new Error("CITA_NO_ENCONTRADA");
     return comprobantePdf({
       paciente: { rut: p.rut, nombre: mostrarNombre ? p.nombre : vistas.mascaraNombre(p.nombre) },

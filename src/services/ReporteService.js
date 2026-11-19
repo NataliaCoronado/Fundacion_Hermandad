@@ -2,17 +2,15 @@
 const { edad } = require("./PacienteService");
 const { hoy, sumarDias } = require("../util/tiempo");
 
-const BOM = "﻿"; // para que Excel lea bien las tildes
+const BOM = "﻿";
 const celda = (v) => {
   let t = String(v ?? "");
-  if (/^[=+\-@]/.test(t)) t = `'${t}`; // evita que Excel interprete texto como fórmula
+  if (/^[=+\-@]/.test(t)) t = `'${t}`;
   return /[",\n;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 };
 const csv = (filas) =>
   BOM + filas.map((f) => f.map(celda).join(";")).join("\r\n") + "\r\n";
 
-// RF19–RF23: indicadores administrativos. Los reportes son agregados: no incluyen RUT ni nombres de pacientes.
-// Todos los métodos aceptan un filtro opcional { desde, hasta, idPoliclinico, especialidad } (fechas "AAAA-MM-DD" de la atención).
 const DIAS = [
   "Lunes",
   "Martes",
@@ -33,7 +31,6 @@ class ReporteService {
     Object.assign(this, { citaRepo, catalogo, extras, encuestas });
   }
 
-  // Carga una vez lo necesario y aplica el filtro: devuelve cupos y citas dentro del alcance, con su sede y especialidad.
   async base(filtro = {}) {
     const [sedesL, profsL, bloquesL, citasL] = await Promise.all([
       this.catalogo.policlinicos(),
@@ -117,7 +114,6 @@ class ReporteService {
     );
   }
 
-  // Una fila por cita con sede, especialidad y estados (sin datos del paciente).
   async detalle(filtro = {}) {
     const b = await this.base(filtro);
     return b.citas.map((c) => {
@@ -165,7 +161,6 @@ class ReporteService {
     });
   }
 
-  // Caracterización de los pacientes que tienen citas registradas (solo totales: sin RUT ni nombres).
   async caracterizacion(filtro = {}) {
     const b = await this.base(filtro);
     const pacientes = await this.catalogo.pacientes();
@@ -217,7 +212,6 @@ class ReporteService {
     };
   }
 
-  // Demanda por profesional: citas, asistencia y ocupación de sus cupos publicados.
   async porProfesional(filtro = {}) {
     const b = await this.base(filtro);
     const deBloque = new Map(b.bloques.map((x) => [x.id, x.idProfesional]));
@@ -265,12 +259,10 @@ class ReporteService {
       );
   }
 
-  // Panel de Administración: todo lo que necesitan las gráficas, en una sola lectura.
   async analitica(filtro = {}) {
     const b = await this.base(filtro);
     const enc = this.encuestas.resumen();
     const resumen = ReporteService.resumenDe(b.citas, b.bloques, enc);
-    // Periodo anterior de igual duración, para mostrar la variación.
     let anterior = null;
     if (filtro.desde && filtro.hasta) {
       const dias =
@@ -358,8 +350,6 @@ class ReporteService {
     };
   }
 
-  // RF22: las dos encuestas por separado (agendamiento, RF36; atención, RF30), contando solo las respuestas de
-  // las citas que entran en el filtro del reporte (período, lugar, especialidad y profesional).
   encuestasPorTipo(citas) {
     const ids = new Set(citas.map((c) => c.id));
     const resumir = (lista) => {
@@ -374,7 +364,6 @@ class ReporteService {
     return { agendamiento: resumir(this.extras.listar("encuestasAgendamiento")), atencion: resumir(this.extras.listar("encuestas")) };
   }
 
-  // Lo que requiere atención hoy y la capacidad de los próximos 14 días (cupos libres, reservados y sin publicar por día).
   async operacion() {
     const hoyTxt = hoy();
     const hasta = sumarDias(hoyTxt, 13);

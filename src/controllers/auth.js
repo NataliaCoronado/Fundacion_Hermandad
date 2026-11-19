@@ -1,13 +1,13 @@
 "use strict";
 const vistas = require("../views/auth");
-const { permitido, rutaAgenda } = require("../auth/permisos");
+const { permitido, rutaInicio } = require("../auth/permisos");
 const { error } = require("./mensajes");
 
 function crearAuthController({ auth, sesiones }) {
   return {
     formulario: ({ consulta, usuario }) =>
       usuario
-        ? { redirigir: rutaAgenda(usuario.rol) }
+        ? { redirigir: rutaInicio(usuario.rol) }
         : { html: vistas.login({ volver: consulta.get("volver") || "" }) },
     entrar: async ({ cuerpo }) => {
       try {
@@ -19,7 +19,7 @@ function crearAuthController({ auth, sesiones }) {
         const volver = String(cuerpo.volver || "");
         const destino = volver.startsWith(prefijo) && !/[\\\r\n]/.test(volver)
           ? volver
-          : rutaAgenda(usuario.rol);
+          : rutaInicio(usuario.rol);
         return { redirigir: destino, cookie: token };
       } catch (e) {
         const estado = e.message === "DEMASIADOS_INTENTOS" ? 429 : 401;

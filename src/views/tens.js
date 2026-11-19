@@ -6,7 +6,6 @@ const { detalleCita } = require("../controllers/contexto");
 const { sumarDias } = require("../util/tiempo");
 
 const iniciales = inic;
-// Estado visual de una cita en la grilla.
 const estadoCelda = (c) =>
   c.asistencia === "ASISTIO"
     ? ["az", "Asistió"]
@@ -18,7 +17,6 @@ const estadoCelda = (c) =>
           ? ["pend", "Sin respuesta"]
           : ["pend", "Por confirmar"];
 
-// Agenda del día en grilla: una columna por profesional y una fila por hora.
 const MES = [
   "ENE",
   "FEB",
@@ -33,7 +31,6 @@ const MES = [
   "NOV",
   "DIC",
 ];
-// Inicio del personal: resumen, próximas citas y tareas pendientes.
 const panel = ({
   usuario,
   ctx,
@@ -182,7 +179,6 @@ const GENEROS = [
   ["OTRO", "Otro"],
   ["NO_INFORMA", "No informa"],
 ];
-// Campos de la ficha (crear y editar). v = valores para rellenar; nuevo = pide RUT y consentimiento.
 const camposFicha = (v, comunas, nuevo) => {
   const val = (k, def = "") => esc(v[k] ?? def);
   return `${nuevo ? `<label>RUT <input name="rut" placeholder="11111111-1" required value="${val("rut")}"></label>` : `<input type="hidden" name="rut" value="${val("rut")}">`}
@@ -213,7 +209,6 @@ const camposFicha = (v, comunas, nuevo) => {
 <label>Teléfono del responsable <input name="respTelefono" placeholder="+56912345678" value="${val("respTelefono")}"></label>
 ${nuevo ? '<label><input type="checkbox" name="consentimiento" value="1"> El paciente (o su responsable) acepta el tratamiento de sus datos administrativos</label>' : ""}`;
 };
-// Pasa una ficha guardada al formato plano del formulario.
 const aFormulario = (p) => ({
   ...p,
   respNombre: p.responsable?.nombre,

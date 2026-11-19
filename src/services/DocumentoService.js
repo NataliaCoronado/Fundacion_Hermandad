@@ -18,7 +18,6 @@ const MAX_BYTES =
   Math.min(20, Math.max(1, Number(process.env.MAX_DOCUMENTO_MB) || 5)) *
   1024 *
   1024;
-// El formato se reconoce por los primeros bytes del archivo, no por su nombre.
 const FORMATOS = [
   {
     formato: "PDF",
@@ -39,12 +38,10 @@ const FORMATOS = [
     firma: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
   },
 ];
-// Carpeta privada de adjuntos: fuera de public/, solo se entrega al personal con sesión.
 const carpeta = () =>
   process.env.DIR_DOCUMENTOS ||
   path.join(__dirname, "..", "..", "datos", "documentos");
 
-// CU-02: documentos administrativos del paciente (FONASA, CESFAM, orden de derivación...), con archivo adjunto opcional.
 class DocumentoService {
   constructor({ catalogo, extras }) {
     Object.assign(this, { catalogo, extras });
@@ -53,14 +50,27 @@ class DocumentoService {
     return TIPOS;
   }
 
-  guardarArchivo(archivo) {
+  // Nombre legible en disco: RUT_Tipo_AAAA-MM-DD_xxxxxx.ext (la cola aleatoria evita choques el mismo día).
+  static nombreLegible({ rut, tipo }, ext) {
+    const limpio = (t) =>
+      String(t || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Za-z0-9-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40);
+    const partes = [limpio(rut) || "sin-rut", limpio(tipo) || "Documento", textoLocal().slice(0, 10)];
+    return `${partes.join("_")}_${crypto.randomUUID().slice(0, 6)}${ext}`;
+  }
+
+  guardarArchivo(archivo, datos = {}) {
     if (archivo.datos.length > MAX_BYTES) throw new Error("ARCHIVO_MUY_GRANDE");
     const f = FORMATOS.find((x) =>
       archivo.datos.subarray(0, x.firma.length).equals(x.firma),
     );
     if (!f) throw new Error("ARCHIVO_INVALIDO");
     fs.mkdirSync(carpeta(), { recursive: true });
-    const guardado = crypto.randomUUID() + f.ext; // el nombre en disco nunca viene del usuario
+    const guardado = DocumentoService.nombreLegible(datos, f.ext);
     fs.writeFileSync(path.join(carpeta(), guardado), archivo.datos, {
       mode: 0o600,
     });
@@ -105,7 +115,7 @@ class DocumentoService {
     )
       throw new Error("FUERA_DE_SEDE");
     const adjunto =
-      archivo && archivo.datos ? this.guardarArchivo(archivo) : null;
+      archivo && archivo.datos ? this.guardarArchivo(archivo, { rut, tipo }) : null;
     if (anterior)
       this.extras.actualizar("documentos", anterior.id, {
         archivado: true,
@@ -136,7 +146,6 @@ class DocumentoService {
       verificadoPor: usuario.nombre,
     });
   }
-  // Datos para descargar el adjunto de un documento.
   archivo(id) {
     const d = this.extras.buscar("documentos", id);
     if (!d) throw new Error("DOCUMENTO_NO_ENCONTRADO");

@@ -1,6 +1,4 @@
 'use strict';
-// Sistema visual del portal y del sitio del personal.
-// Colores y tipografías de la maqueta de Figma; espaciado en múltiplos de 4 px.
 module.exports = `
 :root{
   --navy:#0b3b4c;--navy-2:#0f4a5e;--teal:#16808b;--teal-t:#127f8c;--teal-2:#0f6d77;
@@ -25,7 +23,6 @@ hr{border:0;border-top:1px solid var(--borde);margin:20px 0}
 .saltar{position:absolute;left:-999px;top:8px;background:var(--navy);color:#fff;padding:10px 16px;border-radius:8px;z-index:50}.saltar:focus{left:8px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid #f2b705;outline-offset:2px}
 
-/* ---------- Botones ---------- */
 .btn,form button[type=submit],button.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--teal);background:var(--teal);color:#fff;padding:11px 20px;border-radius:var(--r-s);font:inherit;font-weight:700;font-size:.92rem;line-height:1.2;text-decoration:none;cursor:pointer;transition:background .15s,box-shadow .15s,transform .05s}
 .btn svg{width:18px;height:18px;flex:none}
 .btn,form button[type=submit]{white-space:nowrap}
@@ -39,7 +36,6 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .btn[disabled],.btn.off{opacity:.45;pointer-events:none}
 button{font:inherit;cursor:pointer}
 
-/* ---------- Formularios ---------- */
 label{display:block;font-weight:600;font-size:.86rem;margin:14px 0 6px;color:var(--navy)}
 input,select,textarea{font:inherit;font-size:.95rem;padding:11px 14px;border:1.5px solid var(--borde-2);border-radius:var(--r-s);background:#fff;color:var(--navy);width:100%;max-width:100%;transition:border-color .15s,box-shadow .15s}
 input:hover,select:hover,textarea:hover{border-color:var(--suave)}
@@ -49,7 +45,6 @@ label input,label select,label textarea{margin-top:6px;font-weight:400}
 .check{display:flex!important;gap:10px;align-items:flex-start;font-weight:400!important}
 .check input{margin-top:2px}
 
-/* ---------- Avisos y estados ---------- */
 .aviso{background:var(--claro);border:1px solid #cbe6eb;border-radius:var(--r-s);padding:13px 16px;font-size:.92rem;margin:14px 0;color:var(--navy)}
 .aviso.err{background:var(--err-bg);border-color:#f5c2bd;color:var(--err)}
 .aviso.okk{background:var(--ok-bg);border-color:#b7e0c6;color:var(--ok)}
@@ -61,7 +56,6 @@ label input,label select,label textarea{margin-top:6px;font-weight:400}
 .badge.mal{background:var(--err-bg);color:var(--err)}
 .etiqueta{margin-bottom:8px}
 
-/* ---------- Tarjetas y piezas comunes ---------- */
 .tarjeta{background:var(--sup);border:1px solid var(--borde);border-radius:var(--r);padding:28px;box-shadow:var(--sombra)}
 .lead{color:var(--muted);font-size:1.06rem;line-height:1.6;max-width:640px}
 .sobre{display:inline-block;color:var(--teal-t);background:var(--claro);font-weight:700;font-size:.72rem;letter-spacing:.08em;margin:0 0 16px;padding:6px 12px;border-radius:999px}
@@ -74,7 +68,6 @@ label input,label select,label textarea{margin-top:6px;font-weight:400}
 details{border-bottom:1px solid var(--borde);padding:14px 0}summary{cursor:pointer;font-weight:700}
 .vacio{text-align:center;color:var(--muted);padding:28px 16px;border:1.5px dashed var(--borde-2);border-radius:var(--r);background:#fafcfc}
 
-/* ---------- Tablas ---------- */
 .tabla-w{overflow-x:auto;border:1px solid var(--borde);border-radius:12px;margin:12px 0 4px;background:#fff}
 table{border-collapse:collapse;width:100%;font-size:.89rem}
 th{background:#f6f9fa;text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;padding:12px 14px;border-bottom:1px solid var(--borde);white-space:nowrap}
@@ -85,7 +78,6 @@ td form{display:inline-flex!important;gap:6px;align-items:center;margin:0!import
 td form select{width:auto;padding:6px 10px;font-size:.84rem}
 td form button,td form button[type=submit]{padding:6px 12px;font-size:.8rem;border-radius:8px}
 
-/* =================== PORTAL DE PACIENTES =================== */
 .cab{background:rgba(255,255,255,.96);backdrop-filter:saturate(1.4) blur(8px);display:flex;justify-content:space-between;align-items:center;padding:12px max(20px,calc((100% - var(--ancho))/2));gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--borde)}
 header.sup{position:sticky;top:0;z-index:20}
 .marca{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--teal-t);font-weight:700;font-size:.75rem;line-height:1.2}
@@ -106,7 +98,6 @@ main{flex:1;width:100%;max-width:calc(var(--ancho) + 40px);margin:0 auto;padding
 .pie .sello{width:34px;height:34px}
 .encab{margin-bottom:28px}.encab h1{margin-bottom:8px}
 
-/* Inicio */
 .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;margin:8px 0 48px}
 .hero h1{font-size:clamp(2.1rem,4vw,3rem);line-height:1.1;margin-bottom:18px}
 .hero .acciones{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
@@ -132,7 +123,6 @@ main{flex:1;width:100%;max-width:calc(var(--ancho) + 40px);margin:0 auto;padding
 .sedes-mini span{position:absolute;inset:auto 0 0 0;padding:28px 12px 10px;background:linear-gradient(transparent,rgba(5,30,40,.85));font-weight:700;font-size:.86rem}
 .sedes-mini .ilus{object-fit:contain;background:#e8f4f7}
 
-/* Flujo de reserva */
 .volver{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:600;font-size:.88rem;text-decoration:none;margin-bottom:20px}
 .volver:hover{color:var(--teal-t)}
 .barra{display:flex;gap:8px;margin-bottom:32px;counter-reset:p;list-style:none;padding:0}
@@ -189,7 +179,6 @@ a.dsem:hover:not(.sel){background:var(--claro)}
 .exito .ico-c svg{width:28px;height:28px}
 .exito h1{margin:0 0 4px}.exito p{margin:0}
 
-/* =================== SITIO DEL PERSONAL =================== */
 body.pers{flex-direction:row;background:#f1f5f6}
 .side{width:248px;flex:none;align-self:flex-start;background:linear-gradient(180deg,var(--navy) 0%,#082e3c 100%);color:#c9dde3;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
 .side-marca{display:flex;align-items:center;gap:10px;padding:20px 20px 18px;color:#fff;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -225,7 +214,6 @@ body.pers{flex-direction:row;background:#f1f5f6}
 .cont form:not([style]):not(.inl) button[type=submit]{grid-column:1/-1;justify-self:start;margin-top:14px}
 .cont form label:has(input[type=checkbox]){display:flex;gap:10px;align-items:center;font-weight:500;align-self:center;margin-top:22px}
 .cont form label:has(input[type=checkbox]) input{margin:0}
-/* Inicio del personal */
 .hola{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
 .hola h2{font-size:1.5rem;margin:0 0 4px}.hola p{margin:0;color:var(--muted)}
 .rapidas{display:flex;gap:10px;flex-wrap:wrap}
@@ -267,7 +255,6 @@ a.kpi:hover{border-color:var(--teal);box-shadow:var(--sombra-2)}
 .sub-form{grid-column:1/-1;margin:22px 0 0!important;padding-top:16px;border-top:1px solid var(--borde)}
 .sub-form small{display:block;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:.84rem;margin-top:2px}
 input[type=file]{padding:8px;background:#fff}
-/* Agenda en grilla */
 .filtro{display:flex!important;gap:12px;align-items:end;flex-wrap:wrap;margin:0 0 20px!important;padding:0!important;background:none!important;border:0!important}
 .filtro label{margin:0;font-size:.8rem}.filtro select,.filtro input{width:auto;min-width:180px}
 .filtro .btn{padding:11px 16px}
@@ -289,7 +276,6 @@ input[type=file]{padding:8px;background:#fff}
 .agg-g .vac{background:#f8fafb}
 .leyenda{display:flex;gap:16px;flex-wrap:wrap;font-size:.77rem;color:var(--muted);margin:12px 0 0}
 .leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-/* Ingreso del personal */
 body.ingreso{flex-direction:row;background:#fff}
 .ing-izq{flex:1;background:linear-gradient(150deg,var(--navy),#0c5563 60%,var(--teal));color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
 .ing-izq:after{content:'';position:absolute;right:-120px;bottom:-120px;width:380px;height:380px;border-radius:50%;background:rgba(255,255,255,.06)}
@@ -307,7 +293,6 @@ body.ingreso{flex-direction:row;background:#fff}
 .solo{max-width:560px;margin:60px auto}
 
 
-/* ---------- Panel de Administración: gráficos, alertas y agendas ---------- */
 .sub-p{color:var(--muted);font-size:.84rem;margin:-6px 0 12px}
 .col-p{display:grid;gap:20px;min-width:0;align-content:start}
 .dos-g{grid-template-columns:1fr 1fr;margin-bottom:20px}
@@ -366,14 +351,12 @@ body.ingreso{flex-direction:row;background:#fff}
 .acc-f{display:inline-flex;gap:6px;align-items:center}
 .alerta-t{color:var(--err);font-weight:700}
 .filtro input[type=search]{min-width:220px}
-/* Filtros de reportes */
 .filtro-r{display:flex;flex-wrap:wrap;gap:12px;align-items:end;background:#fff;border:1px solid var(--borde);border-radius:16px;padding:16px 18px;margin:0 0 20px;box-shadow:var(--sombra)}
 .filtro-r label{margin:0;font-size:.78rem}.filtro-r input,.filtro-r select{width:auto;min-width:150px;padding:9px 12px}
 .rapidos{display:flex;gap:4px;background:#eef3f4;padding:4px;border-radius:12px;flex-wrap:wrap;margin-right:auto}
 .rapidos a{padding:8px 12px;border-radius:9px;font-size:.82rem;font-weight:700;color:var(--muted);text-decoration:none}
 .rapidos a:hover{color:var(--navy)}.rapidos a.act{background:#fff;color:var(--teal-t);box-shadow:0 1px 3px rgba(11,59,76,.12)}
 .descargas{display:flex;gap:10px;flex-wrap:wrap}
-/* Policlínicos */
 .sedes-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
 .sede-c{background:#fff;border:1px solid var(--borde);border-radius:16px;padding:16px;box-shadow:var(--sombra);display:flex;flex-direction:column}
 .sede-cab{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px}.sede-cab h3{margin:0;font-size:1.05rem}
@@ -382,7 +365,6 @@ body.ingreso{flex-direction:row;background:#fff}
 .mini-k b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums}.mini-k span{font-size:.7rem;color:var(--muted);line-height:1.2;display:block}
 .esps{display:flex;flex-wrap:wrap;gap:6px}.esps span{background:var(--bg);border-radius:999px;padding:3px 10px;font-size:.74rem;font-weight:600;color:var(--muted)}
 .sede-c .enl{margin:14px 0 0;font-size:.84rem;font-weight:700;margin-top:auto;padding-top:14px}.sede-c .enl a{text-decoration:none}
-/* Agenda semanal de cupos */
 .sem-nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:4px 0 14px}.sem-nav b{margin:0 6px}
 .resumen-sem{display:flex;gap:18px;flex-wrap:wrap;font-size:.86rem;margin:0 0 12px;align-items:center}
 .resumen-sem i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}

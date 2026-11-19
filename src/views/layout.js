@@ -1,10 +1,9 @@
 "use strict";
 const { esc } = require("./util");
-const { permitido, rutaAgenda } = require("../auth/permisos");
+const { permitido, rutaInicio } = require("../auth/permisos");
 const css = require("./estilos");
 const pulido = require("./pulido.css");
 
-// Botón de menú (hamburguesa) que se muestra en pantallas chicas.
 const botonMenu = (id) =>
   `<button type="button" class="menu-btn" data-menu aria-controls="${id}" aria-expanded="false" aria-label="Abrir menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>`;
 
@@ -18,6 +17,7 @@ const MENU = [
     area: "admin",
     titulo: "GESTIÓN INSTITUCIONAL",
     items: [
+      ["/admin/resumen", "Resumen", "inicio"],
       ["/admin/agendas", "Agendas y cupos", "calendario"],
       ["/admin/profesionales", "Equipo de salud", "medico"],
       ["/admin/policlinicos", "Policlínicos y especialidades", "edificio"],
@@ -28,6 +28,7 @@ const MENU = [
     area: "tens",
     titulo: "OPERACIÓN DIARIA",
     items: [
+      ["/tens/resumen", "Resumen", "inicio"],
       ["/tens/agenda", "Agendas y reservas", "calendario"],
       ["/tens/espera", "Lista de espera", "lista"],
       ["/tens/pacientes", "Pacientes", "usuarios"],
@@ -36,13 +37,12 @@ const MENU = [
   },
 ];
 const NAV_PORTAL = [
-  ["agendar", "/", "Reservar hora"],
-  ["consulta", "/paciente/consulta", "Consultar mi reserva"],
-  ["ayuda", "/ayuda", "Ayuda y contacto"],
-  ["cuenta", "/paciente/cuenta", "Iniciar sesión", "cta"],
+  ["agendar", "/", "Reservar hora", "calendario"],
+  ["consulta", "/paciente/consulta", "Consultar mi reserva", "buscar"],
+  ["ayuda", "/ayuda", "Ayuda y contacto", "chat"],
+  ["cuenta", "/paciente/cuenta", "Iniciar sesión", "usuarios"],
 ];
 
-// Dirección pública del portal de pacientes (sitio aparte del personal).
 const URL_PORTAL = () => process.env.URL_PORTAL || "http://localhost:3000";
 const ROLES = {
   ADMINISTRACION: "Administración",
@@ -53,7 +53,7 @@ const marca =
   '<a class="marca" href="/" aria-label="Instituto de Caridad Hermandad de Dolores, inicio"><img class="logo" src="/img/logo.png" alt="Instituto de Caridad Hermandad de Dolores · +200 Años al servicio de Chile" width="170" height="46"></a>';
 const script = `<script>(function(){var h=document.documentElement;function s(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function g(k){try{return localStorage.getItem(k)}catch(e){return null}}
-document.querySelectorAll('.side a').forEach(function(a){if(a.getAttribute('href')===location.pathname)a.classList.add('act')});
+document.querySelectorAll('.side a:not(.side-marca)').forEach(function(a){if(a.getAttribute('href')===location.pathname)a.classList.add('act')});
 document.addEventListener('input',function(e){var c=e.target;if(!c.matches||!c.matches('input[name=rut],input[name=respRut],input[name=rutFamiliar],input[data-rut]'))return;
 var v=c.value.toUpperCase().replace(/[^0-9K]/g,'');var k=v.slice(-1)==='K';v=v.replace(/K/g,'')+(k?'K':'');v=v.slice(0,9);c.value=v.length>1?v.slice(0,-1)+'-'+v.slice(-1):v});
 var mb=document.querySelector('[data-menu]');function menu(abrir){document.body.classList.toggle('menu-abierto',abrir);if(mb)mb.setAttribute('aria-expanded',abrir?'true':'false')}
@@ -103,14 +103,13 @@ function pagina({
   let clase = "";
   if (portal) {
     const conCuenta = !!require("./contextoPortal").peticion().paciente;
-    const nav = NAV_PORTAL.map(([k, href, t, extra]) =>
-      k === "cuenta" && conCuenta ? [k, "/paciente/mis-horas", "Mi cuenta", extra] : [k, href, t, extra],
+    const nav = NAV_PORTAL.map(([k, href, t, i]) =>
+      k === "cuenta" && conCuenta ? [k, "/paciente/mis-horas", "Mi cuenta", i] : [k, href, t, i],
     ).map(
-      ([k, href, t, extra]) =>
-        `<a href="${href}" class="${[k === activo ? "act" : "", extra || ""].join(" ").trim()}"${k === activo ? ' aria-current="page"' : ""}>${t}</a>`,
+      ([k, href, t, i]) =>
+        `<a href="${href}"${k === activo ? ' class="act" aria-current="page"' : ""}>${ico(i)}<span>${t}</span></a>`,
     ).join("");
     clase = "portal";
-    // Banda de portada: la página la entrega (portada) o se arma con el título y la primera bajada (.lead).
     let banda = portada;
     let resto = contenido;
     if (!banda && encabezado) {
@@ -118,18 +117,20 @@ function pagina({
       banda = { titulo: esc(titulo), lead: m ? m[1] : "" };
       if (m) resto = contenido.slice(m[0].length);
     }
-    // Botón Volver en todas las páginas del portal salvo la portada (volver: false).
     const v = volver === false ? null : volver || { href: "/", texto: "Volver al inicio" };
     const volverHtml = v ? `<a class="volver" href="${esc(v.href)}">${ico("chevIzq")}<span>${esc(v.texto)}</span></a>` : "";
     const bandaHtml = banda
       ? `<section class="portada"><img class="portada-sello" src="/img/sello.png" alt="" width="460" height="460"><div class="portada-txt">${volverHtml}${banda.pre || ""}<h1>${banda.titulo}</h1>${banda.lead ? `<p class="lead">${banda.lead}</p>` : ""}</div>${banda.extra || ""}</section>`
       : "";
     const [sedeDir, calle] = DIRECCION.split(": ");
-    cuerpo = `<header class="sup"><div class="cab">${marca}${botonMenu("menu-portal")}<nav class="nav" id="menu-portal" aria-label="Principal">${nav}</nav></div></header>
+    cuerpo = `<aside class="side" id="menu-portal" aria-label="Menú principal"><a class="side-marca" href="/"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>Portal de pacientes</small></span></a>
+<nav aria-label="Principal"><h3>AGENDAMIENTO DE HORAS</h3>${nav}</nav><div class="pie-s"><a href="https://wa.me/${WHATSAPP.replace(/\D/g, "")}" target="_blank" rel="noopener">${ico("telefono")}<span>WhatsApp ${WHATSAPP}</span></a><a href="/privacidad">${ico("escudo")}<span>Política de privacidad</span></a></div></aside>
+<div class="velo" aria-hidden="true"></div>
+<div class="app"><header class="sup"><div class="cab">${marca}${botonMenu("menu-portal")}</div></header>
 <main id="contenido">${bandaHtml}${msg}${resto}</main>
 <footer class="pie"><div class="pie-in"><span class="pie-marca"><img src="/img/sello.png" alt="" width="48" height="48"><span>Instituto de Caridad<br>Hermandad de Dolores</span></span>
 <dl class="pie-datos"><div><dt>${esc(sedeDir)}</dt><dd>${esc(calle)}</dd></div><div><dt>WhatsApp</dt><dd><a href="https://wa.me/${WHATSAPP.replace(/\D/g, "")}">${WHATSAPP}</a></dd></div><div><dt>Correo</dt><dd><a href="mailto:${CORREO}">${CORREO}</a></dd></div></dl>
-<p class="pie-legal">Más de 200 años al servicio de Chile. <a href="/privacidad">Política de privacidad</a></p></div></footer>`;
+<p class="pie-legal">Más de 200 años al servicio de Chile. <a href="/privacidad">Política de privacidad</a></p></div></footer></div>`;
   } else if (ingreso) {
     clase = "ingreso";
     cuerpo = `<section class="ing-izq"><div><span class="logo-b"><img class="logo" src="/img/logo.png" alt="Instituto de Caridad Hermandad de Dolores" width="170" height="46"></span></div>
@@ -152,7 +153,7 @@ function pagina({
             .join("")}`,
       )
       .join("");
-    cuerpo = `<aside class="side" id="menu-personal" aria-label="Menú del personal"><a class="side-marca" href="${rutaAgenda(usuario.rol)}"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>${permitido(usuario.rol, "admin") ? "Administración" : usuario.rol === "TELEMEDICINA" ? "Gestión de Telemedicina" : "TENS/TONS"}</small></span></a>
+    cuerpo = `<aside class="side" id="menu-personal" aria-label="Menú del personal"><a class="side-marca" href="${rutaInicio(usuario.rol)}"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>${permitido(usuario.rol, "admin") ? "Administración" : usuario.rol === "TELEMEDICINA" ? "Gestión de Telemedicina" : "TENS/TONS"}</small></span></a>
 <nav>${grupos}</nav><div class="pie-s">${usuario.rol === "ADMINISTRACION" ? `<a href="/admin/usuarios">${ico("llave")}<span>Configuración / perfil</span></a>` : ""}<div class="side-user"><b>${esc(usuario.nombre)}</b><span>${esc(usuario.rol === "ADMINISTRACION" ? "Red institucional" : usuario.rol === "TELEMEDICINA" ? "Telemedicina" : (require("../models/sedesInfo").infoSede(usuario.idPoliclinico)?.nombre||"Lugar asignado"))}</span><form method="post" action="/logout" class="micro"><button type="submit">Cerrar sesión</button></form></div><a href="${esc(URL_PORTAL())}" target="_blank" rel="noopener">${ico("externo")}<span>Portal de pacientes</span></a></div></aside>
 <div class="velo" aria-hidden="true"></div>
 <div class="app"><header class="top"><div class="top-izq">${botonMenu("menu-personal")}<h1>${esc(titulo)}</h1></div><div class="der"><span class="fecha-hoy">${ico("calendario")}${esc(hoyLargo())}</span>

@@ -1,6 +1,4 @@
 "use strict";
-// Webhook de WhatsApp: avisos con el formato de Meta (Cloud API), firmados como los firma Meta.
-// No se conecta a Meta: prueba que el sistema hace lo correcto con lo que Meta enviaría.
 const test = require("node:test");
 const assert = require("node:assert");
 const crypto = require("node:crypto");
@@ -9,7 +7,7 @@ const { crearServidor } = require("../src/server");
 
 const SECRETO = "secreto-de-prueba-de-la-app";
 const TOKEN = "token-de-verificacion";
-const PACIENTE_A = "56911111111"; // teléfono de la paciente A (cita 1, pendiente) tal como lo envía Meta
+const PACIENTE_A = "56911111111";
 
 function transporteFalso() {
   const enviados = [];
@@ -46,7 +44,6 @@ const aviso = (valor) => ({ object: "whatsapp_business_account", entry: [{ id: "
 const boton = (id, texto, contexto, de = PACIENTE_A) => aviso({ messages: [{ from: de, id, timestamp: "1763500000", type: "button", button: { text: texto, payload: texto }, ...(contexto ? { context: { from: "56900000000", id: contexto } } : {}) }] });
 const texto = (id, cuerpo, de = PACIENTE_A) => aviso({ messages: [{ from: de, id, timestamp: "1763500000", type: "text", text: { body: cuerpo } }] });
 const estado = (id, status, extra = {}) => aviso({ statuses: [{ id, status, timestamp: "1763500000", recipient_id: PACIENTE_A, ...extra }] });
-// El bot envía el recordatorio de una semana antes de la cita 1; Meta le asigna un identificador (wamid).
 async function recordatorio(s) {
   await s.c.bot.procesar("2026-11-16 10:00");
   const m = s.c.extras.listar("mensajes").find((x) => x.idCita === 1 && x.estado === "ENVIADO");
@@ -155,10 +152,10 @@ test("webhook: estados del comprobante: Entregado solo con la confirmación de M
     const m = await pedir();
     assert.strictEqual(m.estado, "Enviado");
     const ver = () => s.c.extras.buscar("comunicaciones", m.id);
-    await avisar(s.base, estado(m.proveedorId, "read"));          // Meta a veces no envía delivered cuando ya se leyó
+    await avisar(s.base, estado(m.proveedorId, "read"));
     assert.strictEqual(ver().estado, "Entregado");
     assert.strictEqual(ver().leido, true);
-    await avisar(s.base, estado(m.proveedorId, "delivered"));     // llega tarde: no retrocede
+    await avisar(s.base, estado(m.proveedorId, "delivered"));
     assert.strictEqual(ver().leido, true);
     assert.match(ver().detalle, /Leído/);
     const otra = await pedir();
@@ -187,7 +184,6 @@ test("webhook: con dos horas consultadas y sin referencia no se adivina: no canc
     const b1 = await s.c.catalogo.bloque(c1.idBloque);
     const libre = (await s.c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).sort((x, y) => `${x.fecha}${x.hora}`.localeCompare(`${y.fecha}${y.hora}`))[0];
     const c2 = await s.c.agendamiento.agendar({ rut: "11111111-1", idBloque: libre.id });
-    // El bot consulta por ambas horas (la víspera de cada una).
     for (const fecha of [b1.fecha, libre.fecha].sort()) await s.c.bot.procesar(`${sumarDias(fecha, -1)} 10:00`);
     const consultadas = new Set(s.c.extras.listar("mensajes").filter((m) => m.estado === "ENVIADO").map((m) => m.idCita));
     assert.ok(consultadas.has(1) && consultadas.has(c2.id), "el bot consultó por las dos horas");

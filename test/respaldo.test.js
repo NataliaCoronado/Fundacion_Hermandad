@@ -1,5 +1,4 @@
 "use strict";
-// RNF06 / CP-42: respaldo y restauración de los datos y los archivos.
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -49,7 +48,6 @@ test("restaurar: deja los datos exactamente como en el respaldo, sin mezclar, y 
   const e = escenario();
   try {
     const { carpeta } = R.crearRespaldo({ datos: e.datos, destino: e.respaldos, baseDatos: "" });
-    // Después del respaldo: se modifica un archivo, se borra un documento y aparece uno nuevo.
     fs.writeFileSync(path.join(e.datos, "estado.json"), JSON.stringify({ citas: [] }));
     fs.rmSync(path.join(e.datos, "documentos", "a.pdf"));
     fs.writeFileSync(path.join(e.datos, "documentos", "nuevo.pdf"), "%PDF posterior");
@@ -58,7 +56,6 @@ test("restaurar: deja los datos exactamente como en el respaldo, sin mezclar, y 
     assert.strictEqual(leer(e.datos, "documentos", "a.pdf"), "%PDF-1.4 original", "el documento borrado vuelve");
     assert.ok(!fs.existsSync(path.join(e.datos, "documentos", "nuevo.pdf")), "no mezcla: lo posterior al respaldo no queda");
     assert.ok(!fs.existsSync(`${e.datos}.restaurando`), "no deja la carpeta temporal");
-    // La copia de seguridad tiene el estado de justo antes de restaurar, para poder deshacer.
     assert.match(path.basename(r.seguridad), /antes-de-restaurar/);
     assert.strictEqual(leer(r.seguridad, "datos", "documentos", "nuevo.pdf"), "%PDF posterior");
   } finally { e.fin(); }
@@ -87,7 +84,6 @@ test("respaldo con PostgreSQL: incluye el volcado de la base; si pg_dump falla n
     assert.strictEqual(llamada.programa, "pg_dump");
     assert.ok(!llamada.args.join(" ").includes("secreta"), "la clave no va en la línea de comandos");
     assert.ok(R.verificarRespaldo(carpeta).ok);
-    // Sin pg_dump instalado: error claro y ninguna carpeta que parezca un respaldo válido.
     const antes = R.listarRespaldos(e.respaldos).length;
     const sinPg = () => { const err = new Error("pg_dump no está instalado en este equipo"); throw err; };
     assert.throws(() => R.crearRespaldo({ datos: e.datos, destino: e.respaldos, baseDatos: url, ejecutar: sinPg }), /no está instalado/);

@@ -2,16 +2,6 @@
 const crypto = require('node:crypto');
 const { textoLocal } = require('../util/tiempo');
 
-// Webhook de WhatsApp Cloud (Meta): recibe las respuestas del paciente a los recordatorios y los estados de
-// entrega de los mensajes enviados. Es la otra mitad de WhatsAppMeta: sin esto el sistema envía pero no se entera
-// de si el mensaje llegó ni de lo que respondió el paciente.
-//
-// Reglas que se respetan aquí:
-//   - Solo se acepta lo firmado por Meta (X-Hub-Signature-256 con el secreto de la app). Sin secreto configurado
-//     el webhook no existe: nunca se procesan avisos sin firma.
-//   - Meta reintenta durante 36 h y puede repetir avisos: cada mensaje y cada estado se procesa una sola vez.
-//   - "Entregado" se escribe solo cuando Meta lo confirma. El silencio no confirma ni cancela una cita (RF09).
-//   - Lo que no se puede asociar con seguridad a una cita no se adivina: queda como aviso para TENS/TONS.
 const ETIQUETAS = { delivered: 'Entregado al teléfono del paciente.', read: 'Leído por el paciente.' };
 const digitos = (t) => String(t || '').replace(/\D/g, '');
 const MAX_VISTOS = 5000;
@@ -24,7 +14,6 @@ class WebhookWhatsApp {
 
   get activo() { return Boolean(this.env.WHATSAPP_APP_SECRET && this.env.WHATSAPP_VERIFY_TOKEN); }
 
-  // Paso de suscripción: Meta envía hub.mode, hub.verify_token y hub.challenge, y espera recibir el challenge.
   verificarSuscripcion(q) {
     const token = String(q.get('hub.verify_token') || '');
     const esperado = String(this.env.WHATSAPP_VERIFY_TOKEN || '');
@@ -33,14 +22,12 @@ class WebhookWhatsApp {
     return ok ? { estado: 200, cuerpo: String(q.get('hub.challenge') || '') } : { estado: 403, cuerpo: 'Token de verificación incorrecto.' };
   }
 
-  // La firma se calcula sobre el cuerpo tal como llegó (bytes), no sobre el JSON ya interpretado.
   firmaValida(cruda, cabecera) {
     const recibida = String(cabecera || '').replace(/^sha256=/, '');
     const calculada = crypto.createHmac('sha256', this.env.WHATSAPP_APP_SECRET).update(cruda).digest('hex');
     return recibida.length === calculada.length && crypto.timingSafeEqual(Buffer.from(recibida), Buffer.from(calculada));
   }
 
-  // Devuelve true la primera vez que ve una clave; las siguientes veces, false.
   primeraVez(clave) {
     const vistos = this.extras.listar('webhookVistos');
     if (vistos.includes(clave)) return false;
@@ -67,7 +54,6 @@ class WebhookWhatsApp {
     return r;
   }
 
-  // Estados de entrega: sent, delivered, read, failed. "read" implica entregado (Meta a veces no envía delivered).
   async estado(s) {
     const cuando = s.timestamp ? textoLocal(new Date(Number(s.timestamp) * 1000)) : textoLocal();
     const com = this.extras.listar('comunicaciones').find((x) => x.proveedorId && x.proveedorId === s.id);
@@ -76,7 +62,7 @@ class WebhookWhatsApp {
         const e = (s.errors || [])[0] || {};
         this.extras.actualizar('comunicaciones', com.id, { estado: 'Error', detalle: `WhatsApp no pudo entregarlo: ${e.title || e.message || 'sin detalle'}.`, entregaEn: cuando });
       } else if (ETIQUETAS[s.status] && ['Enviado', 'Entregado'].includes(com.estado)) {
-        if (com.estado === 'Entregado' && com.leido && s.status === 'delivered') return true; // llegó tarde: no retrocede
+        if (com.estado === 'Entregado' && com.leido && s.status === 'delivered') return true;
         this.extras.actualizar('comunicaciones', com.id, { estado: 'Entregado', detalle: ETIQUETAS[s.status], leido: com.leido || s.status === 'read', entregaEn: com.entregaEn || cuando });
       }
       return true;
@@ -92,11 +78,9 @@ class WebhookWhatsApp {
       }
       return true;
     }
-    return false; // estado de un mensaje que no salió de este sistema
+    return false;
   }
 
-  // Respuesta del paciente. El texto del botón se pasa tal cual al bot de reglas fijas (Confirmar / Cancelar mi hora);
-  // cualquier otra cosa recibe la ayuda de siempre.
   async mensaje(m) {
     const texto = m.type === 'button' ? m.button?.text
       : m.type === 'interactive' ? m.interactive?.button_reply?.title
@@ -112,8 +96,6 @@ class WebhookWhatsApp {
     return 'respuesta';
   }
 
-  // 1) Por el mensaje que el paciente respondió (context.id). 2) Si no viene, por su teléfono, pero solo si hay
-  // exactamente una cita a la que el bot le preguntó: con dos o más no se adivina cuál quiso confirmar o cancelar.
   async citaDe(m) {
     const ref = m.context?.id;
     if (ref) {

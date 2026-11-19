@@ -1,5 +1,4 @@
 "use strict";
-// Cuenta opcional del paciente en el portal (sesión propia, cookie "psid", separada de la del personal).
 const vistas = require("../views/cuentaPaciente");
 const { normalizarRut, rutValido } = require("../util/rut");
 const { hoy, textoLocal } = require("../util/tiempo");
@@ -20,7 +19,6 @@ function crearCuentaController(c, reserva) {
   const conCuenta = (fn) => async (a) => (a.paciente ? fn(a) : { redirigir: "/paciente/cuenta" });
   const abrirSesion = (p) => ({ redirigir: "/paciente/mis-horas", cookiePaciente: sesionesPaciente.crear({ id: p.rut, rut: p.rut, nombre: p.nombre }) });
 
-  // Lugar al que se dirigen las solicitudes y documentos: el habitual o el de su última cita.
   async function lugarDe(rut) {
     const m = op.meta.pacientes[rut];
     if (m?.lugarHabitual) return m.lugarHabitual;
@@ -118,7 +116,6 @@ function crearCuentaController(c, reserva) {
         await cuentas.exigir(paciente.rut, rut);
         if (!TIPOS.includes(d.tipo)) throw new Error("Elige el tipo de documento.");
         if (!d.archivo || typeof d.archivo === "string") throw new Error("Selecciona un archivo.");
-        // Reemplazo: solo un documento vigente del mismo paciente; el anterior queda archivado (no se borra).
         const anterior = d.reemplazar ? documentos.listar().find((x) => x.id === Number(d.reemplazar) && !x.archivado) : null;
         if (d.reemplazar && (!anterior || anterior.rut !== rut)) throw new Error("El documento a reemplazar no corresponde a ese paciente.");
         const doc = await documentos.registrar({

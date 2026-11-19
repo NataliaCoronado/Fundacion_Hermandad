@@ -40,7 +40,6 @@ class Sesiones {
   vencida(s, n = Date.now()) {
     return s.expira < n || n - s.ultimaActividad > INACTIVIDAD_MS;
   }
-  // Borra las sesiones vencidas que nadie volvió a usar (si no, el mapa crece sin límite).
   limpiar() {
     const n = Date.now();
     for (const [token, s] of this.mapa) if (this.vencida(s, n)) this.mapa.delete(token);

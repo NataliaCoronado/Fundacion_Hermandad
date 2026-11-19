@@ -127,7 +127,6 @@ class OperacionService {
     m.sedes = [...new Set([...(m.sedes || []), Number(u.idPoliclinico)])];
     m.lugarHabitual ||= Number(u.idPoliclinico);
   }
-  // Deja constancia del consentimiento de tratamiento de datos (y, si se aceptó, del de comunicaciones).
   registrarConsentimiento(rut, { canal, comunicaciones = false, usuario = null }) {
     const m = (this.meta.pacientes[rut] ||= {});
     m.consentimiento = { fecha: textoLocal(), canal, version: "Política de privacidad vigente" };

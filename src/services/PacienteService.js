@@ -4,14 +4,11 @@ const { hoy } = require('../util/tiempo');
 
 const TELEFONO = /^\+?[0-9]{8,15}$/;
 const GENEROS = ['FEMENINO', 'MASCULINO', 'OTRO', 'NO_INFORMA'];
-// Edad en años cumplidos a la fecha indicada (ambas "AAAA-MM-DD").
 const edad = (nacimiento, fecha = hoy()) => {
   const [a, m, d] = String(nacimiento).split('-').map(Number); const [a2, m2, d2] = fecha.split('-').map(Number);
   return a2 - a - (m2 < m || (m2 === m && d2 < d) ? 1 : 0);
 };
 
-// CU-01: ficha administrativa (sin ficha clínica). Exige consentimiento y RUT válido.
-// Incluye al adulto responsable: obligatorio si el paciente es menor de 18 años, opcional en los demás casos.
 class PacienteService {
   constructor(catalogo) { this.catalogo = catalogo; }
 
@@ -53,7 +50,6 @@ class PacienteService {
     return rut;
   }
 
-  // Corrige los datos de una ficha existente. El RUT no cambia.
   async actualizar(rutOriginal, d) {
     const rut = normalizarRut(rutOriginal);
     if (!(await this.catalogo.paciente(rut))) throw new Error('PACIENTE_NO_ENCONTRADO');

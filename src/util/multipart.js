@@ -1,6 +1,4 @@
 'use strict';
-// Lector mínimo de formularios multipart/form-data (para adjuntar un archivo sin dependencias externas).
-// Devuelve { campo: 'texto', ... , campoArchivo: { nombre, datos: Buffer } }.
 function parsearMultipart(buf, contentType) {
   const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || '');
   const out = {};
@@ -9,10 +7,10 @@ function parsearMultipart(buf, contentType) {
   let pos = buf.indexOf(sep);
   while (pos !== -1) {
     const ini = pos + sep.length;
-    if (buf.slice(ini, ini + 2).toString() === '--') break;      // cierre del formulario
+    if (buf.slice(ini, ini + 2).toString() === '--') break;
     const sig = buf.indexOf(sep, ini);
     if (sig === -1) break;
-    const parte = buf.slice(ini + 2, sig - 2);                    // sin los saltos de línea que rodean la parte
+    const parte = buf.slice(ini + 2, sig - 2);
     const corte = parte.indexOf('\r\n\r\n');
     if (corte !== -1) {
       const cab = parte.slice(0, corte).toString('utf8'); const datos = parte.slice(corte + 4);

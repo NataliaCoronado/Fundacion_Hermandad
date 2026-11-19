@@ -1,5 +1,4 @@
 'use strict';
-// Íconos de línea (SVG en línea, sin archivos externos). Uso: ico('calendario').
 const P = {
   inicio: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
   calendario: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 3v3M16 3v3"/>',

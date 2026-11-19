@@ -1,8 +1,4 @@
 "use strict";
-// Funciones de Administración traídas de la versión anterior del proyecto (respaldo 2026-11-17):
-// - Cancelaciones institucionales en lote, con lista de reservas pendientes de reprogramar.
-// - Cambio de estado de cupos por rango de fechas (publicar, bloquear o dejar sin publicar).
-// - Eliminación de integrantes del equipo que no tienen historial.
 const V = require("../views/operacion");
 const { tabla, raw, esc } = require("../views/util");
 const { cargarContexto } = require("./contexto");
@@ -25,7 +21,6 @@ function crearGestionAdicionalController(c) {
     }
   };
 
-  // Reservas activas, futuras y sin atención, con datos legibles y filtros opcionales.
   async function candidatas(q) {
     const ctx = await cargarContexto(catalogo);
     const desde = fechaValida(q.desde) && q.desde > hoy() ? q.desde : hoy();
@@ -60,7 +55,6 @@ function crearGestionAdicionalController(c) {
     };
   }
 
-  // Ítems de cancelación (con su registro) que aún no tienen una nueva hora asignada.
   const items = () =>
     extras
       .listar("cancelaciones")
@@ -77,7 +71,6 @@ function crearGestionAdicionalController(c) {
     if (x.it.reprogramadaA) throw new Error("La reserva ya fue reprogramada.");
     return x.it;
   }
-  // Horas libres de la misma especialidad: primero el mismo lugar y luego las fechas más próximas.
   async function alternativas(it) {
     const ctx = await cargarContexto(catalogo);
     const ahora = textoLocal();

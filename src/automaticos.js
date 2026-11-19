@@ -1,7 +1,4 @@
 'use strict';
-// Mensajes automáticos: cada minuto procesa los recordatorios del bot (si BOT_WHATSAPP=1) y la bandeja de
-// comunicaciones pendientes. Se apaga con MENSAJES_AUTOMATICOS=0. Las escrituras pasan por la misma cola que las
-// peticiones del servidor para no mezclarse con ellas.
 const encolar = (c, fn) => {
   const previa = c.colaMutacion || Promise.resolve();
   const p = previa.then(fn);

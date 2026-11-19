@@ -1,7 +1,4 @@
 'use strict';
-// Datos de contacto y especialidades de cada policlínico (información institucional entregada por la Fundación).
-// Fuente única: la usan las pantallas, los datos de muestra en memoria y el script que genera db/datos_ejemplo.sql.
-// Los profesionales, pacientes y horarios que se generan a partir de esto son FICTICIOS.
 
 const DESCRIPCION = {
   'Medicina General': 'Control y consulta de salud', 'Pediatría': 'Atención de niños y niñas', 'Matrona': 'Salud de la mujer',
@@ -9,7 +6,6 @@ const DESCRIPCION = {
   'Fonoaudiología': 'Voz, lenguaje y audición', 'Nutrición': 'Alimentación saludable', 'Podología': 'Cuidado de los pies',
   'Psicología': 'Apoyo emocional', 'Psicología adultos': 'Apoyo emocional para adultos',
 };
-// Orden fijo: los cuatro primeros mantienen su número (las pruebas y los datos de ejemplo dependen de él).
 const ESPECIALIDADES = ['Medicina General', 'Psicología', 'Kinesiología', 'Nutrición', 'Ecografías', 'Fonoaudiología', 'Matrona', 'Odontología', 'Pediatría', 'Podología', 'Psicología adultos'];
 
 const SEDES = [
@@ -27,12 +23,10 @@ const SEDES = [
     especialidades: ['Fonoaudiología', 'Kinesiología', 'Medicina General', 'Matrona', 'Nutrición', 'Podología', 'Psicología'] },
   { id: 6, nombre: 'Oratorio Mariano', comuna: 'Maipú', telemedicina: false, direccion: 'Av. Libertador Bernardo O’Higgins #909, Maipú', correo: 'oratoriomariano@hermandad.cl', whatsapp: '+56927255750', extras: [],
     especialidades: ['Fonoaudiología', 'Kinesiología', 'Medicina General', 'Nutrición', 'Podología', 'Psicología'] },
-  // Telemedicina: Medicina General (pediatría y adultos), Psicología adultos y Fonoaudiología. WhatsApp tomado de la maqueta.
   { id: 7, nombre: 'Telemedicina', comuna: 'Modalidad remota', telemedicina: true, direccion: null, correo: 'telemedicina@hermandad.cl', whatsapp: '+56948619713', extras: [],
     especialidades: ['Medicina General', 'Psicología adultos', 'Fonoaudiología'] },
 ];
 
-// Profesionales ficticios: uno por especialidad y sede. Los seis primeros conservan su número y especialidad.
 function profesionalesDeMuestra() {
   const fijos = [[1, 'Medicina General'], [1, 'Psicología'], [2, 'Kinesiología'], [3, 'Medicina General'], [7, 'Medicina General'], [7, 'Psicología adultos']];
   const lista = fijos.map(([idPoliclinico, especialidad], i) => ({ id: i + 1, nombre: `Profesional de prueba ${i + 1}`, especialidad, idPoliclinico, activo: true }));
@@ -47,7 +41,6 @@ function profesionalesDeMuestra() {
 }
 
 const infoSede = (id) => SEDES.find((s) => s.id === Number(id)) || null;
-// "+56927468124" -> "+56 9 2746 8124"
 const formatoTelefono = (n) => String(n).replace(/^\+56(\d)(\d{4})(\d{4})$/, '+56 $1 $2 $3');
 const enlaceWhatsapp = (n) => `https://wa.me/${String(n).replace(/\D/g, '')}`;
 module.exports = { SEDES, ESPECIALIDADES, DESCRIPCION, profesionalesDeMuestra, infoSede, formatoTelefono, enlaceWhatsapp };

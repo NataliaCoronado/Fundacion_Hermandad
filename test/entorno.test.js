@@ -1,6 +1,4 @@
 "use strict";
-// El proyecto debe arrancar en macOS, Linux y Windows con Node 20 o superior, así que .env se lee en código
-// y no con --env-file-if-exists, que existe solo desde Node 22.9.
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");

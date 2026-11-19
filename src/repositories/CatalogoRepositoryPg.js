@@ -12,7 +12,6 @@ const PACIENTE = `SELECT p.numero_documento AS rut, p.nombres || ' ' || p.apelli
     FROM paciente_responsable pr JOIN responsable re ON re.id_responsable = pr.id_responsable
     WHERE pr.id_paciente = p.id_paciente AND pr.vigente ORDER BY pr.id_responsable DESC LIMIT 1) r ON TRUE
   WHERE p.tipo_documento = 'RUT'`;
-// La consulta trae al adulto responsable en columnas sueltas; aquí se arma el objeto que usa la aplicación.
 const aPaciente = ({
   respNombre,
   respRelacion,
@@ -30,7 +29,6 @@ const aPaciente = ({
       }
     : null,
 });
-// Guarda (o quita) el adulto responsable vigente de un paciente. El responsable se identifica por su RUT.
 async function guardarResponsable(q, idPaciente, r) {
   await q(
     "UPDATE paciente_responsable SET vigente = FALSE WHERE id_paciente = $1::bigint AND vigente RETURNING id_paciente",
@@ -61,7 +59,6 @@ const ESPERA = `SELECT s.id_solicitud::int AS id, p.numero_documento AS rut, s.i
   e.nombre AS especialidad, to_char(s.ingresada_en, 'YYYY-MM-DD') AS "registradaEn", s.estado
   FROM solicitud_espera s JOIN paciente p ON p.id_paciente = s.id_paciente JOIN especialidad e ON e.id_especialidad = s.id_especialidad`;
 
-// El resultado de contacto de la aplicación usa texto en español; la base usa códigos.
 const RESULTADO_A_BD = {
   Confirmó: "CONFIRMA",
   Canceló: "CANCELA",
@@ -80,10 +77,10 @@ class CatalogoRepositoryPg {
   async policlinico(id) {
     return (await this.policlinicos()).find((p) => p.id === Number(id)) || null;
   }
-  comunas() {
-    return this.db.query(
-      "SELECT id_comuna::int AS id, nombre FROM comuna ORDER BY nombre",
-    );
+  async comunas() {
+    // Orden alfabético en español (la base ordena «Ñuñoa» al final).
+    const filas = await this.db.query("SELECT id_comuna::int AS id, nombre FROM comuna");
+    return filas.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   }
   async especialidades() {
     return (
@@ -146,9 +143,11 @@ class CatalogoRepositoryPg {
             Number(p.idComuna),
           ],
         );
+        // Sin usuario del personal, el paciente aceptó en la web; si lo registra el personal, queda asistido y con responsable.
+        const canal = p.idUsuario ? p.canalConsentimiento || "PRESENCIAL" : "WEB";
         await q(
-          `INSERT INTO consentimiento (id_paciente, version_texto, canal, registrado_por) VALUES ($1::bigint, 'v1', 'PRESENCIAL', $2::uuid)`,
-          [fila.id, p.idUsuario],
+          `INSERT INTO consentimiento (id_paciente, version_texto, canal, registrado_por) VALUES ($1::bigint, 'v1', $2, $3::uuid)`,
+          [fila.id, canal, p.idUsuario || null],
         );
         await guardarResponsable(q, fila.id, p.responsable);
       });
@@ -244,7 +243,6 @@ class CatalogoRepositoryPg {
     if (!r.length) throw new Error("SIN_AGENDA");
     return this.bloque(r[0].id);
   }
-  // Publica o deja de ofrecer cupos sin cita (NO_PUBLICADO <-> DISPONIBLE). Los reservados y los bloqueados por ausencia no cambian.
   async cambiarPublicacion({
     idProfesional,
     desde,

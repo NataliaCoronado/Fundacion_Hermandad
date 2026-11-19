@@ -2,8 +2,6 @@
 const { ICitaRepository } = require('./ICitaRepository');
 const { traducir } = require('./pgErrores');
 
-// Misma forma de objeto que la versión en memoria. Los estados de la base (RESERVADA/ASISTIO/NO_ASISTIO/CANCELADA)
-// se traducen a estadoReserva ACTIVA|CANCELADA + asistencia.
 const SELECT = `
 SELECT c.id_cita::int AS id, p.numero_documento AS rut, c.id_bloque::int AS "idBloque",
   CASE WHEN c.estado_reserva = 'CANCELADA' THEN 'CANCELADA' ELSE 'ACTIVA' END AS "estadoReserva",
@@ -30,7 +28,6 @@ class CitaRepositoryPg extends ICitaRepository {
          FROM paciente WHERE numero_documento = $1 AND tipo_documento = 'RUT'
          RETURNING id_cita::int AS id`, [rut, Number(idBloque), idUsuario || null, canal]))[0];
     } catch (e) {
-      // El disparador de la base y el índice único impiden dos citas en el mismo cupo (RNF04).
       throw traducir(e, [[/DISPONIBLE|ux_cita_bloque_activa/, 'BLOQUE_OCUPADO']]);
     }
     if (!fila) throw new Error('PACIENTE_NO_ENCONTRADO');

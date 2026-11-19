@@ -1,5 +1,4 @@
 "use strict";
-// Cuenta opcional del paciente: ingreso, registro, recuperación y secciones Mis horas, Mis datos, Mis documentos y Familiares.
 const { pagina, WHATSAPP } = require("./layout");
 const { esc } = require("./util");
 const { fechaLarga, fila } = require("./paciente");
@@ -141,6 +140,5 @@ ${lista.length ? lista.map((f) => `<section class="familiar"><div style="display
 <button class="btn sec" type="submit">Enviar solicitud</button></form>`,
   });
 
-// Compatibilidad: algunas rutas antiguas llamaban a cuentaPaciente({ crear, recuperar }).
 const cuentaPaciente = ({ crear = false, recuperar = false } = {}) => acceso({ modo: recuperar ? "recuperar" : crear ? "crear" : "ingresar" });
 module.exports = { acceso, misHoras, misDatos, misDocumentos, familiares, cuentaPaciente };

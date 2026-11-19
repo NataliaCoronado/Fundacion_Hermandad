@@ -1,5 +1,4 @@
 "use strict";
-// Policlínicos, profesionales, pacientes, bloques, espera, contactos, usuarios y credenciales (modo memoria).
 class CatalogoRepositoryMemoria {
   constructor(datos) {
     this.datos = datos;
@@ -67,7 +66,8 @@ class CatalogoRepositoryMemoria {
     return this.datos.policlinicos.find((p) => p.id === Number(id)) || null;
   }
   comunas() {
-    return this.datos.comunas;
+    // Los estados guardados antes de existir el listado completo reciben las comunas que faltan, sin cambiar los ids ya usados.
+    return require('../models/comunas').completar(this.datos.comunas).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
   especialidades() {
     return [
@@ -85,7 +85,6 @@ class CatalogoRepositoryMemoria {
     if (!p) throw new Error("PROFESIONAL_NO_ENCONTRADO");
     p.activo = !!activo;
   }
-  // Solo para integrantes sin historial: el servicio verifica antes que no tengan reservas.
   eliminarProfesional(id) {
     const i = this.datos.profesionales.findIndex((p) => p.id === Number(id));
     if (i < 0) throw new Error("PROFESIONAL_NO_ENCONTRADO");
@@ -166,8 +165,6 @@ class CatalogoRepositoryMemoria {
     this.datos.bloques.push(n);
     return n;
   }
-  // Publica (libera) o deja de ofrecer (bloquea) cupos de un profesional en un rango de fechas, o un solo cupo.
-  // Los cupos con una cita activa no se tocan. Devuelve cuántos cambiaron.
   cambiarPublicacion({ idProfesional, desde, hasta, idBloque, publicar }) {
     let n = 0;
     for (const b of this.datos.bloques) {
@@ -190,7 +187,6 @@ class CatalogoRepositoryMemoria {
     }
     return n;
   }
-  // Ausencia de un profesional: los cupos libres de ese día dejan de ofrecerse. Devuelve cuántos se cerraron.
   bloquearLibres({ idProfesional, fecha }) {
     let n = 0;
     for (const b of this.datos.bloques) {

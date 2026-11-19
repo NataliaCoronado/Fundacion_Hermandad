@@ -1,5 +1,4 @@
 "use strict";
-// Composición: aquí se eligen las implementaciones. Sin DATABASE_URL = datos de muestra en memoria; con DATABASE_URL = PostgreSQL.
 const { crearDatos } = require("./models/datos");
 const {
   CitaRepositoryMemoria,
@@ -37,7 +36,6 @@ function crearContenedor({
   persistencia,
   whatsapp = process.env.WHATSAPP_MODO || "simulado",
 } = {}) {
-  // demo = historial ficticio para mostrar el panel de Administración (solo modo memoria; las pruebas no lo usan).
   const guardado = persistencia?.leer();
   const base =
     datos ||
@@ -79,7 +77,6 @@ function crearContenedor({
     transporte,
     agendamiento,
   });
-  // Envío de la bandeja de comunicaciones. Sin proveedor de correo real, el correo solo existe en modo simulado.
   const despachador = new DespachadorComunicaciones({
     extras,
     catalogo,
@@ -110,7 +107,6 @@ function crearContenedor({
       auditoria,
       agendamiento,
     });
-  // En memoria siempre hay clave de demostración; con PostgreSQL solo si se define CLAVE_DEMO (nunca en producción).
   async function inicializar() {
     const demo = process.env.CLAVE_DEMO || (db ? null : "demo1234");
     if (demo) await auth.sembrarClaveDemo(demo);

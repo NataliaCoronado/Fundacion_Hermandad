@@ -1,5 +1,4 @@
 "use strict";
-// Comprobante de reserva en PDF (una página A4), sin dependencias externas y sin código de reserva.
 const { fechaLarga } = require("../views/paciente");
 const { infoSede, formatoTelefono } = require("../models/sedesInfo");
 
@@ -11,7 +10,6 @@ const texto = (s) =>
     .replace(/[\\()]/g, "\\$&");
 const latin1 = (s) => Buffer.from(s, "latin1");
 
-// Corta un texto en líneas de a lo más n caracteres, respetando palabras.
 const lineas = (s, n) => String(s || "").match(new RegExp(`.{1,${n}}(\\s|$)|.{1,${n}}`, "g"))?.map((x) => x.trim()) || [""];
 
 function comprobantePdf({ paciente, bloque, profesional, sede, emitido }) {
@@ -21,7 +19,6 @@ function comprobantePdf({ paciente, bloque, profesional, sede, emitido }) {
     st += `BT /${negrita ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${texto(s)}) Tj ET\n`;
   };
   const color = (r, g, b) => (st += `${r} ${g} ${b} rg\n`);
-  // Encabezado institucional
   color(0.06, 0.23, 0.29);
   st += "0 772 595 70 re f\n";
   color(1, 1, 1);

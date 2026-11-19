@@ -1,6 +1,4 @@
 'use strict';
-// Regenera en db/datos_ejemplo.sql las secciones que salen de src/models/sedesInfo.js
-// (especialidades, policlínicos, profesionales, agendas y bloques).  Uso: node scripts/generar-datos-ejemplo.js
 const fs = require('node:fs');
 const path = require('node:path');
 const { SEDES, ESPECIALIDADES, profesionalesDeMuestra } = require('../src/models/sedesInfo');
@@ -30,14 +28,12 @@ ${profs.map((p) => ` ('${18000000 + p.id}-${dv(18000000 + p.id)}','Profesional d
 INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especialidad) VALUES
 ${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)})`).join(',\n')};
 
--- Una agenda por profesional: lunes y martes, 09:00-11:00, bloques de 30 min
 INSERT INTO agenda (id_profesional, id_policlinico, id_especialidad, vigente_desde, vigente_hasta, hora_inicio, hora_termino, duracion_min, estado_publicacion, creado_por) VALUES
 ${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)},'2026-11-01','2026-12-31','09:00','11:00',30,'PUBLICADA','${ADMIN}')`).join(',\n')};
 
 INSERT INTO agenda_dia (id_agenda, dia_semana) VALUES
 ${profs.flatMap((p) => [1, 2].map((d) => ` (${p.id},${d})`)).join(',\n')};
 
--- Bloques: 23 y 24 de noviembre de 2026, 09:00 a 10:30 (4 por día y profesional)
 INSERT INTO bloque_horario (id_agenda, fecha, hora_inicio, hora_termino, estado) VALUES
 ${profs.flatMap((p) => ['2026-11-23', '2026-11-24'].flatMap((f) => horas.map(([a, b]) => ` (${p.id},'${f}','${a}','${b}','DISPONIBLE')`))).join(',\n')};
 
@@ -52,9 +48,7 @@ const corta = (desde, hasta, nuevo) => {
 };
 corta('INSERT INTO especialidad', 'INSERT INTO usuario', seccion1);
 corta('INSERT INTO profesional (', 'INSERT INTO paciente', seccion2);
-// La espera del paciente C se expresa por nombre, para no depender del orden de los números.
 sql = sql.replace(/INSERT INTO solicitud_espera \(id_paciente, id_policlinico, id_especialidad, registrado_por\) VALUES\n \(3,2,3,/,
   `INSERT INTO solicitud_espera (id_paciente, id_policlinico, id_especialidad, registrado_por) VALUES\n (3,2,${idEsp('Kinesiología')},`);
-sql = sql.replace('-- Datos de EJEMPLO (ficticios) para desarrollo. Sin datos reales.', '-- Datos de EJEMPLO para desarrollo. Contacto de policlínicos: institucional. Profesionales, pacientes y horarios: FICTICIOS.');
 fs.writeFileSync(archivo, sql);
 console.log(`datos_ejemplo.sql actualizado: ${profs.length} profesionales, ${profs.length * 8} bloques.`);

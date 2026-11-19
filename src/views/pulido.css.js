@@ -1,7 +1,4 @@
 'use strict';
-// Capa de terminación visual: se carga al final (después de estilos.js y operacion.css.js).
-// Unifica botones, campos y tarjetas, y adapta el diseño a celular, tablet (iPad) y computador.
-// Puntos de quiebre: <=560 celular · <=1024 tablet vertical · >1024 computador / iPad horizontal.
 module.exports = `
 :root{
   --ease:cubic-bezier(.2,.7,.2,1);
@@ -16,7 +13,6 @@ module.exports = `
 body{font-family:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;text-rendering:optimizeLegibility}
 ::selection{background:rgba(22,128,139,.2)}
 
-/* ================= Botones ================= */
 .btn,form button[type=submit],form button:not([type]){
   position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;
   min-height:42px;padding:10px 18px;border-radius:var(--r-s);
@@ -35,7 +31,6 @@ body{font-family:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;tex
 .btn svg{width:18px;height:18px;flex:none;transition:transform .2s var(--ease)}
 .btn:hover svg{transform:translateX(2px)}
 
-/* Secundario: blanco con borde suave */
 .btn.sec,form button.sec,form button[type=submit].sec{
   background:#fff;color:var(--navy);border-color:var(--borde-2);text-shadow:none;
   box-shadow:0 1px 2px rgba(11,59,76,.06),inset 0 -1px 0 rgba(11,59,76,.04)
@@ -51,10 +46,8 @@ body{font-family:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;tex
 .btn[disabled],.btn.off,form button[disabled]{opacity:.45;pointer-events:none;box-shadow:none}
 html.contraste .btn:not(.sec),html.contraste form button[type=submit]:not(.sec){background:#004b52;border-color:#000}
 
-/* Botones dentro de tablas: compactos */
 td .btn,td form button,td form button[type=submit]{min-height:32px;padding:6px 12px;font-size:.8rem;border-radius:9px}
 
-/* ================= Campos ================= */
 input,select,textarea{
   min-height:44px;border:1px solid var(--borde-2);border-radius:var(--r-s);background-color:#fff;
   box-shadow:inset 0 1px 2px rgba(11,59,76,.04);transition:border-color .15s,box-shadow .15s,background-color .15s
@@ -71,7 +64,6 @@ select:not([multiple]){
 }
 label{font-weight:600}
 
-/* ================= Tarjetas y superficies ================= */
 .tarjeta,.opcion,.prof,.panel,.kpi,.semana,.pasos3>div,.sede-c,.cont,.work-panel,.team-card,.filtro-r{
   border-color:rgba(11,59,76,.09);box-shadow:var(--sombra)
 }
@@ -90,7 +82,6 @@ th{background:#f7fafb}
 tbody tr{transition:background .12s}
 .vacio{border-radius:18px}
 
-/* Horas del portal */
 .horas a{border-radius:12px;border-width:1px;box-shadow:0 1px 2px rgba(11,59,76,.05)}
 .horas a:hover{background:var(--g-teal);border-color:#11727c;box-shadow:0 8px 16px -8px rgba(19,127,138,.7);transform:translateY(-1px)}
 .dsem{transition:background .15s}
@@ -98,7 +89,6 @@ tbody tr{transition:background .12s}
 .pestanas a,.rapidos a{transition:color .15s,background .15s,box-shadow .15s}
 .pasos3 .n{background:var(--g-teal);box-shadow:0 6px 14px -6px rgba(19,127,138,.8)}
 
-/* ================= Menú hamburguesa (oculto en computador) ================= */
 .menu-btn{
   display:none;place-items:center;flex:none;width:44px;height:44px;padding:0;border-radius:12px;
   border:1px solid var(--borde);background:#fff;color:var(--navy);cursor:pointer;
@@ -108,14 +98,12 @@ tbody tr{transition:background .12s}
 .menu-btn svg{width:22px;height:22px}
 .velo{display:none}
 
-/* ================= Portal: cabecera ================= */
 .sup .cab{position:relative}
 .nav a{transition:background .15s,color .15s}
 .nav a.cta{background:var(--g-teal);box-shadow:var(--sombra-btn);padding:10px 18px}
 .nav a.cta:hover{background:var(--g-teal-h)}
 .acc button{border-radius:8px;padding:4px 10px;transition:background .15s}
 
-/* ================= Sitio del personal ================= */
 .pers{font-size:14px}
 .side a{border-radius:12px;transition:background .15s,color .15s}
 .side a.act{background:var(--g-teal);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 18px -8px rgba(0,0,0,.45)}
@@ -152,21 +140,17 @@ tbody tr{transition:background .12s}
 .drawer{border-radius:20px}
 .drawer-close{font-weight:700;color:var(--muted)}
 
-/* Ingreso */
 .ing-caja input{min-height:48px}
 .ing-caja .btn,.ing-caja button[type=submit]{min-height:50px;width:100%;font-size:.98rem}
 
-/* Grillas que no deben desbordar en pantallas angostas */
 .sedes-g{grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))}
 .grilla{grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr))}
 .profs{grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))}
 img{height:auto}
 
-/* ================= Tablet y menos (iPad vertical, <=1024px) ================= */
 @media (max-width:1024px){
   .kpis{grid-template-columns:repeat(2,1fr)}
   .paneles,.tres,.dos-g{grid-template-columns:1fr}
-  /* Personal: barra lateral como panel deslizable */
   body.pers{flex-direction:row}
   .pers .menu-btn{display:inline-grid}
   .side{
@@ -185,7 +169,6 @@ img{height:auto}
   .workspace{padding:20px}
 }
 
-/* ================= Portal en tablet/celular (<=900px) ================= */
 @media (max-width:900px){
   .sup .cab{flex-wrap:nowrap;padding:10px 16px}
   .sup .cab .menu-btn{display:inline-grid;margin-left:auto}
@@ -204,9 +187,7 @@ img{height:auto}
   .datos{padding:24px;border-radius:18px}
 }
 
-/* ================= Celular (<=760px) ================= */
 @media (max-width:760px){
-  /* evita el zoom automático de iPhone al tocar un campo */
   input,select,textarea,.workspace input,.workspace select,.workspace textarea{font-size:16px}
   .acc{padding:6px 16px}
   .acc>div:last-child{display:none}
@@ -245,11 +226,9 @@ img{height:auto}
   .kpi{padding:14px 16px}
   .kpi b{font-size:1.4rem}
   .panel{padding:18px}
-  /* Panel flotante como hoja inferior */
   .drawer-backdrop{align-items:flex-end!important}
   .drawer{width:100%!important;max-height:90vh!important;max-height:90dvh!important;border-radius:22px 22px 0 0!important}
   .drawer .workspace{padding:16px}
-  /* Ingreso */
   .ing-izq{padding:24px 20px}
   .ing-izq ul,.ing-izq>small{display:none}
   .ing-izq h1{font-size:1.5rem;margin:18px 0 6px}
@@ -259,7 +238,6 @@ img{height:auto}
   .titulo-sec .btn{width:100%}
 }
 
-/* ================= Celular chico (<=560px) ================= */
 @media (max-width:560px){
   .kpis{grid-template-columns:1fr 1fr;gap:10px}
   .kpi{flex-direction:column;align-items:flex-start;gap:8px}
@@ -277,7 +255,6 @@ img{height:auto}
   .resumen-r .btn,.tarjeta>.btn{width:100%}
 }
 
-/* Dispositivos táctiles: blancos de toque cómodos */
 @media (pointer:coarse){
   .btn,form button[type=submit],form button:not([type]){min-height:44px}
   .btn.chico,td .btn,td form button{min-height:38px}
@@ -288,9 +265,6 @@ img{height:auto}
 }
 @media print{.menu-btn,.velo{display:none!important}}
 
-/* ================= Sistema unificado (Pacientes, Administración y TENS/TONS) =================
-   Paleta institucional: principal #183B4E, secundario #347D86, fondo #F6F8F8, bordes #E1E8EA, tarjetas #FFFFFF.
-   Una tipografía (Source Sans 3), botones de 6 px, tarjetas de 8 px, sombras casi imperceptibles, sin degradados. */
 :root{
   --navy:#183b4e;--navy-2:#1f4a5f;--teal:#347d86;--teal-t:#2e7179;--teal-2:#2a6870;
   --bg:#f6f8f8;--sup:#fff;--borde:#e1e8ea;--borde-2:#ccd8db;--muted:#566870;--suave:#86979d;--claro:#e8f1f2;
@@ -315,6 +289,16 @@ h1,h2,h3,h4,.top h1,.pers .top h1{font-family:var(--f);font-weight:600;letter-sp
 .tarjeta,.opcion,.prof,.panel,.kpi,.semana,.pasos3>div,.sede-c,.cont,.work-panel,.team-card,.filtro-r{border-color:var(--borde);box-shadow:var(--sombra)}
 .opcion:hover,.prof:hover,.team-card:hover{transform:none;box-shadow:var(--sombra)}
 input,select,textarea{border-radius:6px}
+/* Filtros: cada campo ocupa solo su columna (el buscador ya no se monta sobre el selector vecino) */
+.filters label{flex:1 1 120px;min-width:0}
+.filters label input,.filters label select,.filters input[type=search],.filters input[type=date]{min-width:0!important;width:100%;box-sizing:border-box}
+.filters>button,.filters>.btn{flex:0 0 auto;align-self:flex-end;white-space:nowrap}
+/* Botones de una misma fila: misma altura, tipografía y alineación (enlaces y botones de formulario) */
+.workspace :is(.btn,button,.micro button),.workspace td :is(.btn,button){min-height:36px;height:36px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;font-size:inherit;line-height:1}
+.workspace .micro{display:inline-flex;margin:0}
+.workspace .actions,.workspace .acciones{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.calendar-legend{display:flex;justify-content:flex-end;align-items:center;gap:14px;flex-wrap:wrap;padding-top:6px}
+.calendar-legend .muted{font-size:13px;color:var(--muted)}
 .ing-izq{background:var(--navy)}
 .side{background:var(--navy)}
 .av{background:var(--teal)}

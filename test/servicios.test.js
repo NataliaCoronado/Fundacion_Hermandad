@@ -5,7 +5,6 @@ const { crearContenedor } = require('../src/contenedor');
 const { rutValido, normalizarRut } = require('../src/util/rut');
 
 const A = '11111111-1'; const C = '33333333-3';
-// RF07: los recordatorios solo salen con consentimiento de comunicaciones.
 const consentir = (c, rut) => { (c.operacion.meta.pacientes[rut] ||= {}).consentimientoComunicaciones = true; };
 
 test('RUT: valida el dígito verificador y normaliza puntos', () => {
@@ -28,8 +27,8 @@ test('ficha de paciente: exige RUT válido y consentimiento', async () => {
 test('bot: calendario fijo, sin duplicados y sin enviar a quien ya confirmó', async () => {
   const c = crearContenedor();
   consentir(c, (await c.citaRepo.buscarPorId(1)).rut);
-  await c.bot.procesar('2026-11-16 09:00');                     // aún no es la hora del primer recordatorio
-  assert.strictEqual(c.extras.listar('mensajes').length, 3);    // solo la cita 1 (pendiente) tiene plan; la 2 ya confirmó
+  await c.bot.procesar('2026-11-16 09:00');
+  assert.strictEqual(c.extras.listar('mensajes').length, 3);
   const r = await c.bot.procesar('2026-11-16 10:00');
   assert.strictEqual(r.enviados, 1);
   await c.bot.procesar('2026-11-16 10:30');
@@ -73,7 +72,7 @@ test('lista de espera: no asigna sola; asignar usa un cupo compatible', async ()
   const [e] = await c.espera.vigentes();
   assert.strictEqual(e.rut, C);
   assert.ok(e.cupos.length > 0);
-  assert.strictEqual((await c.citaRepo.buscarPorRut(C)).length, 0);   // nada asignado automáticamente
+  assert.strictEqual((await c.citaRepo.buscarPorRut(C)).length, 0);
   await assert.rejects(() => c.espera.asignar({ idSolicitud: e.id, idBloque: 1 }), /BLOQUE_NO_DISPONIBLE/);
   await c.espera.asignar({ idSolicitud: e.id, idBloque: e.cupos[0].id });
   assert.strictEqual((await c.citaRepo.buscarPorRut(C)).length, 1);
@@ -84,10 +83,10 @@ test('cambio de agenda: ausencia cierra cupos libres y deja las citas para llama
   const c = crearContenedor();
   await c.confirmacion.registrarContacto({ idCita: 1, resultado: 'Confirmó', responsable: 't' });
   const r = await c.cambios.ausencia({ idProfesional: 1, fecha: '2026-11-23', motivo: 'Licencia', idUsuario: 'u1' });
-  assert.strictEqual(r.citasAfectadas, 2);                      // las citas 1 y 2 son del profesional 1 ese día
-  assert.strictEqual(r.bloquesCerrados, 2);                     // 4 bloques ese día, 2 con cita
+  assert.strictEqual(r.citasAfectadas, 2);
+  assert.strictEqual(r.bloquesCerrados, 2);
   assert.strictEqual((await c.citaRepo.buscarPorId(1)).estadoConfirmacion, 'PENDIENTE');
-  assert.strictEqual((await c.citaRepo.buscarPorId(2)).estadoConfirmacion, 'PENDIENTE');   // incluso la que estaba confirmada
+  assert.strictEqual((await c.citaRepo.buscarPorId(2)).estadoConfirmacion, 'PENDIENTE');
   assert.strictEqual((await c.citaRepo.buscarPorId(1)).estadoReserva, 'ACTIVA');
   await assert.rejects(() => c.cambios.ausencia({ idProfesional: 1, fecha: '2026-11-23', motivo: '', idUsuario: 'u1' }), /MOTIVO_REQUERIDO/);
 });
@@ -136,7 +135,6 @@ test('ficha: adulto responsable obligatorio en menores, opcional en adultos, y l
   await assert.rejects(() => c.pacientes.crear({ ...base, rut: '55555555-5', respNombre: 'Mamá Prueba', respRelacion: 'Madre', respRut: '1-1', respTelefono: '+56966666666' }), /RESPONSABLE_RUT_INVALIDO/);
   await c.pacientes.crear({ ...base, rut: '55555555-5', respNombre: 'Mamá Prueba', respRelacion: 'Madre', respRut: '66666666-6', respTelefono: '+56966666666' });
   assert.deepStrictEqual((await c.catalogo.paciente('55555555-5')).responsable, { nombre: 'Mamá Prueba', relacion: 'Madre', rut: '66666666-6', telefono: '+56966666666' });
-  // Un adulto no necesita responsable, pero puede tenerlo; al editar se puede quitar.
   await c.pacientes.actualizar('11111111-1', { ...base, fechaNacimiento: '1980-01-01', nombres: 'Corregida', respNombre: 'Hijo Prueba', respRelacion: 'Hijo', respRut: '77777777-7', respTelefono: '+56977777777' });
   let a = await c.catalogo.paciente('11111111-1');
   assert.strictEqual(a.nombre, 'Corregida Prueba'); assert.strictEqual(a.responsable.relacion, 'Hijo');
@@ -185,6 +183,7 @@ test('documentos: adjunto PDF/JPG/PNG reconocido por contenido; se rechaza otro 
     assert.strictEqual(d.adjunto.formato, 'PDF'); assert.strictEqual(d.adjunto.original, 'cartola fonasa.pdf');
     const a = c.documentos.archivo(d.id);
     assert.ok(a.ruta.startsWith(process.env.DIR_DOCUMENTOS) && fs.readFileSync(a.ruta).equals(pdf));
+    assert.match(path.basename(a.ruta), /^11111111-1_Cartola-FONASA_\d{4}-\d{2}-\d{2}_[0-9a-f]{6}\.pdf$/, 'el archivo en disco tiene un nombre legible');
     await assert.rejects(() => c.documentos.registrar({ rut: '11111111-1', tipo: 'Otro', usuario: u, archivo: { nombre: 'x.pdf', datos: Buffer.from('<html>hola</html>') } }), /ARCHIVO_INVALIDO/);
     await assert.rejects(() => c.documentos.registrar({ rut: '11111111-1', tipo: 'Otro', usuario: u, archivo: { nombre: 'x.pdf', datos: Buffer.concat([Buffer.from('%PDF'), Buffer.alloc(5 * 1024 * 1024)]) } }), /ARCHIVO_MUY_GRANDE/);
     const sin = await c.documentos.registrar({ rut: '11111111-1', tipo: 'Otro', usuario: u });

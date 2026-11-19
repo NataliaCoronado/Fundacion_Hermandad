@@ -1,5 +1,3 @@
--- Validación de RUT chileno mediante dígito verificador
--- No se aplica a documentos extranjeros tipo PASAPORTE u OTRO
 CREATE OR REPLACE FUNCTION fn_rut_valido(p_rut TEXT)
 RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE STRICT AS $$
 DECLARE
@@ -31,7 +29,6 @@ CREATE TABLE rol (
 	CONSTRAINT uq_rol_codigo UNIQUE (codigo),
 	CONSTRAINT ck_rol_codigo CHECK (codigo IN ('TENS_TONS', 'TELEMEDICINA', 'ADMINISTRACION'))
 );
-COMMENT ON TABLE rol IS 'Perfil institucional que agrupa permisos.';
  
 CREATE TABLE permiso (
 	id_permiso   SMALLINT GENERATED ALWAYS AS IDENTITY,
@@ -40,7 +37,6 @@ CREATE TABLE permiso (
 	CONSTRAINT pk_permiso PRIMARY KEY (id_permiso),
 	CONSTRAINT uq_permiso_codigo UNIQUE (codigo)
 );
-COMMENT ON TABLE permiso IS 'Función del sistema que puede habilitarse a un rol.';
  
 CREATE TABLE rol_permiso (
 	id_rol      SMALLINT NOT NULL,
@@ -51,7 +47,6 @@ CREATE TABLE rol_permiso (
 	CONSTRAINT fk_rol_permiso_id_permiso FOREIGN KEY (id_permiso)
     	REFERENCES permiso (id_permiso) ON DELETE CASCADE
 );
-COMMENT ON TABLE rol_permiso IS 'Asociación N:M entre roles y permisos.';
  
 CREATE TABLE comuna (
 	id_comuna  SMALLINT GENERATED ALWAYS AS IDENTITY,
@@ -60,7 +55,6 @@ CREATE TABLE comuna (
 	CONSTRAINT pk_comuna PRIMARY KEY (id_comuna),
 	CONSTRAINT uq_comuna_nombre_region UNIQUE (nombre, region)
 );
-COMMENT ON TABLE comuna IS 'Comuna de Chile usada en domicilios de pacientes y sedes.';
  
 CREATE TABLE especialidad (
 	id_especialidad  SMALLINT GENERATED ALWAYS AS IDENTITY,
@@ -70,7 +64,6 @@ CREATE TABLE especialidad (
 	CONSTRAINT pk_especialidad PRIMARY KEY (id_especialidad),
 	CONSTRAINT uq_especialidad_nombre UNIQUE (nombre)
 );
-COMMENT ON TABLE especialidad IS 'Catálogo institucional de especialidades (sin duplicados).';
  
 CREATE TABLE policlinico (
 	id_policlinico   SMALLINT GENERATED ALWAYS AS IDENTITY,
@@ -90,7 +83,6 @@ CREATE TABLE policlinico (
 	CONSTRAINT ck_policlinico_correo CHECK (correo ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
 	CONSTRAINT ck_policlinico_whatsapp CHECK (whatsapp ~ '^\+?[0-9]{8,15}$')
 );
-COMMENT ON TABLE policlinico IS 'Sede de atención: seis policlínicos presenciales y Telemedicina como séptimo.';
  
 CREATE TABLE policlinico_especialidad (
 	id_policlinico   SMALLINT NOT NULL,
@@ -104,7 +96,6 @@ CREATE TABLE policlinico_especialidad (
 	CONSTRAINT fk_policlinico_especialidad_id_especialidad FOREIGN KEY (id_especialidad)
     	REFERENCES especialidad (id_especialidad) ON DELETE RESTRICT
 );
-COMMENT ON TABLE policlinico_especialidad IS 'Oferta: especialidad disponible en una sede (resuelve N:M).';
  
 CREATE TABLE usuario (
 	id_usuario  	UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -123,12 +114,8 @@ CREATE TABLE usuario (
     	REFERENCES policlinico (id_policlinico) ON DELETE RESTRICT,
 	CONSTRAINT ck_usuario_correo CHECK (correo ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')
 );
-COMMENT ON TABLE usuario IS 'Cuenta institucional del personal (TENS/TONS, Telemedicina, Administración).';
 CREATE INDEX ix_usuario_policlinico ON usuario (id_policlinico);
  
--- ------------------------------------------------------------
--- Área B: Profesionales y agendas
--- ------------------------------------------------------------
 CREATE TABLE profesional (
 	id_profesional     	BIGINT GENERATED ALWAYS AS IDENTITY,
 	rut                	VARCHAR(12) NOT NULL,
@@ -146,7 +133,6 @@ CREATE TABLE profesional (
 	CONSTRAINT ck_profesional_rut CHECK (fn_rut_valido(rut)),
 	CONSTRAINT ck_profesional_correo CHECK (correo_institucional ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')
 );
-COMMENT ON TABLE profesional IS 'Profesional de salud externo al sistema que atiende en las agendas.';
  
 CREATE TABLE profesional_asignacion (
 	id_profesional   BIGINT NOT NULL,
@@ -159,7 +145,6 @@ CREATE TABLE profesional_asignacion (
 	CONSTRAINT fk_profesional_asignacion_policlinico_especialidad FOREIGN KEY (id_policlinico, id_especialidad)
     	REFERENCES policlinico_especialidad (id_policlinico, id_especialidad) ON DELETE RESTRICT
 );
-COMMENT ON TABLE profesional_asignacion IS 'Asignación de un profesional a una especialidad en una sede (resuelve N:M).';
  
 CREATE TABLE agenda (
 	id_agenda       	BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -184,7 +169,6 @@ CREATE TABLE agenda (
 	CONSTRAINT ck_agenda_duracion CHECK (duracion_min BETWEEN 10 AND 120),
 	CONSTRAINT ck_agenda_estado CHECK (estado_publicacion IN ('BORRADOR', 'PUBLICADA', 'OCULTA'))
 );
-COMMENT ON TABLE agenda IS 'Horario creado por Administración para un profesional, sede y especialidad.';
 CREATE INDEX ix_agenda_profesional ON agenda (id_profesional);
 CREATE INDEX ix_agenda_sede_especialidad ON agenda (id_policlinico, id_especialidad);
  
@@ -196,7 +180,6 @@ CREATE TABLE agenda_dia (
     	REFERENCES agenda (id_agenda) ON DELETE CASCADE,
 	CONSTRAINT ck_agenda_dia CHECK (dia_semana BETWEEN 1 AND 7)
 );
-COMMENT ON TABLE agenda_dia IS 'Días de la semana en que rige una agenda (atributo multivaluado).';
  
 CREATE TABLE publicacion_programada (
 	id_publicacion	BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -211,7 +194,6 @@ CREATE TABLE publicacion_programada (
 	CONSTRAINT ck_publicacion_rango CHECK (libera_hasta >= libera_desde),
 	CONSTRAINT ck_publicacion_estado CHECK (estado IN ('PROGRAMADA', 'EJECUTADA', 'CANCELADA'))
 );
-COMMENT ON TABLE publicacion_programada IS 'Apertura gradual de cupos: liberaciones programadas de una agenda.';
 CREATE INDEX ix_publicacion_fecha ON publicacion_programada (fecha_liberacion);
  
 CREATE TABLE bloqueo (
@@ -229,7 +211,6 @@ CREATE TABLE bloqueo (
     	REFERENCES usuario (id_usuario) ON DELETE RESTRICT,
 	CONSTRAINT ck_bloqueo_rango CHECK (termino > inicio)
 );
-COMMENT ON TABLE bloqueo IS 'Indisponibilidad registrada por Administración (ausencia, licencia, capacitación).';
 CREATE INDEX ix_bloqueo_profesional ON bloqueo (id_profesional, inicio);
  
 CREATE TABLE bloque_horario (
@@ -250,12 +231,8 @@ CREATE TABLE bloque_horario (
 	CONSTRAINT ck_bloque_estado CHECK (estado IN ('NO_PUBLICADO', 'DISPONIBLE', 'RESERVADO', 'BLOQUEADO')),
 	CONSTRAINT ck_bloque_bloqueado CHECK (estado <> 'BLOQUEADO' OR id_bloqueo IS NOT NULL)
 );
-COMMENT ON TABLE bloque_horario IS 'Cupo concreto (fecha y hora) generado desde una agenda.';
 CREATE INDEX ix_bloque_fecha_estado ON bloque_horario (fecha, estado);
  
--- ------------------------------------------------------------
--- Área C: Pacientes y responsables
--- ------------------------------------------------------------
 CREATE TABLE paciente (
 	id_paciente   	BIGINT GENERATED ALWAYS AS IDENTITY,
 	tipo_documento	VARCHAR(10) NOT NULL DEFAULT 'RUT',
@@ -283,7 +260,6 @@ CREATE TABLE paciente (
 	CONSTRAINT ck_paciente_fono CHECK (telefono_celular ~ '^\+?[0-9]{8,15}$'),
 	CONSTRAINT ck_paciente_correo CHECK (correo IS NULL OR correo ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')
 );
-COMMENT ON TABLE paciente IS 'Ficha administrativa única del paciente (sin ficha clínica).';
 CREATE INDEX ix_paciente_apellidos ON paciente (apellidos, nombres);
  
 CREATE TABLE responsable (
@@ -298,8 +274,6 @@ CREATE TABLE responsable (
 	CONSTRAINT ck_responsable_rut CHECK (fn_rut_valido(rut)),
 	CONSTRAINT ck_responsable_fono CHECK (telefono ~ '^\+?[0-9]{8,15}$')
 );
-COMMENT ON TABLE responsable IS 'Adulto responsable, familiar o solicitante que actúa por el paciente.';
-COMMENT ON COLUMN responsable.rut IS 'RUT opcional: el responsable puede registrarse solo con nombre y teléfono.';
  
 CREATE TABLE paciente_responsable (
 	id_paciente   	BIGINT NOT NULL,
@@ -313,7 +287,6 @@ CREATE TABLE paciente_responsable (
 	CONSTRAINT fk_paciente_responsable_id_responsable FOREIGN KEY (id_responsable)
     	REFERENCES responsable (id_responsable) ON DELETE RESTRICT
 );
-COMMENT ON TABLE paciente_responsable IS 'Vínculo paciente–responsable con relación y representación (resuelve N:M).';
  
 CREATE TABLE consentimiento (
 	id_consentimiento  BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -330,11 +303,7 @@ CREATE TABLE consentimiento (
 	CONSTRAINT ck_consentimiento_canal CHECK (canal IN ('WEB', 'PRESENCIAL', 'TELEFONO')),
 	CONSTRAINT ck_consentimiento_asistido CHECK (canal = 'WEB' OR registrado_por IS NOT NULL)
 );
-COMMENT ON TABLE consentimiento IS 'Aceptación previa en el formulario, registrada en base de datos al crear o vincular la ficha del paciente.';
  
--- ------------------------------------------------------------
--- Área D: Documentos y órdenes médicas
--- ------------------------------------------------------------
 CREATE TABLE documento (
 	id_documento 	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_paciente  	BIGINT NOT NULL,
@@ -364,7 +333,6 @@ CREATE TABLE documento (
 	CONSTRAINT ck_documento_estado CHECK (estado_revision IN ('PENDIENTE', 'VALIDADO', 'OBSERVADO')),
 	CONSTRAINT ck_documento_revision CHECK (estado_revision = 'PENDIENTE' OR (revisado_por IS NOT NULL AND revisado_en IS NOT NULL))
 );
-COMMENT ON TABLE documento IS 'Respaldo administrativo del paciente en almacenamiento privado.';
 CREATE INDEX ix_documento_paciente ON documento (id_paciente, tipo);
  
 CREATE TABLE orden_medica (
@@ -386,11 +354,7 @@ CREATE TABLE orden_medica (
 	CONSTRAINT ck_orden_sesiones CHECK (sesiones_indicadas BETWEEN 1 AND 60),
 	CONSTRAINT ck_orden_estado CHECK (estado IN ('VIGENTE', 'COMPLETADA', 'ANULADA'))
 );
-COMMENT ON TABLE orden_medica IS 'Orden o derivación con número de sesiones indicadas.';
  
--- ------------------------------------------------------------
--- Área E: Citas, confirmación, asistencia y cancelación
--- ------------------------------------------------------------
 CREATE TABLE cita (
 	id_cita               	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_paciente           	BIGINT NOT NULL,
@@ -430,8 +394,6 @@ CREATE TABLE cita (
 	CONSTRAINT ck_cita_cancelacion CHECK ((estado_reserva = 'CANCELADA') = (origen_cancelacion IS NOT NULL AND cancelada_en IS NOT NULL)),
 	CONSTRAINT ck_cita_fono CHECK (telefono_contacto ~ '^\+?[0-9]{8,15}$')
 );
-COMMENT ON TABLE cita IS 'Reserva de un paciente en un bloque; estado de reserva y de confirmación separados.';
-COMMENT ON COLUMN cita.id_responsable IS 'Responsable que agendó o acompaña la cita; opcional y debe estar vinculado al mismo paciente en paciente_responsable.';
 CREATE UNIQUE INDEX ux_cita_bloque_activa ON cita (id_bloque) WHERE estado_reserva <> 'CANCELADA';
 CREATE INDEX ix_cita_paciente ON cita (id_paciente);
 CREATE INDEX ix_cita_pendientes ON cita (estado_confirmacion) WHERE estado_reserva = 'RESERVADA';
@@ -453,7 +415,6 @@ CREATE TABLE cita_historial (
     	REFERENCES usuario (id_usuario) ON DELETE SET NULL,
 	CONSTRAINT ck_historial_origen CHECK (origen IN ('SISTEMA', 'PACIENTE', 'PERSONAL'))
 );
-COMMENT ON TABLE cita_historial IS 'Historial administrativo de cambios de una cita.';
 CREATE INDEX ix_historial_cita ON cita_historial (id_cita, registrado_en);
  
 CREATE TABLE recepcion (
@@ -467,7 +428,6 @@ CREATE TABLE recepcion (
 	CONSTRAINT fk_recepcion_registrado_por FOREIGN KEY (registrado_por)
     	REFERENCES usuario (id_usuario) ON DELETE RESTRICT
 );
-COMMENT ON TABLE recepcion IS 'Llegada del paciente registrada por TENS/TONS (check-in).';
  
 CREATE TABLE contacto_seguimiento (
 	id_contacto   BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -487,12 +447,8 @@ CREATE TABLE contacto_seguimiento (
 	CONSTRAINT ck_contacto_motivo CHECK (motivo IN ('CONFIRMACION', 'CAMBIO_AGENDA', 'OTRO')),
 	CONSTRAINT ck_contacto_resultado CHECK (resultado IN ('CONTACTADO', 'NO_CONTESTA', 'NUMERO_ERRONEO', 'CONFIRMA', 'CANCELA'))
 );
-COMMENT ON TABLE contacto_seguimiento IS 'Llamadas y otros contactos de TENS/TONS sobre una cita.';
 CREATE INDEX ix_contacto_cita ON contacto_seguimiento (id_cita);
  
--- ------------------------------------------------------------
--- Área H: Cambios de agenda
--- ------------------------------------------------------------
 CREATE TABLE cambio_agenda (
 	id_cambio             	BIGINT GENERATED ALWAYS AS IDENTITY,
 	tipo                  	VARCHAR(12) NOT NULL,
@@ -515,7 +471,6 @@ CREATE TABLE cambio_agenda (
 	CONSTRAINT ck_cambio_reemplazo CHECK ((tipo = 'REEMPLAZO') = (id_profesional_reemplazo IS NOT NULL)),
 	CONSTRAINT ck_cambio_distinto CHECK (id_profesional_reemplazo IS NULL OR id_profesional_reemplazo <> id_profesional_original)
 );
-COMMENT ON TABLE cambio_agenda IS 'Reemplazo o cancelación institucional que afecta citas.';
  
 CREATE TABLE cita_afectada (
 	id_cambio       	BIGINT NOT NULL,
@@ -530,12 +485,8 @@ CREATE TABLE cita_afectada (
     	REFERENCES cita (id_cita) ON DELETE CASCADE,
 	CONSTRAINT ck_afectada_respuesta CHECK (respuesta_paciente IN ('PENDIENTE', 'CONSERVA', 'CANCELA', 'SIN_RESPUESTA'))
 );
-COMMENT ON TABLE cita_afectada IS 'Cita afectada por un cambio y respuesta del paciente (resuelve N:M).';
 CREATE INDEX ix_afectada_cita ON cita_afectada (id_cita);
  
--- ------------------------------------------------------------
--- Área F: Mensajería (WhatsApp y correo)
--- ------------------------------------------------------------
 CREATE TABLE plantilla_mensaje (
 	id_plantilla   	SMALLINT GENERATED ALWAYS AS IDENTITY,
 	codigo         	VARCHAR(40) NOT NULL,
@@ -552,7 +503,6 @@ CREATE TABLE plantilla_mensaje (
 	CONSTRAINT ck_plantilla_wsp CHECK (canal <> 'WHATSAPP' OR categoria_meta IS NOT NULL),
 	CONSTRAINT ck_plantilla_estado CHECK (estado_aprobacion IN ('BORRADOR', 'ENVIADA', 'APROBADA', 'RECHAZADA'))
 );
-COMMENT ON TABLE plantilla_mensaje IS 'Plantilla de WhatsApp o correo con su categoría Meta.';
  
 CREATE TABLE mensaje (
 	id_mensaje   	BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -575,13 +525,9 @@ CREATE TABLE mensaje (
 	CONSTRAINT ck_mensaje_respuesta CHECK (respuesta IS NULL OR respuesta IN ('CONFIRMAR', 'CANCELAR', 'CONSERVAR', 'NINGUNA')),
 	CONSTRAINT ck_mensaje_respondido CHECK (respuesta IS NULL OR respondido_en IS NOT NULL)
 );
-COMMENT ON TABLE mensaje IS 'Mensaje enviado o programado por cita (uno por cada cita, aunque el paciente tenga varias).';
 CREATE INDEX ix_mensaje_programados ON mensaje (programado_para) WHERE estado_envio = 'PROGRAMADO';
 CREATE INDEX ix_mensaje_cita ON mensaje (id_cita);
  
--- ------------------------------------------------------------
--- Área G: Lista de espera y cupos liberados
--- ------------------------------------------------------------
 CREATE TABLE solicitud_espera (
 	id_solicitud 	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_paciente  	BIGINT NOT NULL,
@@ -605,7 +551,6 @@ CREATE TABLE solicitud_espera (
 	CONSTRAINT ck_espera_prioridad CHECK (prioridad BETWEEN 1 AND 5),
 	CONSTRAINT ck_espera_estado CHECK (estado IN ('EN_ESPERA', 'CUPO_OFRECIDO', 'ASIGNADA', 'RETIRADA'))
 );
-COMMENT ON TABLE solicitud_espera IS 'Inscripción interna en lista de espera, gestionada por TENS/TONS.';
 CREATE UNIQUE INDEX ux_espera_activa ON solicitud_espera (id_paciente, id_policlinico, id_especialidad) WHERE estado IN ('EN_ESPERA','CUPO_OFRECIDO');
 CREATE INDEX ix_espera_cola ON solicitud_espera (id_policlinico, id_especialidad, estado, prioridad, ingresada_en);
  
@@ -633,7 +578,6 @@ CREATE TABLE notificacion (
 	CONSTRAINT ck_notif_decision CHECK (decision IS NULL OR decision IN ('OFRECER_ESPERA', 'LIBERAR', 'LLAMAR')),
 	CONSTRAINT ck_notif_atendida CHECK ((atendida_en IS NULL) = (atendida_por IS NULL))
 );
-COMMENT ON TABLE notificacion IS 'Alerta al personal de una sede (cupo liberado, cita sin confirmar, cambio, paciente sin WhatsApp).';
 CREATE INDEX ix_notif_pendientes ON notificacion (id_policlinico, creada_en) WHERE atendida_en IS NULL;
  
 CREATE TABLE oferta_cupo (
@@ -657,12 +601,8 @@ CREATE TABLE oferta_cupo (
 	CONSTRAINT ck_oferta_resultado CHECK (resultado IN ('PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'SIN_RESPUESTA')),
 	CONSTRAINT ck_oferta_aceptada CHECK (resultado <> 'ACEPTADA' OR id_cita IS NOT NULL)
 );
-COMMENT ON TABLE oferta_cupo IS 'Ofrecimiento de un cupo liberado a una persona en espera.';
 CREATE INDEX ix_oferta_solicitud ON oferta_cupo (id_solicitud);
  
--- ------------------------------------------------------------
--- Área I: Encuestas
--- ------------------------------------------------------------
 CREATE TABLE encuesta (
 	id_encuesta 	SMALLINT GENERATED ALWAYS AS IDENTITY,
 	tipo        	VARCHAR(12) NOT NULL,
@@ -672,7 +612,6 @@ CREATE TABLE encuesta (
 	CONSTRAINT pk_encuesta PRIMARY KEY (id_encuesta),
 	CONSTRAINT ck_encuesta_tipo CHECK (tipo IN ('AGENDAMIENTO', 'ATENCION'))
 );
-COMMENT ON TABLE encuesta IS 'Encuesta vigente: experiencia de agendamiento web o atención en el policlínico.';
 CREATE UNIQUE INDEX ux_encuesta_vigente ON encuesta (tipo) WHERE vigente;
  
 CREATE TABLE pregunta_encuesta (
@@ -687,7 +626,6 @@ CREATE TABLE pregunta_encuesta (
     	REFERENCES encuesta (id_encuesta) ON DELETE CASCADE,
 	CONSTRAINT ck_pregunta_tipo CHECK (tipo_respuesta IN ('ESCALA', 'SI_NO', 'TEXTO'))
 );
-COMMENT ON TABLE pregunta_encuesta IS 'Pregunta de una encuesta.';
  
 CREATE TABLE respuesta_encuesta (
 	id_respuesta   BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -701,7 +639,6 @@ CREATE TABLE respuesta_encuesta (
 	CONSTRAINT fk_respuesta_encuesta_id_cita FOREIGN KEY (id_cita)
     	REFERENCES cita (id_cita) ON DELETE CASCADE
 );
-COMMENT ON TABLE respuesta_encuesta IS 'Encuesta respondida para una cita (una por tipo de encuesta).';
  
 CREATE TABLE respuesta_detalle (
 	id_respuesta  BIGINT NOT NULL,
@@ -716,11 +653,7 @@ CREATE TABLE respuesta_detalle (
 	CONSTRAINT ck_detalle_escala CHECK (valor_escala IS NULL OR valor_escala BETWEEN 0 AND 5),
 	CONSTRAINT ck_detalle_valor CHECK (valor_escala IS NOT NULL OR valor_texto IS NOT NULL)
 );
-COMMENT ON TABLE respuesta_detalle IS 'Valor respondido a cada pregunta (resuelve N:M respuesta–pregunta).';
  
--- ------------------------------------------------------------
--- Área J: Usuarios, permisos y auditoría
--- ------------------------------------------------------------
 CREATE TABLE auditoria (
 	id_auditoria	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_usuario  	UUID,
@@ -736,21 +669,13 @@ CREATE TABLE auditoria (
 	CONSTRAINT fk_auditoria_id_policlinico FOREIGN KEY (id_policlinico)
     	REFERENCES policlinico (id_policlinico) ON DELETE SET NULL
 );
-COMMENT ON TABLE auditoria IS 'Bitácora de operaciones administrativas (quién, qué, cuándo, dónde).';
 CREATE INDEX ix_auditoria_fecha ON auditoria (realizado_en);
 CREATE INDEX ix_auditoria_sede ON auditoria (id_policlinico, realizado_en);
  
--- ------------------------------------------------------------
--- Índices de apoyo a claves foráneas frecuentes
--- ------------------------------------------------------------
 CREATE INDEX ix_bloque_agenda ON bloque_horario (id_agenda);
 CREATE INDEX ix_paciente_comuna ON paciente (id_comuna);
 CREATE INDEX ix_orden_paciente ON orden_medica (id_paciente);
  
--- ------------------------------------------------------------
--- Regla de negocio con disparador
--- ------------------------------------------------------------
--- Regla RF30: la encuesta de ATENCION solo puede registrarse si la cita tiene asistencia.
 CREATE OR REPLACE FUNCTION fn_valida_encuesta_atencion() RETURNS trigger AS $$
 BEGIN
   IF (SELECT tipo FROM encuesta WHERE id_encuesta = NEW.id_encuesta) = 'ATENCION'
@@ -764,13 +689,7 @@ CREATE TRIGGER trg_encuesta_atencion
 BEFORE INSERT OR UPDATE ON respuesta_encuesta
 FOR EACH ROW EXECUTE FUNCTION fn_valida_encuesta_atencion();
  
--- ------------------------------------------------------------
--- Reglas de integridad adicionales entre tablas (sin nuevas entidades)
--- ------------------------------------------------------------
--- No sustituyen autenticación, permisos de acceso ni validación del backend.
  
--- Las agendas PUBLICADAS de un mismo profesional no deben coincidir
--- en vigencia, día de semana y tramo horario.
 CREATE OR REPLACE FUNCTION fn_agenda_dia_sin_solape()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v_agenda agenda%ROWTYPE;
@@ -826,8 +745,6 @@ BEFORE UPDATE OF id_profesional, vigente_desde, vigente_hasta,
 	hora_inicio, hora_termino, estado_publicacion ON agenda
 FOR EACH ROW EXECUTE FUNCTION fn_agenda_publicacion_sin_solape();
  
--- Reserva y cancelación mantienen sincronizado el estado del cupo.
--- La FK y el índice único parcial siguen evitando la doble reserva.
 CREATE OR REPLACE FUNCTION fn_cita_verifica_cupo()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v_estado VARCHAR(12); v_requiere BOOLEAN := FALSE;
@@ -880,7 +797,6 @@ CREATE TRIGGER trg_cita_sincroniza_cupo
 AFTER INSERT OR UPDATE OF id_bloque, estado_reserva ON cita
 FOR EACH ROW EXECUTE FUNCTION fn_cita_sincroniza_cupo();
  
--- Impide alterar manualmente a DISPONIBLE un cupo ya comprometido.
 CREATE OR REPLACE FUNCTION fn_bloque_no_liberar_ocupado()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -897,7 +813,6 @@ CREATE TRIGGER trg_bloque_no_liberar_ocupado
 BEFORE UPDATE OF estado ON bloque_horario
 FOR EACH ROW EXECUTE FUNCTION fn_bloque_no_liberar_ocupado();
  
--- Comprueba coherencia del paciente en documentos, órdenes, citas y espera.
 CREATE OR REPLACE FUNCTION fn_orden_documento_mismo_paciente()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -950,7 +865,6 @@ CREATE TRIGGER trg_espera_orden_mismo_paciente
 BEFORE INSERT OR UPDATE OF id_paciente, id_orden, id_especialidad ON solicitud_espera
 FOR EACH ROW EXECUTE FUNCTION fn_espera_orden_mismo_paciente();
  
--- La oferta de cupo debe convertirse en cita del mismo paciente y bloque.
 CREATE OR REPLACE FUNCTION fn_oferta_cita_coherente()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -968,7 +882,6 @@ CREATE TRIGGER trg_oferta_cita_coherente
 BEFORE INSERT OR UPDATE OF id_solicitud, id_bloque, id_cita ON oferta_cupo
 FOR EACH ROW EXECUTE FUNCTION fn_oferta_cita_coherente();
  
--- Toda respuesta a pregunta debe pertenecer a la encuesta de la respuesta.
 CREATE OR REPLACE FUNCTION fn_respuesta_pregunta_misma_encuesta()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -986,8 +899,6 @@ CREATE TRIGGER trg_respuesta_pregunta_misma_encuesta
 BEFORE INSERT OR UPDATE OF id_respuesta, id_pregunta ON respuesta_detalle
 FOR EACH ROW EXECUTE FUNCTION fn_respuesta_pregunta_misma_encuesta();
  
--- Proteger integridad ante cambios posteriores de pertenencia.
--- Identificadores de paciente/documento/orden/encuesta vinculados no pueden reasignarse.
 CREATE OR REPLACE FUNCTION fn_prohibe_reasignacion_referenciada()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -1025,9 +936,6 @@ FOR EACH ROW EXECUTE FUNCTION fn_prohibe_reasignacion_referenciada();
 CREATE TRIGGER trg_respuesta_no_reasignar BEFORE UPDATE OF id_encuesta ON respuesta_encuesta
 FOR EACH ROW EXECUTE FUNCTION fn_prohibe_reasignacion_referenciada();
  
--- ------------------------------------------------------------
--- Área K: Reportes e indicadores (vistas, sin tablas propias)
--- ------------------------------------------------------------
 CREATE VIEW v_cita_detalle WITH (security_invoker = true) AS
 SELECT c.id_cita, c.id_paciente, p.id_policlinico, p.nombre AS policlinico,
    	CASE WHEN p.es_telemedicina THEN 'TELEMEDICINA' ELSE 'PRESENCIAL' END AS modalidad,
@@ -1039,7 +947,6 @@ SELECT c.id_cita, c.id_paciente, p.id_policlinico, p.nombre AS policlinico,
   JOIN agenda a ON a.id_agenda = b.id_agenda
   JOIN policlinico p ON p.id_policlinico = a.id_policlinico
   JOIN especialidad e ON e.id_especialidad = a.id_especialidad;
-COMMENT ON VIEW v_cita_detalle IS 'Cita con sede, especialidad, profesional (o reemplazo), fecha y modalidad derivada.';
  
 CREATE VIEW v_indicadores_citas WITH (security_invoker = true) AS
 SELECT fecha, id_policlinico, policlinico, id_especialidad, especialidad,
@@ -1052,7 +959,6 @@ SELECT fecha, id_policlinico, policlinico, id_especialidad, especialidad,
    	COUNT(*) FILTER (WHERE estado_confirmacion = 'SIN_RESPUESTA') AS sin_respuesta
   FROM v_cita_detalle
  GROUP BY fecha, id_policlinico, policlinico, id_especialidad, especialidad;
-COMMENT ON VIEW v_indicadores_citas IS 'Reservas, confirmaciones, asistencia, inasistencia y cancelaciones por día, sede y especialidad.';
  
 CREATE VIEW v_ocupacion WITH (security_invoker = true) AS
 SELECT a.id_profesional, a.id_policlinico, a.id_especialidad, b.fecha,
@@ -1062,7 +968,6 @@ SELECT a.id_profesional, a.id_policlinico, a.id_especialidad, b.fecha,
   LEFT JOIN LATERAL (SELECT c.id_bloque FROM cita c WHERE c.id_bloque = b.id_bloque
                     	AND c.estado_reserva <> 'CANCELADA' LIMIT 1) activa ON TRUE
  GROUP BY a.id_profesional, a.id_policlinico, a.id_especialidad, b.fecha;
-COMMENT ON VIEW v_ocupacion IS 'Bloques publicados frente a bloques reservados por profesional y día.';
  
 CREATE VIEW v_caracterizacion_pacientes WITH (security_invoker = true) AS
 SELECT d.id_policlinico, d.fecha, pa.genero, pa.nacionalidad, co.nombre AS comuna,
@@ -1073,7 +978,6 @@ SELECT d.id_policlinico, d.fecha, pa.genero, pa.nacionalidad, co.nombre AS comun
   JOIN paciente pa ON pa.id_paciente = d.id_paciente
   JOIN comuna co ON co.id_comuna = pa.id_comuna
  WHERE d.estado_reserva = 'ASISTIO';
-COMMENT ON VIEW v_caracterizacion_pacientes IS 'Perfil de pacientes atendidos (edad, género, nacionalidad, comuna).';
  
 CREATE VIEW v_resultado_encuestas WITH (security_invoker = true) AS
 SELECT e.tipo, q.id_pregunta, q.texto, COUNT(rd.id_respuesta) AS respuestas, ROUND(AVG(rd.valor_escala), 2) AS promedio
@@ -1081,7 +985,6 @@ SELECT e.tipo, q.id_pregunta, q.texto, COUNT(rd.id_respuesta) AS respuestas, ROU
   JOIN encuesta e ON e.id_encuesta = q.id_encuesta
   LEFT JOIN respuesta_detalle rd ON rd.id_pregunta = q.id_pregunta
  GROUP BY e.tipo, q.id_pregunta, q.texto;
-COMMENT ON VIEW v_resultado_encuestas IS 'Promedio y cantidad de respuestas por pregunta de cada encuesta.';
  
 CREATE VIEW v_sesiones_orden WITH (security_invoker = true) AS
 SELECT o.id_orden, o.id_paciente, o.sesiones_indicadas,
@@ -1090,5 +993,4 @@ SELECT o.id_orden, o.id_paciente, o.sesiones_indicadas,
    	COUNT(c.id_cita) FILTER (WHERE c.estado_reserva = 'RESERVADA') AS agendadas
   FROM orden_medica o LEFT JOIN cita c ON c.id_orden = o.id_orden
  GROUP BY o.id_orden, o.id_paciente, o.sesiones_indicadas;
-COMMENT ON VIEW v_sesiones_orden IS 'Sesiones indicadas, asistidas e inasistidas por orden médica (se ve en la ficha).';
  

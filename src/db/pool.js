@@ -1,5 +1,4 @@
 'use strict';
-// Conexión a PostgreSQL. Solo se carga el paquete "pg" cuando existe DATABASE_URL.
 function crearDb(url) {
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: url });

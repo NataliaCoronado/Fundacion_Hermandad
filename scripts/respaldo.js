@@ -1,9 +1,4 @@
 "use strict";
-// Respaldo y restauración desde la terminal.
-//   npm run respaldo                      crea un respaldo en respaldos/
-//   npm run respaldo -- listar            muestra los respaldos disponibles
-//   npm run respaldo -- verificar <carpeta>
-//   npm run restaurar -- <carpeta>        restaura (antes respalda lo actual)
 require("../src/util/entorno").cargarEnv();
 const net = require("node:net");
 const path = require("node:path");
@@ -13,18 +8,14 @@ const RAIZ = path.join(__dirname, "..");
 const DATOS = path.resolve(process.env.DIR_DATOS || path.join(RAIZ, "datos"));
 const RESPALDOS = path.resolve(process.env.DIR_RESPALDOS || path.join(RAIZ, "respaldos"));
 const kb = (n) => (n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
-// Rutas relativas al proyecto cuando están dentro de él; completas si están fuera.
 const mostrar = (p) => (p.startsWith(RAIZ + path.sep) ? path.relative(RAIZ, p) : p);
 const salir = (texto) => { console.error(`✘ ${texto}`); process.exit(1); };
 
-// Si los datos están configurados fuera de la carpeta de datos, el respaldo quedaría incompleto sin avisar.
 for (const v of ["ARCHIVO_DATOS", "DIR_DOCUMENTOS"]) {
   const p = process.env[v] && path.resolve(process.env[v]);
   if (p && !p.startsWith(DATOS + path.sep)) salir(`${v} apunta fuera de ${DATOS}. Define DIR_DATOS con la carpeta que contiene todos los datos para respaldarlos completos.`);
 }
 
-// ¿Hay un servidor del sistema escuchando? Restaurar con la aplicación en marcha no sirve: tiene los datos en
-// memoria y los vuelve a guardar en la siguiente petición, borrando lo restaurado.
 const escuchando = (puerto) => new Promise((ok) => {
   const s = net.connect({ port: puerto, host: "127.0.0.1" });
   s.setTimeout(500);

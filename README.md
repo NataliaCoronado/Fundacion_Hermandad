@@ -14,38 +14,40 @@ npm start
 - Personal: http://localhost:3001
 - Portal de pacientes: http://localhost:3000
 
-Administración entra directamente a **Agendas y cupos**. TENS/TONS y Gestión de Telemedicina entran a **Atención del día**. La aplicación usa la zona horaria `America/Santiago`.
+Administración entra directamente a **Agendas y cupos**. 
+TENS/TONS y Gestión de Telemedicina entran a **Atención del día**. 
+La aplicación usa la zona horaria `America/Santiago`.
 
 ### Cuentas de demostración
 
-| Correo | Rol / lugar |
-|---|---|
-| admin@ejemplo.cl | Administración, toda la red |
-| tens@ejemplo.cl | TENS/TONS, Casa Central (San Isidro) |
-| telemedicina.usuario@ejemplo.cl | Gestión de Telemedicina |
+Vista Administración: admin@ejemplo.cl 
+Vista TENS/TONS perteneciente a Casa Central (San Isidro): tens@ejemplo.cl 
+Vista de Telemedicina: telemedicina.usuario@ejemplo.cl
 
-Contraseña de las tres cuentas: `demo1234`. Las cuentas creadas desde Administración no reciben esta contraseña; se habilitan mediante el enlace seguro de un solo uso. En PostgreSQL, `CLAVE_DEMO=demo1234` habilita las claves de las tres cuentas de ejemplo.
+Contraseña de las tres cuentas: `demo1234`. 
+
+Las cuentas creadas desde Administración no reciben esta contraseña; se habilitan mediante el enlace seguro de un solo uso. En PostgreSQL, `CLAVE_DEMO=demo1234` habilita las claves de las tres cuentas de ejemplo.
 
 ## Modalidad de entrega: demostración local reproducible
 
-Para la entrega del 23 de noviembre el sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desplegará en la nube en la etapa siguiente).
+El sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desplegará en la nube en la etapa siguiente).
 
-- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No usa flags de Node recientes ni rutas propias de un sistema operativo: `.env` se lee en código, así que `npm start` funciona igual en los tres. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
+- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
 - **Instalación:** `npm ci`
-- **Configuración:** ninguna para la demostración. Si quieres cambiar opciones, copia `.env.example` como `.env` (el `.env` nunca se sube al repositorio).
-- **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001). Cuentas de prueba en la tabla de más abajo.
+- **Configuración:** ninguna para la demostración.
+- **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001).
 - **Datos:** todos los datos son **ficticios**. La mensajería funciona en modo simulado y no envía nada real; el guion está en `DEMO_MENSAJES.md`.
 - **Verificación:** `npm test`.
 
 ## Administración
 
-Los cuatro módulos principales son Agendas y cupos, Equipo de salud, Policlínicos y especialidades, y Reportes. La barra lateral conserva el estilo y la identidad institucional del proyecto original. Usuarios y Auditoría se encuentran en **Configuración / perfil**.
+Los cuatro módulos principales son Agendas y cupos, Equipo de salud, Policlínicos y especialidades, y Reportes. Usuarios y Auditoría se encuentran en **Configuración / perfil**.
 
 - **Agendas y cupos:** día por profesional y semana, Hoy, fecha, filtros de lugar, especialidad, uno/varios/todos los profesionales y estado. El color representa el lugar en Toda la red y la especialidad al elegir un lugar. Las reservas abren un panel flotante.
 - **Crear bloque horario:** franja completa con fecha única o repetición semanal, duración, rango y días. La revisión calcula días, cupos y conflictos en todos los lugares del profesional. Permite guardar sin publicar o publicar. La publicación, el bloqueo y la disponibilidad pueden cambiarse por cupo.
 - **Cambios de agenda:** ausencia, reemplazo, lugar, fecha/horario o cancelación institucional. Presenta situación actual, propuesta y reservas afectadas. Revalida el impacto al guardar. Permite seleccionar las citas que se cancelarán y elegir si el horario vuelve a estar disponible o queda bloqueado. La reprogramación se realiza desde el detalle de reserva; los cambios generan instrucciones para la sede y una bitácora.
 - **Equipo de salud:** tarjetas o tabla, búsqueda, filtros, alta, edición, fotografía JPG/PNG, tipo de integrante, profesión, varias especialidades y varios lugares. Las asignaciones tienen fecha de vigencia. No se retiran lugares con reservas futuras afectadas; primero se reprograman. Los integrantes se desactivan y conservan su historial.
-- **Policlínicos y especialidades:** pestañas, alta y edición, estado y colores. Incluye las siete ubicaciones originales.
+- **Policlínicos y especialidades:** pestañas, alta y edición, estado y colores. Incluye las 6 y telemedicina.
 - **Reportes:** filtros por lugar, especialidad, profesional y período; cuatro secciones (la cuarta, las dos encuestas por separado), siluetas de sexo registrado, pacientes únicos atendidos, consultas, ausencias y registros pendientes separados. Cada gráfico tiene datos consultables y descargas PDF, Excel real (`.xlsx`) y PNG. PDF y Excel admiten reporte completo. Las descargas incluyen período y filtros.
 - **Usuarios:** crear/editar, vincular integrante, lugares asignados, lugar principal de ingreso, permiso para finalizar atención administrativa, estado y último acceso. El cambio de permisos revoca las sesiones existentes. Los enlaces para establecer contraseña caducan a los 30 minutos y solo sirven una vez.
 - **Auditoría:** usuario, fecha, acción y valores de las operaciones nuevas; filtros por fecha, usuario, acción y lugar. También se conserva la auditoría histórica original.
@@ -57,7 +59,7 @@ La sesión se limita al lugar principal asignado por Administración. Una cuenta
 - **Atención del día:** fecha, búsqueda por nombre/RUT, resumen compacto, tabla de atenciones y tareas de la sede. Permite registrar llegada, sala, confirmación, término administrativo y ausencia. No incluye acciones clínicas.
 - **Agendas y reservas:** día y semana, próximas horas libres, detalles, nueva reserva, reprogramación y cancelación solicitada por el paciente con motivo y canal. La cancelación puede liberar o bloquear el horario.
 - **Lista de espera:** filtros, antigüedad, prioridades, preferencias de mañana/tarde y cupos compatibles. Se registran fecha, canal y resultado de contactos; No responde conserva la solicitud. La asignación siempre la realiza el operador.
-- **Pacientes:** lista sin fotografías; búsqueda por nombre, RUT o teléfono; registro y edición con validación del dígito verificador del RUT. La ficha tiene Resumen, Reservas, Documentos, Responsable o tutor y Comunicaciones. Permite desactivar sin eliminar historial. Los datos se recuperan por RUT para futuras reservas.
+- **Pacientes:** lista; búsqueda por nombre, RUT o teléfono; registro y edición con validación del dígito verificador del RUT. La ficha tiene Resumen, Reservas, Documentos, Responsable o tutor y Comunicaciones. Permite desactivar sin eliminar historial. Los datos se recuperan por RUT para futuras reservas.
 - **Tutor:** los menores de 18 años deben tener un adulto responsable, con relación, RUT y teléfono.
 - **Documentos:** PDF, JPG y PNG, tipo, especialidad y vigencia; validación, descarga/visualización, reemplazo y archivo conservando los originales. Solo los usuarios de la sede autorizada acceden al archivo privado.
 - **Comunicaciones:** bandeja por sede, canal, reserva, estado, fecha, responsable y reintentos. Las llamadas se registran en Confirmaciones. El silencio no cancela una reserva ni elimina una solicitud de espera.

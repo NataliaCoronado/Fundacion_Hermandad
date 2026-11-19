@@ -1,7 +1,5 @@
 "use strict";
-// Operaciones nuevas: conservan claves foráneas y transacciones del catálogo institucional.
 module.exports = {
-  // Elimina un integrante sin historial. Las claves foráneas (cita, cambio_agenda) impiden borrar si lo tiene.
   async eliminarProfesional(id) {
     try {
       await this.db.tx(async (q) => {
@@ -11,7 +9,6 @@ module.exports = {
         if (!r.length) throw new Error("PROFESIONAL_NO_ENCONTRADO");
       });
     } catch (e) {
-      // 23503 = foreign_key_violation, 23001 = restrict_violation.
       if (["23503", "23001"].includes(e.code) || /foreign key constraint/.test(e.message)) throw new Error("El integrante tiene historial; desactívalo en vez de eliminarlo.");
       throw e;
     }

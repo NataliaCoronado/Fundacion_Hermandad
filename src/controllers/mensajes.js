@@ -1,5 +1,4 @@
 'use strict';
-// Texto para el usuario según el código de error de negocio. Nada técnico se muestra en pantalla.
 const MENSAJES = {
   PACIENTE_NO_ENCONTRADO: 'No existe un paciente con ese RUT. Crea primero su ficha en «Pacientes».',
   BLOQUE_NO_DISPONIBLE: 'El cupo no está disponible.',
@@ -47,7 +46,6 @@ const MENSAJES = {
   DEMASIADOS_INTENTOS: 'Demasiados intentos. Espera unos minutos.',
   WHATSAPP_NO_CONFIGURADO: 'WhatsApp real aún no está configurado.',
 };
-// Los códigos (SIN_ESPACIOS) se traducen; los mensajes ya redactados para la persona se muestran tal cual.
 const legible = (m) => /\s/.test(String(m || '')) && !/^\w+Error\b|is not|undefined|Cannot /.test(m);
 const error = (e) => {
   if (MENSAJES[e.message]) return { tipo: 'error', texto: MENSAJES[e.message] };

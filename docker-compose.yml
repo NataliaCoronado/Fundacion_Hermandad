@@ -1,20 +1,17 @@
-# Capa de presentación + lógica: servicio "app". Capa de datos: PostgreSQL ("db").
-# Los scripts de db/ se ejecutan en orden SOLO la primera vez que se crea el volumen.
-# Para empezar de cero:  docker compose down -v
 services:
   app:
     build: .
     ports:
-      - "3000:3000"   # portal de pacientes
-      - "3001:3001"   # sitio del personal (TENS/TONS y Administración)
+      - "3000:3000"
+      - "3001:3001"
     environment:
       TZ: America/Santiago
       PORT: 3000
       PORT_PERSONAL: 3001
       URL_PORTAL: http://localhost:3000
       DATABASE_URL: postgres://hermandad:cambiar_en_local@db:5432/hermandad
-      CLAVE_DEMO: demo1234          # solo desarrollo: contraseña de los usuarios de prueba
-      DIR_DOCUMENTOS: /app/datos/documentos   # archivos adjuntos (carpeta privada)
+      CLAVE_DEMO: demo1234
+      DIR_DOCUMENTOS: /app/datos/documentos
     volumes:
       - adjuntos:/app/datos
     depends_on:

@@ -9,10 +9,6 @@ const MAX_FALLOS = 10;
 const VENTANA_FALLOS_MS = 24 * 60 * 60 * 1000;
 const BLOQUEO_MS = 24 * 60 * 60 * 1000;
 
-// Cuenta opcional del paciente (portal). Se identifica con RUT y contraseña.
-// Para crearla o recuperarla se verifica la identidad con datos de la ficha: fecha de nacimiento
-// y los últimos 4 dígitos del celular registrado. Conocer un RUT nunca basta.
-// El acceso a familiares solo existe si la ficha del familiar registra a esta persona como adulto responsable.
 class CuentaPacienteService {
   constructor({ catalogo, extras, citaRepo }) {
     Object.assign(this, { catalogo, extras, citaRepo });
@@ -26,8 +22,6 @@ class CuentaPacienteService {
     return this.cuentas().find((c) => c.rut === normalizarRut(rut)) || null;
   }
 
-  // Bloqueo por RUT (se guarda con los datos, sobrevive a reinicios y no depende de la IP):
-  // tras MAX_FALLOS verificaciones fallidas en 24 h, ese RUT no se puede verificar por 24 h.
   bloqueos() {
     return (this.extras.extras.bloqueosVerificacion ||= {});
   }
@@ -49,7 +43,6 @@ class CuentaPacienteService {
       if (e.hasta < n && n - e.desde > VENTANA_FALLOS_MS) delete this.bloqueos()[k];
   }
 
-  // Devuelve la ficha si los datos coinciden; si no, null (sin revelar qué dato falló ni si hay bloqueo).
   async verificarIdentidad({ rut, fechaNacimiento, celular4 }) {
     const r = normalizarRut(rut);
     if (!rutValido(r)) return null;
@@ -64,7 +57,6 @@ class CuentaPacienteService {
       !!fechaNacimiento &&
       p.fechaNacimiento === fechaNacimiento &&
       digitos.slice(-4) === String(celular4 || "").replace(/\D/g, "");
-    // Solo se cuentan fallos de RUT con ficha: así RUT inventados no llenan el registro.
     if (ok) delete this.bloqueos()[r];
     else if (p) this.registrarFallo(r);
     return ok ? p : null;
@@ -112,7 +104,6 @@ class CuentaPacienteService {
     return p;
   }
 
-  // Fichas que registran a esta persona como adulto responsable: son los familiares vinculados.
   async familiares(rut) {
     const r = normalizarRut(rut);
     return (await this.catalogo.pacientes()).filter(
@@ -128,7 +119,6 @@ class CuentaPacienteService {
     if (!(await this.puedeVer(rutCuenta, rutObjetivo))) throw new Error("FUERA_DE_SEDE");
   }
 
-  // Solicitudes que resuelve el personal (corrección de identidad, vinculación de un familiar).
   solicitar({ rut, tipo, detalle, idPoliclinico }) {
     const s = this.extras.agregar("solicitudesPaciente", {
       rut: normalizarRut(rut),

@@ -6,7 +6,6 @@ const { crearAuthController } = require("./controllers/auth");
 const { crearReservaController } = require("./controllers/reserva");
 const { rutaAgenda } = require("./auth/permisos");
 
-// "area" indica quién puede entrar: null = público; 'tens' o 'admin' = personal con ese permiso (src/auth/permisos.js).
 function crearRutas(c) {
   const admin = crearAdminController(c);
   const tens = crearTensController(c);
@@ -28,7 +27,6 @@ function crearRutas(c) {
   };
   const get = (ruta, area, m) => r("GET", ruta, area, m);
   const post = (ruta, area, m) => r("POST", ruta, area, m);
-  // El bot de WhatsApp queda fuera por ahora: sus pantallas solo existen si se enciende con BOT_WHATSAPP=1.
   const botActivo = process.env.BOT_WHATSAPP === "1";
   const op = require("./controllers/operacion").crearOperacionController(c);
   const rep = require("./controllers/reportes").crearReportesController(c);
@@ -45,6 +43,7 @@ function crearRutas(c) {
     get("/admin/reportes", "admin", rep.ver),
     get("/admin/reportes/exportar", "admin", rep.exportar),
     get("/admin/reportes/agenda.json", "admin", rep.agendaJson),
+    get("/admin/resumen", "admin", op.resumen),
     get("/admin/panel", "admin", irAAgenda),
     get("/admin/agendas", "admin", op.adminAgenda),
     get("/admin/bloque/nuevo", "admin", op.bloqueNuevo),
@@ -71,6 +70,7 @@ function crearRutas(c) {
     get("/admin/auditoria", "admin", op.auditoria),
     get("/restablecer", null, op.restablecer),
     post("/restablecer", null, op.guardarClave),
+    get("/tens/resumen", "tens", op.resumen),
     get("/tens/panel", "tens", irAAgenda),
     get("/tens/agenda", "tens", op.tensAgenda),
     get("/tens/pacientes", "tens", op.pacientes),

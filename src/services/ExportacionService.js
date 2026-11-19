@@ -1,5 +1,4 @@
 "use strict";
-// Archivos OOXML sin dependencias adicionales y PDF vectorial con datos agregados.
 const xml = (s) =>
   String(s ?? "").replace(
     /[<>&"']/g,

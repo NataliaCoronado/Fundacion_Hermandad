@@ -1,8 +1,4 @@
 'use strict';
-// Respaldo y restauración (RNF06 / CP-42). Copia la carpeta de datos (estado JSON, metadatos, documentos y
-// fotos privadas) y, si se usa PostgreSQL, un volcado de la base. Cada respaldo lleva un manifiesto con el
-// tamaño y la huella SHA-256 de cada archivo: así se puede comprobar que no está dañado antes de restaurarlo.
-// Restaurar nunca destruye sin copia: primero respalda lo que hay, y reemplaza la carpeta entera (no mezcla).
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -13,7 +9,6 @@ const pad = (n) => String(n).padStart(2, '0');
 const sello = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 const huella = (archivo) => crypto.createHash('sha256').update(fs.readFileSync(archivo)).digest('hex');
 
-// Archivos de una carpeta, con rutas relativas en formato "a/b.txt" (igual en macOS, Linux y Windows).
 function listarArchivos(dir, rel = '') {
   const salida = [];
   for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
@@ -25,8 +20,6 @@ function listarArchivos(dir, rel = '') {
   return salida.sort();
 }
 
-// Variables de conexión para pg_dump/pg_restore. La clave va en el entorno del proceso, no en la línea de
-// comandos, para que no aparezca en la lista de procesos del equipo.
 function entornoPg(url) {
   const u = new URL(url);
   return {
@@ -79,7 +72,7 @@ function crearRespaldo({ datos, destino, baseDatos = process.env.DATABASE_URL, e
     fs.writeFileSync(path.join(carpeta, 'manifiesto.json'), JSON.stringify(manifiesto, null, 2), { mode: 0o600 });
     return { carpeta, manifiesto };
   } catch (e) {
-    fs.rmSync(carpeta, { recursive: true, force: true });   // nunca dejar un respaldo a medias que parezca válido
+    fs.rmSync(carpeta, { recursive: true, force: true });
     throw e;
   }
 }
@@ -103,11 +96,9 @@ function restaurar({ respaldo, datos, destinoSeguridad, baseDatos = process.env.
   const { manifiesto } = v;
   if (manifiesto.modo === 'postgresql' && !baseDatos) throw new Error('Este respaldo incluye la base PostgreSQL: define DATABASE_URL para restaurarla.');
   if (manifiesto.modo === 'memoria' && baseDatos) throw new Error('Este respaldo es del modo sin base de datos y DATABASE_URL está definida: restaurarlo dejaría la base y los archivos desalineados.');
-  // 1) Copia de seguridad de lo que hay ahora, para poder deshacer la restauración.
   let seguridad = null;
   if (fs.existsSync(datos) && listarArchivos(datos).length)
     seguridad = crearRespaldo({ datos, destino: destinoSeguridad, baseDatos, etiqueta: 'antes-de-restaurar', ejecutar }).carpeta;
-  // 2) Se arma la carpeta restaurada aparte y recién al final reemplaza a la actual.
   const temporal = `${datos}.restaurando`;
   fs.rmSync(temporal, { recursive: true, force: true });
   fs.mkdirSync(temporal, { recursive: true, mode: 0o700 });

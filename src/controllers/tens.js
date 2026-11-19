@@ -18,7 +18,7 @@ function crearTensController(c) {
     extras,
     auditoria,
   } = c;
-  const sedeDe = (u) => (u && u.idPoliclinico ? Number(u.idPoliclinico) : null); // TENS/TONS solo ve su sede; un usuario sin sede asignada ve todas
+  const sedeDe = (u) => (u && u.idPoliclinico ? Number(u.idPoliclinico) : null);
   const citasVisibles = async (u, ctx, soloActivas = false) => {
     const sede = sedeDe(u);
     return (await citaRepo.listar()).filter(
@@ -243,7 +243,6 @@ function crearTensController(c) {
       .filter((n) => !sede || n.idPoliclinico === sede);
     return { html: vistas.avisos({ lista, mensaje, usuario }) };
   };
-  // Guardia: un TENS/TONS no opera sobre citas de otra sede.
   const citaDeMiSede = async (usuario, idCita) => {
     const cita = await citaRepo.buscarPorId(idCita);
     if (!cita) throw new Error("CITA_NO_ENCONTRADA");
@@ -425,7 +424,6 @@ function crearTensController(c) {
     registrarAsistencia: async ({ cuerpo, usuario }) => {
       try {
         await citaDeMiSede(usuario, cuerpo.idCita);
-        // Misma regla que en Agenda: cerrar la atención como realizada exige el permiso del usuario.
         if (cuerpo.asistio === "1" && usuario.puedeTerminarAtencion === false)
           throw new Error("No tienes permiso para terminar la atención.");
         await agendamiento.registrarAsistencia(

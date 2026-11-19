@@ -1,9 +1,3 @@
--- ============================================================
--- Datos de EJEMPLO para desarrollo. Contacto de policlínicos: institucional. Profesionales, pacientes y horarios: FICTICIOS.
--- Se ejecuta DESPUÉS de hermandad_postgresql.sql (docker-compose los carga en orden).
--- Coincide con los datos de muestra de src/models/datos.js
--- ============================================================
-
 INSERT INTO rol (codigo, nombre) VALUES
  ('ADMINISTRACION','Administración'),('TENS_TONS','TENS/TONS'),('TELEMEDICINA','Telemedicina');
 
@@ -13,7 +7,53 @@ INSERT INTO comuna (nombre, region) VALUES
  ('Puente Alto','Metropolitana'),
  ('Estación Central','Metropolitana'),
  ('Conchalí','Metropolitana'),
- ('Maipú','Metropolitana');
+ ('Maipú','Metropolitana'),
+ ('Alhué','Metropolitana'),
+ ('Buin','Metropolitana'),
+ ('Calera de Tango','Metropolitana'),
+ ('Cerrillos','Metropolitana'),
+ ('Cerro Navia','Metropolitana'),
+ ('Colina','Metropolitana'),
+ ('Curacaví','Metropolitana'),
+ ('El Bosque','Metropolitana'),
+ ('El Monte','Metropolitana'),
+ ('Huechuraba','Metropolitana'),
+ ('Independencia','Metropolitana'),
+ ('Isla de Maipo','Metropolitana'),
+ ('La Cisterna','Metropolitana'),
+ ('La Florida','Metropolitana'),
+ ('La Granja','Metropolitana'),
+ ('La Pintana','Metropolitana'),
+ ('La Reina','Metropolitana'),
+ ('Lampa','Metropolitana'),
+ ('Las Condes','Metropolitana'),
+ ('Lo Barnechea','Metropolitana'),
+ ('Lo Espejo','Metropolitana'),
+ ('Lo Prado','Metropolitana'),
+ ('Macul','Metropolitana'),
+ ('María Pinto','Metropolitana'),
+ ('Melipilla','Metropolitana'),
+ ('Ñuñoa','Metropolitana'),
+ ('Padre Hurtado','Metropolitana'),
+ ('Paine','Metropolitana'),
+ ('Pedro Aguirre Cerda','Metropolitana'),
+ ('Peñaflor','Metropolitana'),
+ ('Peñalolén','Metropolitana'),
+ ('Pirque','Metropolitana'),
+ ('Providencia','Metropolitana'),
+ ('Pudahuel','Metropolitana'),
+ ('Quilicura','Metropolitana'),
+ ('Quinta Normal','Metropolitana'),
+ ('Recoleta','Metropolitana'),
+ ('Renca','Metropolitana'),
+ ('San Bernardo','Metropolitana'),
+ ('San Joaquín','Metropolitana'),
+ ('San José de Maipo','Metropolitana'),
+ ('San Miguel','Metropolitana'),
+ ('San Pedro','Metropolitana'),
+ ('Talagante','Metropolitana'),
+ ('Tiltil','Metropolitana'),
+ ('Vitacura','Metropolitana');
 
 INSERT INTO especialidad (nombre, requiere_orden) VALUES
  ('Medicina General',FALSE),
@@ -189,7 +229,6 @@ INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especiali
  (46,6,2),
  (47,7,6);
 
--- Una agenda por profesional: lunes y martes, 09:00-11:00, bloques de 30 min
 INSERT INTO agenda (id_profesional, id_policlinico, id_especialidad, vigente_desde, vigente_hasta, hora_inicio, hora_termino, duracion_min, estado_publicacion, creado_por) VALUES
  (1,1,1,'2026-11-01','2026-12-31','09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
  (2,1,2,'2026-11-01','2026-12-31','09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
@@ -335,7 +374,6 @@ INSERT INTO agenda_dia (id_agenda, dia_semana) VALUES
  (47,1),
  (47,2);
 
--- Bloques: 23 y 24 de noviembre de 2026, 09:00 a 10:30 (4 por día y profesional)
 INSERT INTO bloque_horario (id_agenda, fecha, hora_inicio, hora_termino, estado) VALUES
  (1,'2026-11-23','09:00','09:30','DISPONIBLE'),
  (1,'2026-11-23','09:30','10:00','DISPONIBLE'),
@@ -719,7 +757,7 @@ INSERT INTO paciente (tipo_documento, numero_documento, nombres, apellidos, fech
  ('RUT','22222222-2','Paciente de prueba','B','1950-05-05','MASCULINO','Chilena','+56922222222',TRUE,'Dirección de prueba 2',2),
  ('RUT','33333333-3','Paciente de prueba','C','2015-09-09','FEMENINO','Venezolana','+56933333333',FALSE,'Dirección de prueba 3',3);
 
--- La paciente C es menor de edad: lleva un adulto responsable.
+
 INSERT INTO responsable (rut, nombres, apellidos, telefono) VALUES ('44444444-4','Responsable','de prueba','+56944444444');
 INSERT INTO paciente_responsable (id_paciente, id_responsable, relacion, es_representante) VALUES (3,1,'Madre',TRUE);
 
@@ -727,16 +765,16 @@ INSERT INTO consentimiento (id_paciente, version_texto, canal, registrado_por) V
 
  (1,'v1','PRESENCIAL','00000000-0000-0000-0000-000000000002'),(2,'v1','PRESENCIAL','00000000-0000-0000-0000-000000000002'),(3,'v1','PRESENCIAL','00000000-0000-0000-0000-000000000002');
 
--- Citas: la A queda pendiente de confirmar; la B ya confirmada. El cupo pasa a RESERVADO por disparador.
+
 INSERT INTO cita (id_paciente, id_bloque, canal_reserva, telefono_contacto, estado_confirmacion, creada_por) VALUES
  (1,1,'PRESENCIAL','+56911111111','PENDIENTE','00000000-0000-0000-0000-000000000002'),
  (2,2,'PRESENCIAL','+56922222222','CONFIRMADA','00000000-0000-0000-0000-000000000002');
 
--- Lista de espera (sin asignación automática): paciente C en Sagrada Familia, Kinesiología
+
 INSERT INTO solicitud_espera (id_paciente, id_policlinico, id_especialidad, registrado_por) VALUES
  (3,2,3,'00000000-0000-0000-0000-000000000002');
 
--- Plantillas del bot de reglas fijas (sin IA, sin texto libre): botones Confirmar / Cancelar mi hora
+
 INSERT INTO plantilla_mensaje (codigo, tipo, canal, categoria_meta, estado_aprobacion, contenido) VALUES
  ('RECORDATORIO_7D','RECORDATORIO','WHATSAPP','UTILIDAD','BORRADOR','Recordatorio de su hora en una semana. Botones: Confirmar | Cancelar mi hora'),
  ('RECORDATORIO_1D','RECORDATORIO','WHATSAPP','UTILIDAD','BORRADOR','Recordatorio de su hora para mañana. Botones: Confirmar | Cancelar mi hora'),

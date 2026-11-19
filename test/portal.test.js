@@ -1,5 +1,4 @@
 'use strict';
-// Portal del paciente: reserva en 4 pasos, comprobante PDF, datos recordados con verificación y cuenta opcional.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -15,7 +14,6 @@ async function levantar() {
   const srv = crearServidor(c);
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${srv.address().port}`;
-  // Cliente con su propia cookie de paciente.
   const cliente = () => {
     let ck = '';
     const req = async (ruta, datos, multi) => {
@@ -41,7 +39,7 @@ test('portal: la página principal abre en Reservar hora y admite un policlínic
     const h = await s.cliente().texto('/');
     assert.match(h, /Reserva tu hora/);
     assert.match(h, /name="rut"/);
-    assert.match(h, /href="\/paciente\/cuenta"[^>]*>Iniciar sesión/);
+    assert.match(h, /href="\/paciente\/cuenta"[^>]*>(?:(?!<\/a>)[\s\S])*Iniciar sesión/);
     assert.match(await s.cliente().texto('/?lugar=2'), /<option value="2" selected/);
   } finally { await s.cerrar(); }
 });
@@ -55,7 +53,7 @@ test('portal: el formulario de reserva pide RUT y lugar', async () => {
     assert.match(h, /name="lugar"/);
     assert.match(h, /Toda la red/);
     assert.match(h, /Telemedicina/);
-    assert.match(h, /href="\/paciente\/cuenta"[^>]*>Iniciar sesión/);
+    assert.match(h, /href="\/paciente\/cuenta"[^>]*>(?:(?!<\/a>)[\s\S])*Iniciar sesión/);
   } finally { await s.cerrar(); }
 });
 
@@ -85,12 +83,10 @@ test('portal: calendario mensual con días disponibles, búsqueda por profesiona
     assert.ok(ids.length > 0, 'muestra horas del primer día disponible');
     for (const id of ids) assert.strictEqual((await s.c.catalogo.bloque(id)).idProfesional, 1, 'solo horas del profesional buscado');
     for (const q of ['mes=basura&dia=x', 'mes=2030-01', 'mes=1999-01', 'dia=2026-13-40']) assert.strictEqual((await p.req(`/agendar/calendario?t=${t}&${q}`)).status, 200, q);
-    // Telemedicina devuelve solo horas propias.
     const t2 = tokenDe(await p.req('/agendar', { rut: '33333333-3', lugar: '7', modo: 'esp', esp: (await s.c.catalogo.profesionales()).find((x) => x.idPoliclinico === 7).especialidad, consentimiento: '1' }));
     const h2 = await p.texto(`/agendar/calendario?t=${t2}`);
     assert.match(h2, /Videoconsulta/);
     assert.doesNotMatch(h2, /Presencial<\/span>/);
-    // Token inválido vuelve al inicio.
     assert.strictEqual((await p.req('/agendar/calendario?t=falso')).headers.get('location'), '/agendar');
   } finally { await s.cerrar(); }
 });
@@ -104,10 +100,8 @@ test('portal: paciente nuevo completa datos y documentos, confirma, obtiene PDF 
     const form = await p.texto(`/agendar/datos?t=${t}&bloque=${bloque}`);
     assert.match(form, /Completa los datos del paciente/);
     assert.match(form, /Nombres <span class="req"/, 'los obligatorios llevan asterisco');
-    // Falta un dato obligatorio o el archivo no es válido: no avanza.
     assert.strictEqual((await p.req('/agendar/datos', { t, ...NUEVO, direccion: '' }, true)).status, 400);
     assert.match(await p.texto('/agendar/datos', { t, ...NUEVO, tipo1: 'Otro', doc1: { blob: new Blob(['MZ']), nombre: 'x.pdf' } }, true), /debe ser PDF, JPG o PNG/);
-    // Datos y documento válidos.
     const pdf = new Blob([Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(500, 1)])], { type: 'application/pdf' });
     const r = await p.req('/agendar/datos', { t, ...NUEVO, tipo1: 'Cartola FONASA', doc1: { blob: pdf, nombre: 'fonasa.pdf' } }, true);
     assert.strictEqual(r.headers.get('location'), `/agendar/revisar?t=${t}`);
@@ -118,7 +112,6 @@ test('portal: paciente nuevo completa datos y documentos, confirma, obtiene PDF 
     assert.match(conf, /Tu hora fue reservada correctamente/);
     assert.match(conf, /Descargar comprobante \(PDF\)/);
     assert.match(conf, /quedó registrado/);
-    // Registro del paciente, cita, consentimiento, documento y envío registrado.
     const ficha = await s.c.catalogo.paciente('12345678-5');
     assert.strictEqual(ficha.nombre, 'Ana Prueba');
     const cita = (await s.c.citaRepo.buscarPorRut('12345678-5')).find((x) => x.idBloque === bloque);
@@ -129,14 +122,12 @@ test('portal: paciente nuevo completa datos y documentos, confirma, obtiene PDF 
     assert.strictEqual(doc.tipo, 'Cartola FONASA');
     assert.strictEqual(doc.adjunto.original, 'fonasa.pdf');
     assert.ok(s.c.extras.listar('comunicaciones').some((m) => m.idCita === cita.id && m.tipo === 'Comprobante de reserva' && m.estado === 'Simulado'));
-    // PDF del comprobante.
     const pr = await p.req(`/agendar/comprobante.pdf?t=${t}`);
     assert.strictEqual(pr.headers.get('content-type'), 'application/pdf');
     const buf = Buffer.from(await pr.arrayBuffer());
     assert.strictEqual(buf.subarray(0, 5).toString(), '%PDF-');
     assert.ok(buf.toString('latin1').includes('Ana Prueba') && buf.toString('latin1').includes('12345678-5'));
     assert.ok(!/c.digo de reserva:/i.test(buf.toString('latin1')));
-    // Repetir la confirmación no duplica; el cupo ya no se ofrece y otra persona no puede tomarlo.
     await p.req('/agendar/confirmar', { t });
     assert.strictEqual((await s.c.citaRepo.buscarPorRut('12345678-5')).length, 1);
     assert.ok(!(await s.c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).some((b) => b.id === bloque));
@@ -158,7 +149,6 @@ test('portal: paciente existente: sin sesión no ve sus datos ni se le pide veri
     assert.doesNotMatch(sin, /celular4|Verificar/, 'el flujo de reserva ya no pide verificar');
     assert.doesNotMatch(sin, /Paciente de prueba A|Dirección de prueba 1|56911111111/, 'no muestra datos personales sin sesión');
     assert.strictEqual((await p.req('/agendar/verificar', { t })).status, 404, 'la ruta de verificación ya no existe');
-    // Con cuenta (titular), los datos se ven bloqueados/editables y se actualizan.
     const clave = 'una clave de prueba larga';
     assert.strictEqual((await p.req('/paciente/cuenta/acceso', { modo: 'crear', rut: '111111111', fechaNacimiento: '1980-01-01', celular4: '1111', clave, confirmarClave: clave, acepto: '1' })).status, 302);
     const t2 = tokenDe(await p.req('/agendar', { quien: '11111111-1', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
@@ -175,8 +165,6 @@ test('portal: paciente existente: sin sesión no ve sus datos ni se le pide veri
   } finally { await s.cerrar(); }
 });
 
-// Conocer un RUT no debe revelar de quién es (RNF03). Antes el resumen, el comprobante en pantalla y el PDF
-// mostraban el nombre completo de una ficha ajena sin verificar la identidad.
 test('portal: sin verificar la identidad el nombre de una ficha ajena va enmascarado, pero la reserva se registra', async () => {
   const s = await levantar();
   try {
@@ -194,7 +182,6 @@ test('portal: sin verificar la identidad el nombre de una ficha ajena va enmasca
     const pdf = Buffer.from(await (await p.req(`/agendar/comprobante.pdf?t=${t}`)).arrayBuffer()).toString('latin1');
     assert.match(pdf, /^%PDF/);
     assert.ok(!pdf.includes('Paciente de prueba B'), 'el PDF tampoco');
-    // No verificar la identidad no impide reservar: eso sigue igual.
     assert.ok((await s.c.citaRepo.buscarPorRut('22222222-2')).some((x) => x.idBloque === bloque && x.estadoReserva === 'ACTIVA'));
   } finally { await s.cerrar(); }
 });
@@ -203,54 +190,43 @@ test('cuenta del paciente: crear con verificación, ingresar, mis horas, datos, 
   const s = await levantar();
   try {
     const c = s.c;
-    // El adulto responsable de la paciente C (menor) tiene su propia ficha.
     await c.pacientes.crear({ rut: '44444444-4', nombres: 'Responsable', apellidos: 'Prueba', fechaNacimiento: '1985-02-02', genero: 'FEMENINO', telefono: '+56944444444', direccion: 'Calle 4', idComuna: 1, consentimiento: true });
     const p = s.cliente();
     const clave = 'una clave suficientemente larga';
-    // Conocer el RUT no basta para crear la cuenta.
     assert.match(await p.texto('/paciente/cuenta/acceso', { modo: 'crear', rut: '44.444.444-4', fechaNacimiento: '1985-02-03', celular4: '4444', clave, confirmarClave: clave, acepto: '1' }), /No pudimos verificar/);
     assert.match(await p.texto('/paciente/cuenta/acceso', { modo: 'crear', rut: '44.444.444-4', fechaNacimiento: '1985-02-02', celular4: '4444', clave: 'corta', confirmarClave: 'corta', acepto: '1' }), /entre 15 y 128/);
     const cr = await p.req('/paciente/cuenta/acceso', { modo: 'crear', rut: '44.444.444-4', fechaNacimiento: '1985-02-02', celular4: '4444', clave, confirmarClave: clave, acepto: '1' });
     assert.strictEqual(cr.headers.get('location'), '/paciente/mis-horas');
     assert.ok(!c.extras.extras.cuentasPaciente[0].hash.includes(clave), 'la contraseña no se guarda en texto');
     assert.match(await p.texto('/'), /Mi cuenta/);
-    // Familiares: la menor C aparece porque su ficha registra a esta persona como responsable.
     const fam = await p.texto('/paciente/familiares');
     assert.match(fam, /Paciente de prueba C/);
     assert.doesNotMatch(fam, /Paciente de prueba A/);
-    // Comprobante de una hora de la familiar sí; de otra persona no.
     const bc = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 }))[0];
     const citaC = await c.agendamiento.agendar({ rut: '33333333-3', idBloque: bc.id });
     assert.strictEqual((await p.req(`/paciente/comprobante.pdf?idCita=${citaC.id}`)).headers.get('content-type'), 'application/pdf');
     assert.strictEqual((await p.req('/paciente/comprobante.pdf?idCita=1')).status, 403);
-    // La reserva puede hacerse para la familiar desde la cuenta, ya verificada.
     const t = tokenDe(await p.req('/agendar', { quien: '33333333-3', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
     const bloque = Number((await p.texto(`/agendar/calendario?t=${t}`)).match(/bloque=(\d+)/)[1]);
     assert.match(await p.texto(`/agendar/datos?t=${t}&bloque=${bloque}`), /Revisa los datos del paciente/);
-    // Mis horas y Mis datos.
     assert.match(await p.texto('/paciente/mis-horas'), /Próximas horas/);
     assert.match(await p.texto('/paciente/mis-datos', { telefono: '+56944444444', direccion: 'Calle 44', idComuna: '1', genero: 'FEMENINO', nacionalidad: 'Chilena', tieneWhatsapp: '1' }), /Datos guardados/);
     assert.strictEqual((await c.catalogo.paciente('44444444-4')).direccion, 'Calle 44');
     assert.match(await p.texto('/paciente/mis-datos/correccion', { detalle: 'Mi segundo apellido está mal escrito' }), /Solicitud enviada/);
     assert.ok(c.extras.listar('notificaciones').some((n) => n.tipo === 'SOLICITUD_PACIENTE'));
-    // Mis documentos: propio y de la familiar; no de un tercero.
     const pdf = { blob: new Blob([Buffer.from('%PDF-1.4 x')], { type: 'application/pdf' }), nombre: 'cesfam.pdf' };
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '44444444-4', tipo: 'Credencial CESFAM', archivo: pdf }, true), /Documento adjuntado/);
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '33333333-3', tipo: 'Certificado', archivo: pdf }, true), /Documento adjuntado/);
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '11111111-1', tipo: 'Certificado', archivo: pdf }, true), /familiares vinculados/);
     const idDoc = c.documentos.listar().find((d) => d.rut === '44444444-4').id;
-    // Reemplazar: el anterior queda archivado (no se borra) y el nuevo pendiente de revisión.
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '44444444-4', tipo: 'Credencial CESFAM', reemplazar: String(idDoc), archivo: pdf }, true), /Documento reemplazado/);
     assert.strictEqual(c.documentos.listar().find((d) => d.id === idDoc).archivado, true);
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '33333333-3', tipo: 'Otro', reemplazar: String(idDoc), archivo: pdf }, true), /no corresponde a ese paciente/);
     assert.strictEqual((await p.req(`/paciente/mis-documentos/archivo?id=${idDoc}`)).headers.get('content-type'), 'application/pdf');
-    // Solicitar vinculación no concede acceso.
     assert.match(await p.texto('/paciente/familiares/solicitar', { rutFamiliar: '11.111.111-1', relacion: 'Hijo' }), /Solicitud enviada/);
     assert.doesNotMatch(await p.texto('/paciente/familiares'), /Paciente de prueba A/);
-    // Cerrar sesión.
     await p.req('/paciente/salir', {});
     assert.strictEqual((await p.req('/paciente/mis-horas')).headers.get('location'), '/paciente/cuenta');
-    // Ingreso: clave incorrecta no entra; recuperar cambia la clave.
     const q = s.cliente();
     assert.strictEqual((await q.req('/paciente/cuenta/acceso', { modo: 'ingresar', rut: '44444444-4', clave: 'otra clave cualquiera' })).status, 401);
     const nueva = 'nueva clave suficientemente larga';
@@ -342,29 +318,24 @@ test('portal: el comprobante de una cita cancelada no falla: lleva a Consultar m
   } finally { await s.cerrar(); }
 });
 
-// RF36 / CP-36: la encuesta de agendamiento es otra encuesta, distinta de la posterior a la atención (RF30).
 test('portal: la encuesta de agendamiento se ofrece tras reservar, es distinta de la de atención y se responde una vez', async () => {
   const s = await levantar();
   try {
     const p = s.cliente();
     const t = tokenDe(await p.req('/agendar', { rut: '13456789-9', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
     const bloque = Number((await p.texto(`/agendar/calendario?t=${t}`)).match(/bloque=(\d+)/)[1]);
-    // Antes de confirmar la reserva no hay encuesta que responder.
     assert.strictEqual((await p.req(`/agendar/encuesta?t=${t}`)).headers.get('location'), '/agendar');
     await p.req(`/agendar/datos?t=${t}&bloque=${bloque}`);
     assert.strictEqual((await p.req('/agendar/datos', { t, ...NUEVO, nombres: 'Carla' }, true)).status, 302);
     const conf = await p.texto('/agendar/confirmar', { t });
     assert.match(conf, /¿Cómo fue reservar tu hora\?/, 'la reserva confirmada invita a responderla');
     assert.match(conf, /\/agendar\/encuesta/);
-    // El formulario pregunta por el agendamiento, no por la atención, y no pide el RUT.
     const form = await p.texto(`/agendar/encuesta?t=${t}`);
     assert.match(form, /fácil fue reservar tu hora/);
     assert.match(form, /No es la encuesta de la atención/);
     assert.doesNotMatch(form, /name="rut"/, 'no pide el RUT: se responde con el token de la reserva');
-    // Nota inválida: no se registra nada.
     assert.match(await p.texto('/agendar/encuesta', { t, nota: '9' }), /La nota debe ser de 1 a 5/);
     assert.strictEqual(s.c.extras.listar('encuestasAgendamiento').length, 0);
-    // Respuesta válida, guardada aparte de la encuesta de atención.
     assert.match(await p.texto('/agendar/encuesta', { t, nota: '4', comentario: 'Fue sencillo' }), /quedó registrada/);
     const [e] = s.c.extras.listar('encuestasAgendamiento');
     assert.strictEqual(e.nota, 4);
@@ -372,7 +343,6 @@ test('portal: la encuesta de agendamiento se ofrece tras reservar, es distinta d
     assert.strictEqual(e.canal, 'WEB');
     assert.deepStrictEqual(s.c.encuestas.resumenAgendamiento(), { respuestas: 1, promedio: 4 });
     assert.deepStrictEqual(s.c.encuestas.resumen(), { respuestas: 0, promedio: null }, 'no contamina la encuesta de atención');
-    // Una sola respuesta por reserva.
     assert.match(await p.texto('/agendar/encuesta', { t, nota: '1' }), /Ya respondiste la encuesta de esta reserva/);
     assert.strictEqual(s.c.extras.listar('encuestasAgendamiento').length, 1);
   } finally { await s.cerrar(); }

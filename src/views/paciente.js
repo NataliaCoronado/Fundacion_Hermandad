@@ -9,7 +9,6 @@ const fechaLarga = (f) => {
 };
 const fila = (t, v) => `<div class="fila"><span>${esc(t)}</span><b>${esc(v)}</b></div>`;
 
-// resultado: null (formulario) | {mensaje, bloqueado} | {citas: [{fecha,hora,policlinico,profesional,especialidad,confirmada}]}
 const formulario = (resultado, usuario) => {
   let cuerpo = '';
   if (resultado && resultado.bloqueado) {

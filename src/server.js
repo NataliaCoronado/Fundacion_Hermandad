@@ -1,5 +1,5 @@
 "use strict";
-require("./util/entorno").cargarEnv();   // lee .env sin depender de un flag de Node
+require("./util/entorno").cargarEnv();
 process.env.TZ ||= "America/Santiago";
 const http = require("node:http");
 const fs = require("node:fs");
@@ -7,13 +7,12 @@ const path = require("node:path");
 const { crearContenedor } = require("./contenedor");
 const { crearRutas } = require("./rutas");
 const { leerCookie, DURACION_MS } = require("./auth/Sesiones");
-const { permitido, rutaAgenda } = require("./auth/permisos");
+const { permitido, rutaInicio } = require("./auth/permisos");
 const { pagina } = require("./views/layout");
 const { prohibido } = require("./views/auth");
 const { conPeticion } = require("./views/contextoPortal");
 
 const TIPOS = { ".jpg": "image/jpeg", ".png": "image/png" };
-// Solo sirve archivos de public/img con nombre simple: sin subcarpetas ni "..".
 function archivoEstatico(pathname) {
   const m = /^\/img\/([a-z0-9_-]+\.(?:jpg|png))$/.exec(pathname);
   if (!m) return null;
@@ -24,8 +23,7 @@ function archivoEstatico(pathname) {
 const { parsearMultipart } = require("./util/multipart");
 const MAX_FORM = 1e6;
 const MAX_ADJUNTO =
-  3 * require("./services/DocumentoService").MAX_BYTES + 1024 * 1024; // formularios normales: 1 MB; con archivos: hasta 3 adjuntos de 5 MB
-// Lee el cuerpo de un POST. Si supera el límite devuelve { __excedido: true } sin guardar nada.
+  3 * require("./services/DocumentoService").MAX_BYTES + 1024 * 1024;
 const leerCuerpo = (req) =>
   new Promise((resolver) => {
     const tipo = req.headers["content-type"] || "";
@@ -53,9 +51,6 @@ const leerCuerpo = (req) =>
     req.on("error", () => resolver({ __excedido: true }));
   });
 
-// IP del cliente. Con TRUST_PROXY=1 (la app corre detrás de un proxy inverso propio) se usa la
-// última dirección de X-Forwarded-For, que es la que agregó ese proxy; si no, la del socket.
-// Sin esa variable la cabecera se ignora: un cliente no puede inventarse otra IP.
 function ipCliente(req) {
   if (process.env.TRUST_PROXY === "1") {
     const lista = String(req.headers["x-forwarded-for"] || "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -72,7 +67,6 @@ const hostDeOrigen = (origen) => {
   }
 };
 
-// modo: 'paciente' (solo páginas públicas del portal), 'personal' (login, TENS/TONS y Administración) o 'todo' (pruebas).
 const RUTAS_PERSONAL_PUBLICAS = new Set(["/login", "/logout", "/restablecer"]);
 function crearServidor(c, modo = "todo") {
   const esPersonal = (r) =>
@@ -83,7 +77,6 @@ function crearServidor(c, modo = "todo") {
       (modo === "personal" ? esPersonal(r) && r.ruta !== "/" : !esPersonal(r)),
   );
   c.colaMutacion ||= Promise.resolve();
-  // Limpieza periódica de sesiones vencidas (sin impedir que el proceso termine).
   if (!c.limpieza) {
     c.limpieza = setInterval(() => {
       c.sesiones?.limpiar?.();
@@ -95,7 +88,6 @@ function crearServidor(c, modo = "todo") {
   return http.createServer((req, res) => {
     const tokenPaciente = leerCookie(req.headers.cookie, "psid");
     const paciente = tokenPaciente && c.sesionesPaciente ? c.sesionesPaciente.obtener(tokenPaciente) : null;
-    // Red de seguridad: un error no previsto responde 500 en vez de botar el proceso.
     return conPeticion({ paciente }, () =>
       atender(req, res, paciente, tokenPaciente).catch((e) => {
         console.error(e);
@@ -104,8 +96,6 @@ function crearServidor(c, modo = "todo") {
       }),
     );
   });
-  // Webhook de WhatsApp (Meta). Va aparte del resto: no usa sesión ni formulario, y la firma se comprueba sobre
-  // el cuerpo exactamente como llegó. Sin WHATSAPP_APP_SECRET y WHATSAPP_VERIFY_TOKEN no existe (404).
   async function webhookWhatsApp(req, res, url) {
     const w = c.webhook;
     const responder = (estado, texto) => {
@@ -143,7 +133,7 @@ function crearServidor(c, modo = "todo") {
       return responder(200, "EVENT_RECEIVED");
     } catch (e) {
       console.error("Webhook de WhatsApp:", e);
-      return responder(500, "Error al procesar el aviso."); // Meta lo reintentará
+      return responder(500, "Error al procesar el aviso.");
     } finally {
       liberar();
     }
@@ -181,7 +171,7 @@ function crearServidor(c, modo = "todo") {
       return fs.createReadStream(est.ruta).pipe(res);
     }
     if (modo === "personal" && req.method === "GET" && url.pathname === "/") {
-      const destino = usuario ? rutaAgenda(usuario.rol) : "/login";
+      const destino = usuario ? rutaInicio(usuario.rol) : "/login";
       res.writeHead(302, { Location: destino, ...cabeceras });
       return res.end();
     }
@@ -197,8 +187,6 @@ function crearServidor(c, modo = "todo") {
           contenido: "<p>La página no existe.</p>",
         }),
       );
-    // Defensa básica contra CSRF: un POST debe venir de este mismo sitio.
-    // Un Origin ilegible (por ejemplo "null") se rechaza igual, sin lanzar errores.
     if (req.method === "POST" && req.headers.origin && hostDeOrigen(req.headers.origin) !== req.headers.host)
       return enviar(
         403,
@@ -217,8 +205,6 @@ function crearServidor(c, modo = "todo") {
     }
     if (ruta.area && !permitido(usuario.rol, ruta.area))
       return enviar(403, prohibido(usuario));
-    // El cuerpo se lee ANTES de entrar a la cola de escrituras: un cliente lento
-    // solo se retrasa a sí mismo y no bloquea las operaciones de los demás.
     const cuerpo = req.method === "POST" ? await leerCuerpo(req) : {};
     let liberar;
     if (req.method === "POST" && !cuerpo.__excedido) {
@@ -342,15 +328,11 @@ async function arrancar() {
     argumentoPuerto >= 0 && /^\d+$/.test(process.argv[argumentoPuerto + 1] || "")
       ? Number(process.argv[argumentoPuerto + 1])
       : null;
-  // Los entornos de previsualización entregan el puerto mediante --port.
-  // En ese caso se levanta el modo integrado para revisar ambos roles desde
-  // una sola URL; el inicio normal conserva los dos sitios separados.
   const puerto = Number(process.env.PORT || puertoCli || 3000);
   const puertoPersonal = Number(
     process.env.PORT_PERSONAL ?? (puertoCli ? 0 : 3001),
   );
   if (!puertoPersonal) {
-    // PORT_PERSONAL=0: un solo sitio con todo (útil en pruebas)
     crearServidor(c).listen(puerto, () =>
       console.log(
         `Hermandad citas (todo en uno) en http://localhost:${puerto} (almacenamiento: ${c.modo})`,

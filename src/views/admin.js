@@ -9,10 +9,8 @@ const ROLES = { ADMINISTRACION: 'Administración', TENS_TONS: 'TENS/TONS', TELEM
 const pct = (v) => (v === null || v === undefined ? '—' : `${v} %`);
 const qs = (obj) => { const p = new URLSearchParams(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== '')); const t = p.toString(); return t ? `?${t}` : ''; };
 
-// Encabezado de cada pantalla: título, explicación y acciones principales.
 const encabezado = (titulo, sub, acciones = '') => `<div class="hola"><div><h2>${esc(titulo)}</h2><p>${sub}</p></div>${acciones ? `<div class="rapidas">${acciones}</div>` : ''}</div>`;
 
-// Variación frente al periodo anterior. tipo: 'rel' (porcentaje) o 'pts' (puntos porcentuales). Si menorEsMejor, bajar es bueno.
 function variacion(actual, previo, { tipo = 'rel', menorEsMejor = false, base = 'periodo anterior' } = {}) {
   if (actual === null || previo === null || previo === undefined || (tipo === 'rel' && !previo)) return '';
   const d = tipo === 'rel' ? Math.round(((actual - previo) / previo) * 100) : actual - previo;
@@ -24,7 +22,6 @@ const kpi = ({ href, clase = '', icono, valor, texto, dl = '' }) => `<${href ? `
 const panelCaja = (titulo, cuerpo, enlace = '', extra = '') => `<section class="panel ${extra}"><div class="panel-t"><h2>${titulo}</h2>${enlace}</div>${cuerpo}</section>`;
 const fechaCorta = G.fechaCorta;
 
-// ---------------------------------------------------------------- Inicio
 const panel = ({ usuario, a30, a12, op, espera, cambios, auditoria, ctx }) => {
   const r = a30.resumen; const p = a30.anterior;
   const nombre = String(usuario.nombre || '').split(' ')[0];
@@ -71,7 +68,6 @@ ${panelCaja('Actividad reciente', auditoria.length ? `<ul class="actividad">${au
   });
 };
 
-// ---------------------------------------------------------------- Policlínicos
 const policlinicos = ({ lista, hoy30, prox, profesionales, usuario }) => pagina({
   titulo: 'Policlínicos', usuario, lienzo: true,
   contenido: `${encabezado('Red de policlínicos', 'Ficha de cada sede con su actividad de los últimos 30 días y la disponibilidad de las próximas dos semanas.')}
@@ -87,7 +83,6 @@ ${i.whatsapp ? `<p class="dir">${ico('telefono')}<span>${esc(formatoTelefono(i.w
   }).join('')}</div>`,
 });
 
-// ---------------------------------------------------------------- Profesionales
 const profesionales = ({ filas, ctx, filtro, especialidades, mensaje, usuario }) => pagina({
   titulo: 'Profesionales', usuario, mensaje, lienzo: true,
   contenido: `${encabezado('Profesionales de la salud', 'Estado, carga y disponibilidad de cada profesional. Al desactivar a alguien dejan de ofrecerse sus cupos sin cita.')}
@@ -103,7 +98,6 @@ ${tabla(['Profesional', 'Especialidad', 'Policlínico', 'Estado', 'Cupos libres 
     raw(`<span class="acc-f"><a class="btn sec chico" href="/admin/agendas?prof=${x.id}">Agenda</a>${forma('/admin/profesionales/estado', { idProfesional: x.id, activo: x.activo ? '0' : '1' }, x.activo ? 'Desactivar' : 'Activar').replace('<form ', `<form ${x.activo ? 'onsubmit="return confirm(\'¿Desactivar a este profesional? Sus cupos sin cita dejarán de ofrecerse.\')" ' : ''}`)}</span>`)]), 'Ningún profesional coincide con el filtro.')}</div>`,
 });
 
-// ---------------------------------------------------------------- Agendas y cupos
 const DIAS_C = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const agendas = ({ prof, sedeSel, sedes, profesionales: profs, semana, anterior, siguiente, hoyLunes, bloques, reservados, dias, mensaje, ctx, usuario }) => {
   const nombreProf = (p) => `${p.nombre} – ${p.especialidad}`;
@@ -161,7 +155,6 @@ ${horas.length ? `<div class="rejilla" style="--cols:${dias.length}"><div class=
   });
 };
 
-// ---------------------------------------------------------------- Cambios de agenda
 const cambios = ({ profesionales: profs, lista, ctx, mensaje, usuario }) => pagina({
   titulo: 'Cambios de agenda', usuario, mensaje,
   contenido: `<p>Ausencia: se cierran los cupos libres del día y las citas ya reservadas quedan para llamar. Reemplazo: las citas del día pasan al profesional indicado (misma especialidad y sede).</p>
@@ -176,7 +169,6 @@ const cambios = ({ profesionales: profs, lista, ctx, mensaje, usuario }) => pagi
 ${tabla(['Registrado', 'Tipo', 'Fecha', 'Profesional', 'Reemplazo', 'Motivo', 'Citas afectadas', 'Cupos cerrados'], lista.map((c) => [c.fechaRegistro, c.tipo === 'REEMPLAZO' ? 'Reemplazo' : 'Ausencia', c.fecha, ctx.profs.get(c.idProfesional)?.nombre, c.idReemplazo ? ctx.profs.get(c.idReemplazo)?.nombre : '—', c.motivo, c.citasAfectadas, c.bloquesCerrados]), 'Sin cambios registrados.')}`,
 });
 
-// ---------------------------------------------------------------- Reportes
 const reportes = ({ a, filtro, sedes, especialidades, rapidos, qsDescarga, usuario }) => {
   const r = a.resumen; const p = a.anterior; const k = a.caracterizacion;
   const alcance = [filtro.idPoliclinico && sedes.find((s) => String(s.id) === String(filtro.idPoliclinico))?.nombre, filtro.especialidad].filter(Boolean).join(' · ') || 'Toda la red';
@@ -233,7 +225,6 @@ ${tabla(['Profesional', 'Especialidad', 'Policlínico', 'Citas', 'Asistieron', '
   });
 };
 
-// ---------------------------------------------------------------- Usuarios y auditoría
 const usuarios = ({ lista, ctx, usuario }) => pagina({
   titulo: 'Usuarios y roles', usuario, lienzo: true,
   contenido: `${encabezado('Usuarios y roles', 'Quién puede entrar al sistema y a qué parte. Administración gestiona la red; TENS/TONS y Telemedicina atienden pacientes en su sede.')}

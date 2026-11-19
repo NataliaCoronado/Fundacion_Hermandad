@@ -241,6 +241,95 @@ function crearOperacionController(c) {
     };
   };
   return {
+    resumen: async ({ usuario: u }) => {
+      const R = require("../views/resumen");
+      const admin = u.rol === "ADMINISTRACION";
+      const ctx = await contexto();
+      const ahora = textoLocal();
+      const fHoy = ahora.slice(0, 10),
+        hora = ahora.slice(11),
+        manana = sumarDias(fHoy, 1),
+        semana = sumarDias(fHoy, 7),
+        hace30 = sumarDias(fHoy, -30);
+      const sedeDe = (b) => op.sedeBloque(b, ctx.profs.get(b?.idProfesional));
+      const miSede = (idSede) => admin || idSede === Number(u.idPoliclinico);
+      const citas = (admin ? await citaRepo.listar() : await visible(u))
+        .map((x) => ({ x, b: ctx.bloques.get(x.idBloque) }))
+        .filter(({ b }) => b);
+      const activas = citas.filter(({ x }) => x.estadoReserva === "ACTIVA");
+      const tele = (b) => !!ctx.sedes.get(sedeDe(b))?.telemedicina;
+      const esPendiente = ({ x }) => !x.asistencia && x.estadoConfirmacion !== "CONFIRMADA";
+      const hoyC = activas.filter(({ b }) => b.fecha === fHoy).sort((a, z) => a.b.hora.localeCompare(z.b.hora));
+      const proximas48 = activas.filter(({ b }) => b.fecha === fHoy || b.fecha === manana);
+      const sinConfirmar = proximas48.filter(esPendiente);
+      const sinAsistencia = hoyC.filter(({ x, b }) => !x.asistencia && b.hora <= hora);
+      const sinEnlace = proximas48.filter(({ x, b }) => tele(b) && !x.asistencia && ["Enlace pendiente", "Error de envío"].includes(op.estadoEnvioEnlace(x).estado));
+      const reservados = new Set(activas.map(({ x }) => x.idBloque));
+      const cuposSemana = [...ctx.bloques.values()].filter((b) => b.publicado && b.fecha >= fHoy && b.fecha <= semana && miSede(sedeDe(b)));
+      const libresSemana = cuposSemana.filter((b) => !reservados.has(b.id) && (b.fecha > fHoy || b.hora > hora));
+      const esperaV = (await espera.vigentes()).filter((e) => miSede(e.idPoliclinico));
+      const esperaConCupo = esperaV.filter((e) => e.estado === "EN_ESPERA" && e.cupos.length);
+      const esperaAntigua = esperaV.filter((e) => e.registradaEn && e.registradaEn <= hace30);
+      const comErr = extras.listar("comunicaciones").filter((m) => m.estado === "Error" && (admin || m.idPoliclinico === +u.idPoliclinico));
+      const docsPend = extras.listar("documentos").filter((d) => !d.verificado && !d.archivado && (admin || d.idPoliclinico === +u.idPoliclinico));
+      const ultimos30 = citas.filter(({ x, b }) => b.fecha >= hace30 && b.fecha <= fHoy && x.asistencia);
+      const inasist = R.pct(ultimos30.filter(({ x }) => x.asistencia === "NO_ASISTIO").length, ultimos30.length);
+      const profInactivos = activas.filter(({ x, b }) => b.fecha >= fHoy && !x.idProfesionalReemplazo && ctx.profs.get(b.idProfesional)?.activo === false);
+      const confirmadasHoy = hoyC.filter(({ x }) => x.estadoConfirmacion === "CONFIRMADA").length;
+      const atendidasHoy = hoyC.filter(({ x }) => x.asistencia === "ASISTIO").length;
+      const base = admin ? "/admin" : "/tens";
+      const agendaDia = admin ? "/admin/agendas?vista=lista" : "/tens/agenda?vista=lista";
+      const kpis = [
+        { href: agendaDia, clase: "dest", icono: "calendario", valor: hoyC.length, texto: "Citas hoy", nota: `${atendidasHoy} atendidas · ${confirmadasHoy} confirmadas` },
+        { href: admin ? "/admin/comunicaciones" : "/tens/confirmaciones", clase: sinConfirmar.length ? "am" : "", icono: "telefono", valor: sinConfirmar.length, texto: "Por confirmar (hoy y mañana)" },
+        { href: `${base}/espera`, clase: "az", icono: "lista", valor: esperaV.length, texto: "Pacientes en lista de espera", nota: esperaConCupo.length ? `${esperaConCupo.length} con cupo disponible` : "" },
+        admin
+          ? { href: "/admin/reportes", clase: inasist >= 20 ? "rojo" : "gr", icono: "grafico", valor: inasist == null ? "—" : `${inasist}%`, texto: "Inasistencia últimos 30 días", nota: `Ocupación 7 días: ${(R.pct(cuposSemana.length - libresSemana.length, cuposSemana.length) ?? "—") + (cuposSemana.length ? "%" : "")}` }
+          : { href: "/tens/agenda?vista=semana", clase: "gr", icono: "reloj", valor: libresSemana.length, texto: "Cupos libres próximos 7 días" },
+      ];
+      const alertas = [
+        { nivel: "crit", titulo: "Citas de hoy sin registrar asistencia", detalle: "La hora ya pasó y falta marcar si llegó o no", n: sinAsistencia.length, href: agendaDia },
+        { nivel: "crit", titulo: "Citas de hoy o mañana sin confirmar", detalle: "Llamar o enviar recordatorio al paciente", n: sinConfirmar.length, href: admin ? "/admin/comunicaciones" : "/tens/confirmaciones" },
+        ...(admin || tele({ idPoliclinico: +u.idPoliclinico })
+          ? [{ nivel: "crit", titulo: "Telemedicina sin enlace enviado", detalle: "Citas de hoy o mañana sin enlace de atención o con error de envío", n: sinEnlace.length, href: agendaDia }]
+          : []),
+        ...(admin
+          ? [{ nivel: "crit", titulo: "Citas con profesional inactivo", detalle: "Reservas futuras sin reemplazo asignado: reagendar o reasignar", n: profInactivos.length, href: "/admin/cancelaciones" }]
+          : []),
+        { nivel: "crit", titulo: "Mensajes con error de envío", detalle: "Comunicaciones que no llegaron al paciente", n: comErr.length, href: `${base}/comunicaciones` },
+        { nivel: "aviso", titulo: "Lista de espera con cupo disponible", detalle: "Hay horas libres que calzan con la solicitud", n: esperaConCupo.length, href: `${base}/espera` },
+        { nivel: "aviso", titulo: "Solicitudes en espera hace más de 30 días", detalle: "Revisar prioridad o contactar al paciente", n: esperaAntigua.length, href: `${base}/espera` },
+        ...(admin ? [] : [{ nivel: "aviso", titulo: "Documentos por revisar", detalle: "Órdenes o documentos subidos sin verificar", n: docsPend.length, href: "/tens/documentos" }]),
+      ].sort((a, z) => (z.n ? 1 : 0) - (a.n ? 1 : 0) || (a.nivel === "crit" ? -1 : 1) - (z.nivel === "crit" ? -1 : 1));
+      const citasHoy = hoyC.slice(0, admin ? 10 : 12).map(({ x, b }) => {
+        const prof = ctx.profs.get(b.idProfesional);
+        const est = V.estado(x, tele(b), op);
+        return {
+          fecha: b.fecha,
+          hora: b.hora,
+          paciente: ctx.pacientes.get(x.rut)?.nombre || x.rut,
+          detalle: [b.especialidad, prof?.nombre, admin ? ctx.sedes.get(sedeDe(b))?.nombre : ""].filter(Boolean).join(" · "),
+          href: admin ? "/admin/cupo?idCita=" + x.id : detalleReserva(x.id),
+          badge: V.badge(est),
+        };
+      });
+      const porSede = admin
+        ? ctx.listaSedes.map((s) => {
+            const deSede = (b) => sedeDe(b) === s.id;
+            const cs = cuposSemana.filter(deSede);
+            return {
+              nombre: s.nombre,
+              hoy: hoyC.filter(({ b }) => deSede(b)).length,
+              porConfirmar: sinConfirmar.filter(({ b }) => deSede(b)).length,
+              espera: esperaV.filter((e) => e.idPoliclinico === s.id).length,
+              ocupacion: R.pct(cs.filter((b) => reservados.has(b.id)).length, cs.length),
+            };
+          })
+        : null;
+      return {
+        html: R.resumen({ usuario: u, admin, sede: ctx.sedes.get(+u.idPoliclinico), kpis, alertas, citasHoy, porSede, hora }),
+      };
+    },
     adminAgenda: (r) => getAgenda(r, true),
     tensAgenda: (r) => getAgenda(r, false),
     bloqueNuevo: async ({ usuario: u }) => ({
@@ -327,7 +416,6 @@ function crearOperacionController(c) {
         const p = await catalogo.profesional(d.idProfesional);
         if (!p) throw new Error("Profesional no encontrado.");
         if (d.activo !== "1") {
-          // No se desactiva a quien tiene reservas vigentes: primero se reprograman o cancelan.
           const suyos = new Set(
             (await catalogo.bloques())
               .filter((b) => b.idProfesional === p.id && b.fecha >= hoy())

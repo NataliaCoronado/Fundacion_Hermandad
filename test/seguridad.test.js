@@ -1,5 +1,4 @@
 'use strict';
-// Robustez del servidor y bloqueo de la verificación de identidad por RUT.
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
@@ -50,10 +49,8 @@ test('seguridad: tras varios fallos el RUT queda bloqueado aunque luego se den l
     for (let i = 0; i < MAX_FALLOS; i++) assert.strictEqual(await s.c.cuentas.verificarIdentidad({ ...bien, celular4: String(1000 + i) }), null);
     assert.strictEqual(await s.c.cuentas.verificarIdentidad(bien), null, 'bloqueado: los datos correctos ya no bastan');
     assert.ok(s.c.cuentas.bloqueado(PACIENTE.rut));
-    // El bloqueo también alcanza a la consulta de reservas y a la recuperación de contraseña.
     const h = await (await fetch(`${s.base}/paciente/consulta`, { method: 'POST', body: new URLSearchParams(bien) })).text();
     assert.match(h, /No pudimos verificar/);
-    // Al vencer el bloqueo vuelve a verificar y el contador se reinicia.
     s.c.cuentas.bloqueos()[PACIENTE.rut].hasta = Date.now() - 1;
     assert.ok(await s.c.cuentas.verificarIdentidad(bien));
     assert.strictEqual(s.c.cuentas.bloqueos()[PACIENTE.rut], undefined);
@@ -72,11 +69,9 @@ test('seguridad: X-Forwarded-For solo se usa con TRUST_PROXY=1', async () => {
   const s = await levantar();
   const consulta = (ip) => fetch(`${s.base}/paciente/consulta`, { method: 'POST', headers: { 'x-forwarded-for': ip }, body: new URLSearchParams({ rut: '1-9' }) });
   try {
-    // Sin la variable, inventar la cabecera no evita el límite (5 por minuto por cliente).
     let ultimo;
     for (let i = 0; i < 6; i++) ultimo = await consulta(`10.0.0.${i}`);
     assert.strictEqual(ultimo.status, 429);
-    // Con la variable, cada cliente real (según el proxy) tiene su propio límite.
     process.env.TRUST_PROXY = '1';
     for (let i = 0; i < 5; i++) assert.strictEqual((await consulta('1.1.1.1, 10.9.9.9')).status, 200);
     assert.strictEqual((await consulta('1.1.1.1, 10.9.9.9')).status, 429);

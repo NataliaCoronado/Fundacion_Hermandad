@@ -1,6 +1,4 @@
 "use strict";
-// Límite de intentos por clave (IP, RUT...) en una ventana deslizante.
-// Cada cierto tiempo borra las claves sin intentos recientes, para que el mapa no crezca sin límite.
 function crearLimitador(ventanaMs = 60_000) {
   const intentos = new Map();
   let ultimaLimpieza = Date.now();

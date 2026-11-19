@@ -1,5 +1,4 @@
 "use strict";
-// Carga de una vez los catálogos que las pantallas necesitan para mostrar nombres (evita consultar fila por fila).
 async function cargarContexto(catalogo) {
   const [sedes, profs, bloques, pacientes] = await Promise.all([
     catalogo.policlinicos(),
@@ -16,7 +15,6 @@ async function cargarContexto(catalogo) {
     pacientes: new Map(pacientes.map((x) => [x.rut, x])),
   };
 }
-// Datos legibles de una cita: bloque, profesional, sede y paciente.
 function detalleCita(c, ctx) {
   const b = ctx.bloques.get(c.idBloque);
   const prof = b && ctx.profs.get(b.idProfesional);

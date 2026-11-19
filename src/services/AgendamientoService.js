@@ -1,7 +1,6 @@
 "use strict";
 const { textoLocal } = require("../util/tiempo");
 
-// CU-03 (agendar), CU-05 (cancelar) y CU-07 (asistencia).
 class AgendamientoService {
   constructor(citaRepo, catalogo, extras) {
     this.citaRepo = citaRepo;
@@ -9,7 +8,6 @@ class AgendamientoService {
     this.extras = extras;
   }
 
-  // Bloques publicados y sin cita activa. Filtros opcionales: policlínico, fecha y especialidad.
   async bloquesDisponibles({ idPoliclinico, fecha, especialidad } = {}) {
     const sedes=new Map((await this.catalogo.policlinicos()).map(s=>[s.id,s]));
     const profs = new Map(
@@ -40,7 +38,6 @@ class AgendamientoService {
     });
   }
 
-  // TENS/TONS registra una cita en nombre del paciente (el paciente se identifica por RUT).
   async agendar({ rut, idBloque, idUsuario, canal = "PRESENCIAL" }) {
     if (
       !(await this.catalogo.paciente(rut)) ||
@@ -67,7 +64,6 @@ class AgendamientoService {
     });
   }
 
-  // La cancelación solo la origina el paciente por WhatsApp, TENS/TONS (asistida) o la institución. El silencio nunca cancela.
   async cancelar(idCita, origen) {
     if (!["WHATSAPP", "ASISTIDA", "INSTITUCIONAL"].includes(origen))
       throw new Error("ORIGEN_INVALIDO");
@@ -84,7 +80,6 @@ class AgendamientoService {
     return actualizada;
   }
 
-  // CU-05: al liberarse un cupo se avisa a TENS/TONS de la sede para ofrecerlo a la lista de espera.
   async avisarCupoLiberado(cita) {
     const b = await this.catalogo.bloque(cita.idBloque);
     const prof = b && (await this.catalogo.profesional(b.idProfesional));

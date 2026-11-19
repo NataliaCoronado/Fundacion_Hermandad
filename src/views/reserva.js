@@ -1,5 +1,4 @@
 'use strict';
-// Portal del paciente: flujo de reserva en 4 pasos (Buscar → Fecha y hora → Datos → Confirmar) y comprobante.
 const { pagina, WHATSAPP, iniciales } = require('./layout');
 const { ico } = require('./iconos');
 const { esc } = require('./util');
@@ -46,7 +45,6 @@ const marco = (n, titulo, sub, cuerpo, mensaje, usuario, volver) => pagina({
 });
 const opciones = (lista, valor) => lista.map((o) => `<option value="${esc(o.id)}"${String(o.id) === String(valor ?? '') ? ' selected' : ''}${o.data || ''}>${esc(o.nombre)}</option>`).join('');
 const mascaraNombre = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0] + '***').join(' ');
-// Ficha de un RUT ya registrado, sin sesión: se muestra bloqueada y oculta en parte, para que la persona la reconozca.
 const ocultaFin = (s, ver = 4) => { const x = String(s || ''); return x.length > ver ? '*'.repeat(x.length - ver) + x.slice(-ver) : x; };
 const ocultaCorreo = (c) => (c ? String(c).replace(/^(.)[^@]*(@.*)$/, '$1***$2') : '');
 const ocultaFecha = (f) => (f ? `**-**-${String(f).slice(0, 4)}` : '');
@@ -58,7 +56,6 @@ ${bloq('Nombre completo', mascaraNombre(ficha.nombre), true)}${bloq('Celular', o
 ${bloq('Dirección', mascaraNombre(ficha.direccion), true)}${bloq('Comuna', comuna ? mascaraNombre(comuna.nombre) : '')}</div>`;
 };
 
-// ---------- Paso 1: buscar ----------
 const inicio = ({ oferta, d = {}, mensaje, usuario, cuenta }) => {
   const { sedes, profs, espsPorLugar } = oferta;
   const lugares = [{ id: 'red', nombre: 'Toda la red (todos los lugares)' }, ...sedes.map((s) => ({ id: s.id, nombre: s.telemedicina ? 'Telemedicina (atención a distancia)' : `Policlínico ${s.nombre}` }))];
@@ -96,7 +93,6 @@ var s=f.querySelector('#quien');if(s)s.addEventListener('change',quien);filtrar(
   });
 };
 
-// ---------- Paso 2: calendario del mes y horas del día ----------
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const calendario = ({ t, resumen, mes, antes, despues, dias, dia, grupos, usuario }) => {
   const [a, m] = mes.split('-').map(Number);
@@ -119,7 +115,6 @@ ${dia ? `<h2 class="dia-t">${esc(fechaLarga(dia).replace(/ de \d{4}$/, '').repla
   return marco(2, 'Elige el día y la hora', 'Selecciona un día disponible y luego la hora con el profesional que prefieras.', cuerpo, null, usuario, { href: `/agendar?${q({ t })}`, texto: 'Volver a la búsqueda' });
 };
 
-// ---------- Paso 3: datos del paciente y documentos ----------
 const campo = (nombre, titulo, valor, { tipo = 'text', req = false, extra = '', full = false } = {}) => `<div${full ? ' class="full"' : ''}><label for="${nombre}">${titulo}${req ? ` ${AST}` : ''}</label><input id="${nombre}" name="${nombre}" type="${tipo}" value="${esc(valor ?? '')}"${req ? ' required' : ''} ${extra}></div>`;
 const GENEROS = [['FEMENINO', 'Femenino'], ['MASCULINO', 'Masculino'], ['OTRO', 'Otro'], ['NO_INFORMA', 'Prefiere no informar']];
 const camposEditables = (v, comunas) => `
@@ -171,7 +166,6 @@ ${seccionDocs({ tipos, registrados: nuevo ? null : registrados, pendientes })}
   return marco(3, 'Datos del paciente', 'Revisa o completa los datos y, si quieres, adjunta documentos.', cuerpo, mensaje, usuario, { href: `/agendar/calendario?${q({ t })}`, texto: 'Volver al día y la hora' });
 };
 
-// ---------- Paso 4: resumen y confirmación ----------
 const revisar = ({ t, r, mensaje, usuario }) => marco(4, 'Revisa y confirma tu reserva', 'Confirma que todo esté correcto antes de reservar.',
   `<div class="tarjeta col" style="max-width:640px"><p class="sec-t">PACIENTE</p>${fila('Nombre', r.nombre)}${fila('RUT', r.rut)}${r.nuevo ? fila('Registro', 'Se creará el registro del paciente') : ''}${r.actualiza ? fila('Datos', 'Se actualizarán los datos editados') : ''}
 <p class="sec-t">ATENCIÓN</p>${fila('Lugar', r.lugar)}${fila('Modalidad', r.tele ? 'Atención a distancia' : 'Presencial')}${fila('Especialidad', r.esp)}${fila('Profesional', r.prof)}${fila('Fecha', fechaLarga(r.fecha))}${fila('Hora', r.hora)}
@@ -180,7 +174,6 @@ const revisar = ({ t, r, mensaje, usuario }) => marco(4, 'Revisa y confirma tu r
 <form method="post" action="/agendar/confirmar"><input type="hidden" name="t" value="${esc(t)}"><button class="btn blq" type="submit">Confirmar reserva</button></form>
 <p style="text-align:center;margin-top:12px"><a href="/agendar/calendario?${q({ t })}">Cambiar hora</a></p></div>`, mensaje, usuario, { href: `/agendar/datos?${q({ t })}`, texto: 'Volver a los datos' });
 
-// ---------- Comprobante ----------
 const confirmada = ({ t, r, envio, cuenta, usuario }) => {
   const info = infoSede(r.idSede) || {}; const wa = formatoTelefono(info.whatsapp || '+56927468124');
   return pagina({
@@ -199,7 +192,6 @@ ${cuenta ? '' : '<div class="tarjeta no-imprimir" style="margin-top:12px"><h3>Tu
   });
 };
 
-// RF36: encuesta del agendamiento. Separada de la encuesta de atención en texto, ruta y almacenamiento.
 const encuestaAgendamiento = ({ t, respondida, mensaje, usuario }) => pagina({
   titulo: 'Encuesta de agendamiento', usuario, portal: true, activo: 'agendar', mensaje,
   contenido: `<p class="lead">Dos preguntas voluntarias sobre <b>cómo fue reservar tu hora</b>. No es la encuesta de la atención: esa se responde cuando ya te hayan atendido.</p>

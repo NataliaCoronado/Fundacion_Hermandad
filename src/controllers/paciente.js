@@ -6,7 +6,7 @@ const { cargarContexto, detalleCita } = require('./contexto');
 const { crearLimitador } = require('../util/limitador');
 const { infoSede } = require('../models/sedesInfo');
 
-const LIMITE = 5;            // intentos por minuto y por cliente (protección básica contra enumeración, RNF03)
+const LIMITE = 5;
 const VENTANA_MS = 60_000;
 
 function crearPacienteController({ citaRepo, catalogo, encuestas, cuentas }) {
@@ -16,9 +16,6 @@ function crearPacienteController({ citaRepo, catalogo, encuestas, cuentas }) {
     formulario: ({ usuario }) => ({ html: vistas.formulario(null, usuario) }),
     consultar: async ({ cuerpo, ip, usuario }) => {
       if (excedido(ip)) return { estado: 429, html: vistas.formulario({ bloqueado: true }, usuario) };
-      // Verificación de acceso: RUT + fecha de nacimiento + últimos 4 dígitos del celular registrado.
-      // Si algo no coincide (o el RUT no existe) se responde lo mismo, sin revelar qué dato falló.
-      // La misma verificación del portal: además del límite por cliente, bloquea el RUT tras fallos repetidos.
       const rut = normalizarRut(cuerpo.rut);
       const verificado = await cuentas.verificarIdentidad({ rut, fechaNacimiento: cuerpo.fechaNacimiento, celular4: cuerpo.celular4 });
       if (!verificado) return { html: vistas.formulario({ noVerificado: true }, usuario) };

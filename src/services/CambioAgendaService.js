@@ -1,7 +1,6 @@
 'use strict';
 const { textoLocal } = require('../util/tiempo');
 
-// CU-09: cambios de agenda. Ausencia de un profesional o reemplazo; avisa y deja las citas afectadas para llamar.
 class CambioAgendaService {
   constructor({ citaRepo, catalogo, extras }) { Object.assign(this, { citaRepo, catalogo, extras }); }
 
@@ -21,7 +20,6 @@ class CambioAgendaService {
     if (!prof) throw new Error('PROFESIONAL_NO_ENCONTRADO');
     const afectadas = await this.citasDelDia(idProfesional, fecha);
     const cerrados = await this.catalogo.bloquearLibres({ idProfesional, fecha, motivo: motivo.trim(), idUsuario });
-    // Las citas ya reservadas siguen activas, pero se marcan para que TENS/TONS llame y ofrezca otra hora.
     for (const c of afectadas) await this.citaRepo.actualizar({ ...c, estadoConfirmacion: 'PENDIENTE' });
     await this.aviso(prof, fecha, `Ausencia de ${prof.nombre} el ${fecha}: ${afectadas.length} cita(s) afectada(s). Llamar a los pacientes.`);
     return this.registrar('AUSENCIA', prof, null, fecha, motivo, afectadas.length, cerrados);

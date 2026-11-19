@@ -4,7 +4,6 @@ const { hashClave, verificarClave } = require("../auth/clave");
 const MAX_INTENTOS = 5;
 const VENTANA_MS = 15 * 60 * 1000;
 
-// CU-11: autenticación. Mismo mensaje si el correo no existe o la clave es incorrecta; bloqueo temporal por correo.
 class AuthService {
   constructor({ catalogo, sesiones, auditoria }) {
     Object.assign(this, { catalogo, sesiones, auditoria });
@@ -16,7 +15,6 @@ class AuthService {
     const l = (this.intentos.get(correo) || []).filter(
       (t) => ahora - t < VENTANA_MS,
     );
-    // Solo se guardan correos con fallos recientes: así el mapa no crece con cada intento.
     if (l.length) this.intentos.set(correo, l);
     else this.intentos.delete(correo);
     return l.length >= MAX_INTENTOS;
@@ -44,7 +42,6 @@ class AuthService {
     return { token: this.sesiones.crear(u), usuario: u };
   }
 
-  // Solo para desarrollo/demostración: asigna una clave a los usuarios que aún no tienen.
   async sembrarClaveDemo(clave) {
     for (const u of await this.catalogo.usuarios()) {
       if(!["admin@ejemplo.cl","tens@ejemplo.cl","telemedicina.usuario@ejemplo.cl"].includes(u.correo.toLowerCase())) continue;

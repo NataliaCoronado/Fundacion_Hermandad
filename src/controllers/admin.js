@@ -74,7 +74,6 @@ function crearAdminController({
     };
   };
 
-  // Agendas y cupos: se revisa de a un profesional y de a una semana (son miles de cupos en total).
   const verAgendas = async (
     usuario,
     mensaje,
@@ -142,7 +141,6 @@ function crearAdminController({
   };
   const descarga = (nombre, texto) => ({ csv: texto, nombreArchivo: nombre });
 
-  // Filtro de los reportes a partir de la dirección. Sin parámetros: porDefecto (la pantalla usa los últimos 90 días; las descargas, todo).
   const filtroDe = (consulta, porDefecto) => {
     let desde = consulta.get("desde");
     let hasta = consulta.get("hasta");
@@ -271,7 +269,6 @@ function crearAdminController({
         return verAgendas(usuario, error(e), vista);
       }
     },
-    // Libera (publica) o bloquea cupos sin cita: uno solo o todos los de un rango de fechas.
     publicarCupos: async ({ cuerpo, usuario }) => {
       const vista = { prof: cuerpo.idProfesional, semana: cuerpo.semana };
       try {
@@ -306,7 +303,6 @@ function crearAdminController({
         return verAgendas(usuario, error(e), vista);
       }
     },
-    // Programa cupos en serie: rango de fechas × días de la semana × franja horaria con duración fija.
     serieCupos: async ({ cuerpo, usuario }) => {
       const vista = { prof: cuerpo.idProfesional, semana: cuerpo.semana };
       try {
@@ -381,7 +377,6 @@ function crearAdminController({
         return verAgendas(usuario, error(e), vista);
       }
     },
-    // Libera o bloquea cupos de varios profesionales a la vez (por policlínico y/o especialidad).
     publicarMasivo: async ({ cuerpo, usuario }) => {
       const vista = {
         prof: cuerpo.idProfesional,
@@ -476,7 +471,6 @@ function crearAdminController({
       }));
       const qsDescarga = rango(filtro.desde, filtro.hasta);
       const a = await reportes.analitica(filtro);
-      // Solo semanas completas dentro del rango, para que una semana a medias no parezca una caída.
       const completas = a.semanal.filter(
         (w) =>
           w.semana >= filtro.desde && sumarDias(w.semana, 6) <= filtro.hasta,

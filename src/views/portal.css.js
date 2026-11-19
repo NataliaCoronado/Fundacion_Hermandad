@@ -1,11 +1,8 @@
 'use strict';
-// Portal de pacientes: banda de portada con el sello, riel de pasos (cuentas del sello) y superficies sobrias.
-// Solo se carga en páginas del portal; todo va bajo body.portal para no tocar el sitio del personal.
 module.exports = `
 body.portal{overflow-x:clip;color-scheme:light;--suave:#5b6c73;--tinta:#183b4e;--tinta-2:#112d3c;--sombra-c:var(--sombra);--riel:#5f8d9a;--riel-ok:#7fd0d6;--sobre-tinta:#c3dae0}
 body.portal main{padding-top:0}
 
-/* ---------- Tipografía: Source Sans 3 en todo el portal ---------- */
 body.portal{--f-titulo:'Source Sans 3','Segoe UI',system-ui,sans-serif;--f-texto:'Source Sans 3','Segoe UI',system-ui,sans-serif;
   font-family:var(--f-texto);font-weight:400;font-size:1rem;line-height:1.55}
 html:has(body.portal){--fs:17px;overflow-x:clip}
@@ -15,7 +12,6 @@ body.portal .btn,body.portal button,body.portal .nav a{font-family:var(--f-titul
 body.portal input,body.portal select,body.portal textarea,body.portal label,body.portal legend,body.portal .check{font-family:var(--f-texto)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* ---------- Cabecera ---------- */
 body.portal .cab{border-bottom:0;padding-top:14px;padding-bottom:14px;background:var(--sup);backdrop-filter:none}
 body.portal .nav{gap:2px}
 body.portal .nav a{border-radius:6px;font-weight:600;color:var(--navy);position:relative}
@@ -26,7 +22,6 @@ body.portal .nav a.cta{background:var(--sup);color:var(--navy);border:1.5px soli
 body.portal .nav a.cta:hover{border-color:var(--teal);background:var(--claro)}
 body.portal .nav a.cta.act::after{display:none}
 
-/* ---------- Portada ---------- */
 .portada{position:relative;isolation:isolate;background:var(--tinta);color:var(--sobre-tinta);
   box-shadow:0 0 0 100vmax var(--tinta);clip-path:inset(0 -100vmax);padding:52px 0 44px;margin:0 0 44px}
 .portada-sello{position:absolute;z-index:-1;right:-150px;top:50%;width:460px;height:460px;transform:translateY(-50%);
@@ -40,7 +35,6 @@ body.portal .nav a.cta.act::after{display:none}
 .portada .lead{color:var(--sobre-tinta);font-size:1.06rem;line-height:1.6;max-width:58ch;margin:0}
 .portada .lead a{color:#fff;text-decoration-color:var(--riel-ok)}
 
-/* ---------- Riel de pasos: cuentas como el borde del sello ---------- */
 .barra{display:grid;grid-template-columns:repeat(4,1fr);list-style:none;margin:40px 0 0;padding:0;max-width:760px;counter-reset:none}
 .barra li{position:relative;display:flex;flex-direction:column;gap:10px;font-size:.86rem;font-weight:600;color:#9fbfc8}
 body.portal .barra li::before{content:'';position:absolute;top:12px;left:38px;right:10px;height:4px;
@@ -54,7 +48,6 @@ body.portal .barra .hecho::before{background-image:radial-gradient(circle,var(--
 .barra .actual{color:#fff}
 .barra .actual .cuenta{background:#fff;border-color:#fff;color:var(--tinta);box-shadow:0 0 0 5px rgba(255,255,255,.14)}
 
-/* ---------- Superficies ---------- */
 body.portal .tarjeta,body.portal .opcion,body.portal .prof,body.portal .mes,body.portal .busqueda-r,
 body.portal .hora,body.portal .familiar,body.portal details.docs,body.portal .account-page{
   border-radius:8px;box-shadow:var(--sombra-c);border:1px solid var(--borde);background:var(--sup)}
@@ -74,7 +67,6 @@ body.portal .btn:hover svg{transform:none}
 body.portal .cuenta-nav form button{background:none;border:0;color:var(--muted)}
 body.portal .cuenta-nav form button:hover{background:var(--sup);color:var(--navy)}
 
-/* Portada: un botón principal y acceso a los policlínicos */
 .portada-acc{margin:28px 0 0}
 body.portal .portada-acc .btn{background:#fff;color:var(--tinta);border-color:#fff}
 body.portal .portada-acc .btn:hover{background:var(--claro);border-color:var(--claro)}
@@ -89,11 +81,9 @@ body.portal .portada-acc .btn:hover{background:var(--claro);border-color:var(--c
 .sede-d{color:var(--muted);font-size:.9rem;padding:0 16px 16px}
 .ayuda-l{margin-top:14px}
 
-/* Fotos de policlínicos: a sangre dentro de la tarjeta */
 body.portal .opcion{overflow:hidden}
 body.portal .opcion .foto{max-width:none;width:calc(100% + 40px);margin:-20px -20px 12px;height:160px;border-radius:0}
 
-/* Columna lateral de ayuda: texto, no tarjetas */
 .lado{display:grid;gap:0;align-content:start}
 .lado section{padding:4px 0 22px;margin-bottom:20px;border-bottom:1px solid var(--borde)}
 .lado section:last-child{border-bottom:0}
@@ -102,7 +92,6 @@ body.portal .opcion .foto{max-width:none;width:calc(100% + 40px);margin:-20px -2
 .lado ol{padding-left:18px;margin:0;line-height:1.7}
 .lado .btn{margin-top:4px}
 
-/* Calendario */
 body.portal .mes-g a{background:var(--sup);border:1.5px solid #9fd0d6;border-radius:6px}
 body.portal .mes-g a:hover{background:var(--claro);border-color:var(--teal)}
 body.portal .mes-g a.sel{background:var(--tinta);border-color:var(--tinta);color:#fff}
@@ -112,7 +101,6 @@ body.portal .horas a{border-radius:6px;box-shadow:none}
 body.portal .horas a:hover{background:var(--teal);border-color:var(--teal);box-shadow:none;transform:none}
 body.portal .franja{letter-spacing:.04em}
 
-/* Ayuda: contacto */
 .contacto{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:0;margin:0 0 8px;
   border-top:1px solid var(--borde);border-bottom:1px solid var(--borde)}
 .contacto div{padding:18px 20px 18px 0}
@@ -120,7 +108,6 @@ body.portal .franja{letter-spacing:.04em}
 .contacto dd{margin:0;font-family:var(--f-titulo);font-size:1.3rem;font-weight:600;color:var(--navy)}
 .contacto dd a{color:inherit}
 
-/* ---------- Pie ---------- */
 body.portal .pie{display:block;background:var(--tinta-2);border-top:0;color:#b9d2d9;padding:40px max(20px,calc((100% - var(--ancho))/2)) 44px;font-size:.88rem}
 .pie-in{display:grid;grid-template-columns:auto 1fr;gap:28px 56px;align-items:start}
 .pie-marca{display:flex;gap:12px;align-items:center;color:#fff;font-family:var(--f-titulo);font-weight:600;font-size:1.02rem;line-height:1.25}
@@ -132,7 +119,6 @@ body.portal .pie{display:block;background:var(--tinta-2);border-top:0;color:#b9d
 .pie-legal{grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:18px;font-size:.8rem;color:#86a9b3}
 .pie-legal a{color:#b9d2d9}
 
-/* ---------- Pantallas chicas ---------- */
 @media(max-width:860px){
   .portada{padding:36px 0 32px;margin-bottom:32px}
   .portada-sello{width:300px;height:300px;right:-110px;top:24px;transform:none;opacity:.09}
@@ -147,7 +133,6 @@ body.portal .pie{display:block;background:var(--tinta-2);border-top:0;color:#b9d
   .barra li:not(.actual) .et{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .barra .actual .et{white-space:nowrap}
 }
-/* ---------- Composición centrada: banda, pasos y columna de contenido ---------- */
 .portada-txt{text-align:center}
 .portada h1,.portada .lead{margin-left:auto;margin-right:auto}
 .portada .volver{margin-left:0}
@@ -169,7 +154,6 @@ body.portal .profs>.prof{flex:0 1 400px;min-width:min(340px,100%)}
 body.portal .grilla{display:flex;flex-wrap:wrap;justify-content:center;gap:18px}
 body.portal .grilla>.opcion{flex:0 1 calc(25% - 14px);min-width:min(240px,100%)}
 
-/* ---------- Accesibilidad (RNF02): texto de al menos 16 px y contraste de al menos 4,5:1 ---------- */
 body.portal :is(.nav a,.barra li,.barra .cuenta,.barra .et,label,legend,.check,.req,.nota,.sede-d,.ayuda-l,.opcion p,
  .opcion .meta span,.contacto dt,.account-links,.account-links p,.account-links a,.pie-datos dt,.pie-datos dd,.pie-datos a,
  .pie-legal,.pie-legal a,.busqueda-r,.bloq-t,.bloq-v,.fila,.fila span,.aviso,.mes-g small,.mes-g a,.mes-g a i,.mes-g span,
@@ -184,5 +168,19 @@ body.portal .mes-g a i{color:var(--teal-t)}
   .portada{background:none;box-shadow:none;clip-path:none;color:#000;padding:0;margin-bottom:16px}
   .portada h1{color:#000}.portada .lead{color:#333}
   .portada-sello,.barra{display:none}
+}
+
+/* Barra lateral del portal, igual a la del panel del personal */
+body.portal{flex-direction:row}
+body.portal .app{overflow-x:clip}
+body.portal .side a{font-family:var(--f-titulo)}
+body.portal .side .pie-s a{font-size:.84rem;color:#b9d2d9}
+body.portal header.sup{display:none}
+@media (max-width:1024px){
+  body.portal{flex-direction:column}
+  body.portal header.sup{display:block}
+  body.portal .sup .cab{flex-wrap:nowrap}
+  body.portal .menu-btn{display:inline-grid;margin-left:auto}
+  body.portal.menu-abierto{overflow:hidden}
 }
 `;

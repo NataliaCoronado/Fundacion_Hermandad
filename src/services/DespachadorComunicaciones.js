@@ -3,12 +3,9 @@ const { textoLocal, sumarMinutos } = require('../util/tiempo');
 const { huellaEnlace } = require('../util/huella');
 
 const MAX_INTENTOS = 3;
-// Tipos que dan por supuesta una hora vigente: no deben salir si la reserva se canceló tras encolarse.
-// Los avisos de cancelación y de cambio quedan fuera a propósito: su razón de ser es informar ese cambio.
 const REQUIERE_RESERVA_ACTIVA = new Set(['Recordatorio', 'Comprobante de reserva', 'Enlace de atención']);
-const ESPERA_MIN = 5; // espera entre reintentos: 5, 10 min…
+const ESPERA_MIN = 5;
 
-// Correo SIMULADO: no hay proveedor de correo conectado. Deja el mensaje en la bandeja de demostración.
 class CorreoSimulado {
   constructor(extras) { this.extras = extras; }
   get simulado() { return true; }
@@ -17,13 +14,6 @@ class CorreoSimulado {
   }
 }
 
-// Envía las comunicaciones que quedaron "Pendiente" en la bandeja (comprobantes, avisos de cambios, enlaces de
-// Telemedicina…). Estados que escribe, y solo estos:
-//   Simulado  → el transporte es de demostración: NO salió ningún mensaje real.
-//   Enviado   → el proveedor real aceptó el mensaje (no significa que el paciente lo haya recibido).
-//   Pendiente → falló y se reintenta (hasta 3 veces), o no hay proveedor para ese canal.
-//   Error     → sin consentimiento, sin datos del destinatario o 3 intentos fallidos.
-// Este despachador nunca escribe "Entregado": solo lo hace el webhook de WhatsApp cuando Meta confirma la entrega.
 class DespachadorComunicaciones {
   constructor({ extras, catalogo, citaRepo, transportes, ahora = textoLocal }) {
     Object.assign(this, { extras, catalogo, citaRepo, transportes, ahora });
@@ -55,7 +45,7 @@ class DespachadorComunicaciones {
   async enviar(m) {
     if (!m || m.estado !== 'Pendiente') return m;
     const transporte = this.transportes[m.canal];
-    if (!transporte) return m; // sin proveedor para este canal: queda Pendiente, no se inventa un resultado
+    if (!transporte) return m;
     const ahora = this.ahora();
     const cerrar = (cambios) => this.extras.actualizar('comunicaciones', m.id, cambios);
     const p = await this.catalogo.paciente(m.rut);
@@ -64,10 +54,8 @@ class DespachadorComunicaciones {
     const destino = m.canal === 'WhatsApp' ? (p?.tieneWhatsapp ? p.telefono : '') : p?.correo;
     if (!cita || !consiente || !destino)
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: !consiente ? 'Falta el consentimiento del paciente.' : 'Faltan datos del destinatario.' });
-    // La reserva pudo cancelarse entre la solicitud y el envío: no se cita a un paciente a una hora que ya no existe.
     if (REQUIERE_RESERVA_ACTIVA.has(m.tipo) && cita.estadoReserva !== 'ACTIVA')
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'La reserva ya no está activa: no se envió este mensaje.' });
-    // El enlace de Telemedicina pudo reemplazarse: no se envía un enlace distinto del que se solicitó enviar.
     if (m.tipo === 'Enlace de atención' && m.huellaEnlace && huellaEnlace(cita.enlace) !== m.huellaEnlace)
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'El enlace de atención fue reemplazado: solicita el envío del enlace vigente.' });
     const intentos = (m.intentos || 0) + 1;
@@ -87,7 +75,6 @@ class DespachadorComunicaciones {
     }
   }
 
-  // Un ciclo: procesa todo lo pendiente cuya hora de reintento ya llegó.
   async procesar() {
     const ahora = this.ahora();
     const r = { enviados: 0, simulados: 0, errores: 0, reintentos: 0 };

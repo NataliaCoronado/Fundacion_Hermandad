@@ -10,7 +10,6 @@ const consentir = (c, rut, valor = true) => {
   (c.operacion.meta.pacientes[rut] ||= {}).consentimientoComunicaciones = valor;
 };
 const bandejaSaliente = (c) => c.extras.listar("bandeja").filter((b) => b.direccion === "SALIENTE");
-// Prepara una comunicación pendiente de la cita 1 (paciente con WhatsApp y consentimiento).
 async function pendiente(c, tipo = "Comprobante de reserva") {
   const cita = await c.citaRepo.buscarPorId(1);
   consentir(c, cita.rut);
@@ -29,7 +28,6 @@ test("despachador: con transporte simulado el estado es Simulado, nunca Enviado 
   assert.ok(!c.extras.listar("comunicaciones").some((x) => ["Enviado", "Entregado"].includes(x.estado)));
   assert.match(bandejaSaliente(c)[0].texto, /Hermandad de Dolores:.*comprobante/);
   assert.ok(!/código/i.test(bandejaSaliente(c)[0].texto), "el comprobante no menciona un código de reserva");
-  // Un segundo ciclo no vuelve a enviar lo ya procesado.
   assert.strictEqual((await c.despachador.procesar()).simulados, 0);
   assert.strictEqual(bandejaSaliente(c).length, 1);
 });
@@ -67,7 +65,7 @@ test("despachador: si el proveedor falla reintenta con espera creciente y al ter
   assert.strictEqual(ver().estado, "Pendiente");
   assert.strictEqual(ver().intentos, 1);
   assert.strictEqual(ver().proximoIntento, "2026-11-20 10:05");
-  reloj = "2026-11-20 10:01"; // todavía no toca reintentar
+  reloj = "2026-11-20 10:01";
   assert.strictEqual((await c.despachador.procesar()).reintentos, 0);
   assert.strictEqual(ver().intentos, 1);
   reloj = "2026-11-20 10:05";
@@ -99,7 +97,6 @@ test("WhatsApp Meta: sin configuración rechaza; con configuración arma la soli
   const env = { WHATSAPP_TOKEN: "token-de-prueba", WHATSAPP_PHONE_ID: "12345", WHATSAPP_PLANTILLA: "recordatorio_hora" };
   const meta = new WhatsAppMeta({ env, fetchFn });
   assert.strictEqual(meta.simulado, false);
-  // Mensaje iniciado por la Fundación: plantilla aprobada con el texto en una sola variable, sin saltos de línea.
   const r = await meta.enviar({ telefono: "+56 9 1111 2222", texto: "Hola\n\nmundo", iniciado: true });
   assert.deepStrictEqual(r, { id: "wamid.OK" });
   const [l] = llamadas;
@@ -110,13 +107,10 @@ test("WhatsApp Meta: sin configuración rechaza; con configuración arma la soli
   assert.strictEqual(l.cuerpo.template.name, "recordatorio_hora");
   assert.strictEqual(l.cuerpo.template.language.code, "es");
   assert.strictEqual(l.cuerpo.template.components[0].parameters[0].text, "Hola mundo");
-  // Respuesta dentro de las 24 h: texto libre.
   await meta.enviar({ telefono: "+56911112222", texto: "Gracias" });
   assert.strictEqual(llamadas[1].cuerpo.type, "text");
-  // Mensaje iniciado sin plantilla configurada: se rechaza antes de llamar a Meta.
   await assert.rejects(() => new WhatsAppMeta({ env: { ...env, WHATSAPP_PLANTILLA: "" }, fetchFn }).enviar({ telefono: "+56911112222", texto: "x", iniciado: true }), /WHATSAPP_PLANTILLA_FALTANTE/);
   assert.strictEqual(llamadas.length, 2);
-  // Meta rechaza el mensaje: el error lleva el estado y el motivo, y nunca el token.
   const rechaza = new WhatsAppMeta({ env, fetchFn: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "plantilla no aprobada" } }) }) });
   await assert.rejects(() => rechaza.enviar({ telefono: "+56911112222", texto: "x", iniciado: true }), (e) => /400.*plantilla no aprobada/.test(e.message) && !e.message.includes("token-de-prueba"));
 });
@@ -135,18 +129,16 @@ test("bot: si el proveedor falla el ciclo continúa, reintenta después y al ago
   consentir(c, (await c.citaRepo.buscarPorId(1)).rut);
   const real = c.bot.transporte;
   c.bot.transporte = { enviar: async () => { throw new Error("WHATSAPP_NO_CONFIGURADO"); }, registrarEntrante: async () => {} };
-  const r = await c.bot.procesar("2026-11-16 10:00"); // no debe lanzar
+  const r = await c.bot.procesar("2026-11-16 10:00");
   assert.strictEqual(r.errores, 1);
   const m = c.extras.listar("mensajes").find((x) => x.tipo === "SEMANA");
   assert.strictEqual(m.estado, "PROGRAMADO");
   assert.strictEqual(m.intentos, 1);
   assert.strictEqual(m.programadoPara, "2026-11-16 10:05");
-  // Vuelve el proveedor: el mensaje sale en el reintento.
   c.bot.transporte = real;
   const r2 = await c.bot.procesar("2026-11-16 10:05");
   assert.strictEqual(r2.enviados, 1);
   assert.strictEqual(c.extras.buscar("mensajes", m.id).estado, "ENVIADO");
-  // Fallo permanente: tras 3 intentos queda en ERROR y TENS/TONS recibe el aviso.
   const d = crearContenedor();
   consentir(d, (await d.citaRepo.buscarPorId(1)).rut);
   d.bot.transporte = { enviar: async () => { throw new Error("caído"); }, registrarEntrante: async () => {} };
@@ -192,7 +184,6 @@ test("despachador: el aviso de cancelación sí se envía, porque su razón de s
   assert.match(bandejaSaliente(c)[0].texto, /fue cancelada por la institución/);
 });
 
-// Telemedicina: el enlace que se solicitó enviar es el único que puede salir.
 async function citaTelemedicina(c, enlace) {
   const profs = await c.catalogo.profesionales();
   const bloque = (await c.catalogo.bloques()).find((b) => {
@@ -211,14 +202,12 @@ test("despachador: un enlace de Telemedicina reemplazado no se envía con la sol
   const cita = await citaTelemedicina(c, "https://videollamada.ejemplo.cl/SALA-A");
   const m = await c.operacion.comunicar(tele, cita, "WhatsApp", "Enlace de atención");
   assert.strictEqual(m.estado, "Pendiente");
-  // El operador corrige el enlace antes de que la cola procese la solicitud.
   c.operacion.meta.citas[cita.id].enlace = "https://videollamada.ejemplo.cl/SALA-B";
   await c.despachador.procesar();
   const f = c.extras.buscar("comunicaciones", m.id);
   assert.strictEqual(f.estado, "Error");
   assert.match(f.detalle, /reemplazado/);
   assert.strictEqual(bandejaSaliente(c).length, 0, "no sale ni el enlace viejo ni el nuevo");
-  // La pantalla muestra que el enlace vigente aún no se ha enviado, y la nueva solicitud sí sale.
   const vigente = await c.citaRepo.buscarPorId(cita.id);
   assert.strictEqual(c.operacion.estadoEnvioEnlace(vigente).estado, "Enlace guardado");
   await c.operacion.comunicar(tele, vigente, "WhatsApp", "Enlace de atención");

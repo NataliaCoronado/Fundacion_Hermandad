@@ -67,7 +67,6 @@ const estado = (c, tele, op) => {
   if (c.estadoReserva === "CANCELADA") return "Cancelada";
   if (c.asistencia === "ASISTIO") return "Atendida";
   if (c.asistencia === "NO_ASISTIO") return tele ? "No se conectó" : "No asistió";
-  // Los estados antiguos del enlace eran manuales. El estado del envío sale de Comunicaciones.
   if (c.flujo && !(tele && ["Enlace enviado", "Enlace pendiente"].includes(c.flujo)))
     return c.flujo;
   if (c.estadoConfirmacion === "CONFIRMADA") return "Confirmada";

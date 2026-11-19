@@ -1,6 +1,7 @@
 # Diseño: despliegue en la nube
 
-**Estado:** propuesta para la etapa siguiente del curso. **No está implementada.** Escrita el 18 de noviembre de 2026, sobre el código del commit `1f2d86a`.
+**Estado:** propuesta para la etapa siguiente del curso. 
+**No está implementada.** Escrita el 18 de noviembre de 2026, sobre el código del commit `1f2d86a`.
 **Decisión pendiente del equipo:** el enfoque (sección 4) y las preguntas de la sección 8.
 
 ## 1. Por qué

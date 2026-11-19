@@ -1,6 +1,4 @@
 'use strict';
-// Registros de apoyo que aún no se guardan en PostgreSQL: documentos, cambios de agenda, encuestas,
-// mensajes del bot, avisos y auditoría. Son datos de trabajo; se pierden al reiniciar.
 class ExtrasRepositoryMemoria {
   constructor(extras) { this.extras = extras; }
   listar(tipo) { return this.extras[tipo]; }

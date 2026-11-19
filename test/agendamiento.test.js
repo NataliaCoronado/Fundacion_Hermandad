@@ -4,8 +4,6 @@ const assert = require('node:assert');
 const { crearContenedor } = require('../src/contenedor');
 
 const A = '11111111-1'; const B = '22222222-2'; const C = '33333333-3';
-// Cada prueba usa datos nuevos: no comparten estado con la aplicación ni entre sí.
-// Bloques: 1 y 2 ya tienen citas (A y B); el 3 está libre.
 
 test('un bloque no admite dos citas activas (RNF04)', async () => {
   const { agendamiento } = crearContenedor();

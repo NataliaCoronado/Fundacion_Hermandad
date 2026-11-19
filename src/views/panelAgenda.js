@@ -1,7 +1,4 @@
 'use strict';
-// Panel "Actividad de agenda" de Reportes: cuatro gráficos interactivos con datos reales del período
-// (ocupación, evolución de reservas, estado de las reservas y mapa de calor) y una tabla de reservas
-// filtrable. Sin datos de pacientes. Se dibuja en el navegador y se actualiza cada minuto.
 const { esc } = require('./util');
 
 const CSS = `<style>
@@ -47,7 +44,6 @@ details.inst>summary{cursor:pointer;font-weight:600;font-size:1.05rem;color:var(
 details.inst[open]>summary{margin-bottom:8px}
 </style>`;
 
-// El script trabaja solo con el conjunto anónimo que entrega el servidor.
 const SCRIPT = `<script>(function(){
 var raiz=document.getElementById('ag');if(!raiz)return;
 var D=JSON.parse(document.getElementById('ag-datos').textContent);
@@ -66,7 +62,6 @@ function sumar(f,k){var d=new Date(f+'T12:00:00');d.setDate(d.getDate()+k);retur
 function sedeN(id){return D.sedes[id]||'Sin lugar'}
 function vacio(){return '<div class="vacio-g">No hay información para este período.</div>'}
 function sedeFoco(){return D.sede||drill}
-// Filtro que nace de un clic en un gráfico; filtra la tabla de reservas.
 function pasa(r){if(!sel)return true;
  if(sel.sid!=null&&r[2]!==sel.sid)return false;if(sel.esp!=null&&r[3]!==sel.esp)return false;
  if(sel.est&&r[5]!==sel.est)return false;if(sel.desde&&(r[0]<sel.desde||r[0]>sel.hasta))return false;
@@ -74,7 +69,6 @@ function pasa(r){if(!sel)return true;
 function elegir(s){sel=s;pag=0;dibujar();var t=document.getElementById('ag-tabla');if(t&&s)t.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'})}
 function hit(attrs,tip,lbl){return '<g class="hit" tabindex="0" role="button" aria-label="'+e(lbl)+'" data-tip="'+e(tip)+'" '+attrs+'>'}
 
-// 1. Ocupación: horas publicadas ocupadas por policlínico; al elegir uno, por especialidad.
 function ocupacion(){
  var foco=sedeFoco(),g={};
  D.cupos.forEach(function(c){if(foco&&c[0]!==foco)return;var k=foco?c[1]:c[0];g[k]=g[k]||[0,0];g[k][0]+=c[2];g[k][1]+=c[3]});
@@ -93,7 +87,6 @@ function ocupacion(){
   '<text class="val" x="'+(L+bw+8)+'" y="'+(y+12)+'">'+x.p+'%</text><text x="'+(L+bw+42)+'" y="'+(y+12)+'">'+n(x.o)+'/'+n(x.c)+' h</text></g>'});
  return miga+s+'</svg>'}
 
-// 2. Evolución de reservas por día, semana o mes, con el período anterior como referencia.
 function cubeta(f){return gran==='mes'?f.slice(0,7):gran==='semana'?lunes(f):f}
 function etiqueta(k){return gran==='mes'?MES[+k.slice(5,7)-1]+' '+k.slice(2,4):fCorta(k)}
 function evolucion(){
@@ -122,7 +115,6 @@ function evolucion(){
  s+='<div class="ag-ley"><span><i style="background:#183b4e"></i>Período actual: '+n(tot)+' reservas</span>'+(hayP?'<span><i style="background:#9fb3ba"></i>Período anterior: '+n(totP)+' ('+(dif>=0?'+':'')+dif+'%)</span>':'<span>Sin reservas en el período anterior para comparar.</span>')+'</div>';
  return s}
 
-// 3. Estado de las reservas por lugar (o por especialidad dentro de un lugar).
 function estado(){
  var foco=sedeFoco(),g={};D.reservas.forEach(function(r){if(foco&&r[2]!==foco)return;var k=foco?r[3]:r[2];g[k]=g[k]||{t:0};g[k][r[5]]=(g[k][r[5]]||0)+1;g[k].t++});
  var f=Object.keys(g).map(function(k){return{k:k,n:foco?k:sedeN(+k),v:g[k]}}).sort(function(a,b){return b.v.t-a.v.t});
@@ -138,7 +130,6 @@ function estado(){
  s+='</svg><div class="ag-ley">'+EST.map(function(es){return '<span><i style="background:'+es[2]+'"></i>'+es[1]+'</span>'}).join('')+'</div>';
  return s}
 
-// 4. Mapa de calor: reservas vigentes por día de la semana y hora de inicio.
 function calor(){
  var act=D.reservas.filter(function(r){return r[5]!=='CAN'});if(!act.length)return vacio();
  var m={},hs={},ds={0:1,1:1,2:1,3:1,4:1},max=0;
@@ -153,7 +144,6 @@ function calor(){
    s+=v?hit('data-a="hm" data-d="'+d+'" data-h="'+h+'"','<b>'+DIASL[d]+' '+h+':00</b><br>'+n(v)+' reservas vigentes',DIASL[d]+' '+h+':00: '+v+' reservas')+r+'</g>':r})});
  return s+'</svg><div class="ag-ley"><span>Menos</span>'+[.15,.4,.65,.9].map(function(a){return '<i style="background:rgba(52,125,134,'+a+')"></i>'}).join('')+'<span>Más reservas</span></div>'}
 
-// Tabla de reservas filtrada por el último clic.
 function filas(){return D.reservas.filter(pasa).sort(function(a,b){return a[0]<b[0]?-1:a[0]>b[0]?1:a[1]<b[1]?-1:1})}
 function descripcion(){if(!sel)return '';var p=[];
  if(sel.sid!=null)p.push(sedeN(sel.sid));if(sel.esp!=null)p.push(sel.esp);if(sel.est)p.push(NEST[sel.est][1]);
@@ -188,7 +178,6 @@ function accion(t){var a=t.dataset.a,foco=sedeFoco();
 raiz.addEventListener('click',function(ev){var g=ev.target.closest('[data-gran]');if(g){gran=g.dataset.gran;dibujar();return}var t=ev.target.closest('[data-a]');if(t&&raiz.contains(t))accion(t)});
 raiz.addEventListener('keydown',function(ev){if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches&&ev.target.matches('g.hit')){ev.preventDefault();accion(ev.target)}});
 dibujar();
-// Refleja cambios de agenda sin recargar: vuelve a pedir los datos cada minuto mientras la pestaña está visible.
 setInterval(function(){if(document.hidden)return;fetch(URL_JSON,{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j){D=j;dibujar()}}).catch(function(){})},60000);
 })();</script>`;
 

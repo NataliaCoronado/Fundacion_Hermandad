@@ -1,5 +1,4 @@
 "use strict";
-// RF22: los reportes muestran las dos encuestas por separado y según el filtro del reporte.
 const test = require("node:test");
 const assert = require("node:assert");
 const { crearContenedor } = require("../src/contenedor");
@@ -55,7 +54,6 @@ test("reportes: las encuestas se descargan en PDF y Excel, solas o en el reporte
       assert.strictEqual(solo.status, 200, `encuesta sola en ${formato}`);
       const todo = await s.get(`/admin/reportes/exportar?${AÑO}&grafico=todos&formato=${formato}`);
       assert.strictEqual(todo.status, 200, `reporte completo en ${formato}`);
-      // La exportación no comprime: el texto de las dos encuestas se puede leer en el archivo.
       const bytes = Buffer.from(await todo.arrayBuffer()).toString("latin1");
       assert.ok(bytes.includes("Encuesta de agendamiento"), `el reporte completo en ${formato} trae la encuesta de agendamiento`);
       assert.ok(bytes.includes("Encuesta de atenci"), `el reporte completo en ${formato} trae la encuesta de atención`);

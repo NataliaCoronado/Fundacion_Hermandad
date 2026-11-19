@@ -1,12 +1,10 @@
 'use strict';
-// Datos de MUESTRA (ficticios) para el modo en memoria. Con DATABASE_URL se usa PostgreSQL y esto no se toca.
-// Los repositorios (src/repositories) son la única capa que accede a estos datos.
 
 const { SEDES, profesionalesDeMuestra } = require('./sedesInfo');
 
 function crearDatos() {
   const policlinicos = SEDES.map(({ id, nombre, comuna, telemedicina }) => ({ id, nombre, comuna, telemedicina }));
-  const comunas = [...new Set(policlinicos.filter((p) => !p.telemedicina).map((p) => p.comuna))].map((nombre, i) => ({ id: i + 1, nombre }));
+  const comunas = require('./comunas').completar([...new Set(policlinicos.filter((p) => !p.telemedicina).map((p) => p.comuna))].map((nombre, i) => ({ id: i + 1, nombre })));
   const profesionales = profesionalesDeMuestra();
   const pacientes = [
     { rut: '11111111-1', nombre: 'Paciente de prueba A', nombres: 'Paciente de prueba', apellidos: 'A', telefono: '+56911111111', tieneWhatsapp: true, correo: '', fechaNacimiento: '1980-01-01', genero: 'FEMENINO', nacionalidad: 'Chilena', direccion: 'Dirección de prueba 1', idComuna: 1, responsable: null },
@@ -14,7 +12,6 @@ function crearDatos() {
     { rut: '33333333-3', nombre: 'Paciente de prueba C', nombres: 'Paciente de prueba', apellidos: 'C', telefono: '+56933333333', tieneWhatsapp: false, correo: '', fechaNacimiento: '2015-09-09', genero: 'FEMENINO', nacionalidad: 'Venezolana', direccion: 'Dirección de prueba 3', idComuna: 3,
       responsable: { nombre: 'Responsable de prueba', relacion: 'Madre', rut: '44444444-4', telefono: '+56944444444' } },
   ];
-  // Bloques horarios: los crea Administración; solo los publicados se pueden reservar.
   const bloques = [];
   let sigBloque = 1;
   for (const p of profesionales) {
@@ -24,8 +21,6 @@ function crearDatos() {
       }
     }
   }
-  // estadoReserva: ACTIVA | CANCELADA   (independiente de)   estadoConfirmacion: PENDIENTE | CONFIRMADA | SIN_RESPUESTA
-  // asistencia: null | ASISTIO | NO_ASISTIO   (el silencio NO cancela ni confirma)
   const citas = [
     { id: 1, rut: '11111111-1', idBloque: 1, estadoReserva: 'ACTIVA', estadoConfirmacion: 'PENDIENTE', asistencia: null, origenCancelacion: null, idProfesionalReemplazo: null },
     { id: 2, rut: '22222222-2', idBloque: 2, estadoReserva: 'ACTIVA', estadoConfirmacion: 'CONFIRMADA', asistencia: null, origenCancelacion: null, idProfesionalReemplazo: null },
@@ -41,7 +36,7 @@ function crearDatos() {
   return {
     policlinicos, comunas, profesionales, pacientes, bloques, citas, espera, usuarios,
     contactos: [],
-    credenciales: {},                      // idUsuario -> hash scrypt
+    credenciales: {},
     extras: { documentos: [], cambios: [], encuestas: [], mensajes: [], bandeja: [], notificaciones: [], auditoria: [] },
     secuencias: { cita: 3, espera: 2, contacto: 1, bloque: sigBloque },
   };

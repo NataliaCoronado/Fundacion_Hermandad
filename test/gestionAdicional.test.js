@@ -1,5 +1,4 @@
 "use strict";
-// Funciones traídas de la versión anterior: cancelaciones en lote, cupos por rango y eliminación de integrantes.
 const test = require("node:test"),
   assert = require("node:assert/strict");
 const { crearContenedor } = require("../src/contenedor");

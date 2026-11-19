@@ -1,8 +1,4 @@
 "use strict";
-// Ejecuta los casos de la Matriz de Pruebas (CP-xx) contra el sistema real (modo memoria, servidor HTTP local)
-// y guarda una evidencia por caso: EV-CP-xx.txt con fecha, pasos, datos observados y resultado.
-// El estado (Aprobada/Fallida) se calcula a partir de lo observado; nada se escribe a mano.
-// Uso: node scripts/evidencias-matriz.js <carpeta-de-salida>
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -12,6 +8,12 @@ const { crearServidor } = require("../src/server");
 const { textoLocal, hoy, sumarDias } = require("../src/util/tiempo");
 
 const SALIDA = path.resolve(process.argv[2] || "Evidencias_Pruebas");
+// Los adjuntos de prueba van a una carpeta temporal: nunca a datos/documentos del sistema.
+const DOCS_TEMPORALES = !process.env.DIR_DOCUMENTOS && fs.mkdtempSync(path.join(os.tmpdir(), "evidencias-docs-"));
+if (DOCS_TEMPORALES) {
+  process.env.DIR_DOCUMENTOS = DOCS_TEMPORALES;
+  process.on("exit", () => fs.rmSync(DOCS_TEMPORALES, { recursive: true, force: true }));
+}
 const A = "11111111-1", B = "22222222-2", C = "33333333-3";
 
 async function sitio(opciones = {}) {
@@ -36,7 +38,6 @@ async function sitio(opciones = {}) {
   return s;
 }
 
-// Registro de un caso: cada verificación queda escrita con ✔ o ✘.
 function caso() {
   const log = [];
   let ok = true;
@@ -48,7 +49,6 @@ function caso() {
     get ok() { return ok; },
   };
 }
-// Crea (o usa) la cuenta del paciente y devuelve un cliente con su cookie de sesión.
 async function cuentaDe(s, rut, fechaNacimiento, celular4, clave = "una clave suficientemente larga") {
   const r = await s.form("/paciente/cuenta/acceso", { modo: "crear", rut, fechaNacimiento, celular4, clave, confirmarClave: clave, acepto: "1" });
   const ck = (r.headers.get("set-cookie") || "").startsWith("psid=") ? r.headers.get("set-cookie").split(";")[0] : null;
@@ -463,9 +463,6 @@ const CASOS = {
   "CP-28": { req: "RF28", titulo: "Comprobante en pantalla, WhatsApp y correo", async run(k) {
     const s = await sitio();
     try {
-      // Paciente NUEVA: al registrar su propia ficha queda registrado su consentimiento de comunicaciones, así el
-      // caso llega de verdad a la etapa de envío. Con una ficha ajena y sin verificar la identidad el sistema no
-      // registra el consentimiento a nombre de otra persona (correcto), y entonces el caso no probaría el envío.
       const N = "30123456-2";
       k.paso(`Una paciente nueva (${N}) reserva por la web con su celular con WhatsApp y acepta recibir avisos.`);
       const { html, cita, t } = await reservaWeb(s, N, { nuevo: { nombres: "Paciente", apellidos: "Nueva", fechaNacimiento: "1990-01-01", genero: "FEMENINO", nacionalidad: "Chilena", telefono: "+56911112222", tieneWhatsapp: "1", correo: "", direccion: "Calle 1", idComuna: "1" } });
@@ -574,7 +571,7 @@ const CASOS = {
     const s = await sitio();
     try {
       const acceso = await s.form("/login", { correo: "telemedicina.usuario@ejemplo.cl", clave: "demo1234" });
-      k.chk(acceso.status === 302 && acceso.headers.get("location") === "/tens/agenda", "Telemedicina abre directamente la Agenda al iniciar sesión.");
+      k.chk(acceso.status === 302 && acceso.headers.get("location") === "/tens/resumen", "Telemedicina abre su Resumen (dashboard) al iniciar sesión.");
       const h = await (await s.req("/tens/agenda", s.tm)).text();
       for (const m of ["Agendas y reservas", "Lista de espera", "Pacientes", "Comunicaciones"]) k.chk(h.includes(m), `El menú de Telemedicina incluye «${m}».`);
       k.chk(!h.includes('href="/tens/panel"'), "El menú omite el acceso al panel anterior.");
@@ -582,7 +579,7 @@ const CASOS = {
       for (const r of ["/tens/agenda", "/tens/espera", "/tens/confirmaciones", "/tens/comunicaciones", "/tens/pacientes"]) st[r] = (await s.req(r, s.tm)).status;
       k.dato("Códigos HTTP", st);
       k.chk(Object.values(st).every((x) => x === 200), "Agenda, lista de espera, confirmaciones, comunicaciones y pacientes funcionan para Telemedicina.");
-      return k.ok ? "Telemedicina abre directamente la Agenda. Las pantallas de lista de espera, confirmaciones, comunicaciones y pacientes también respondieron correctamente." : null;
+      return k.ok ? "Telemedicina abre su Resumen al iniciar sesión y la Agenda queda en el menú. Las pantallas de lista de espera, confirmaciones, comunicaciones y pacientes también respondieron correctamente." : null;
     } finally { await s.cerrar(); }
   } },
 
@@ -612,7 +609,6 @@ const CASOS = {
   } },
 
   "CP-42": { req: "RNF06", titulo: "Trazabilidad de operaciones y restauración de datos y archivos desde un respaldo", async run(k) {
-    // Sistema completo por HTTP con los datos guardados en disco, como en uso normal (no en memoria).
     const R = require("../src/util/respaldo");
     const { Persistencia } = require("../src/repositories/Persistencia");
     const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "cp42-"));
@@ -670,7 +666,7 @@ const CASOS = {
       await s.req("/tens/agendar", s.t, { rut: C, idBloque: String(b3.id) });
       fs.rmSync(rutaDoc);
       k.chk(!fs.existsSync(rutaDoc), "El archivo del documento ya no está en disco.");
-      await s.cerrar(); s = null;   // la aplicación se detiene antes de restaurar
+      await s.cerrar(); s = null;
 
       k.paso("Se restaura el respaldo con la aplicación detenida y se vuelve a iniciar desde disco.");
       const r = R.restaurar({ respaldo: carpeta, datos, destinoSeguridad: respaldos, baseDatos: "" });
@@ -850,7 +846,6 @@ const CASOS = {
 
 };
 
-// Reserva completa por el portal del paciente (flujo en 4 pasos); devuelve el HTML del comprobante, la cita y el token.
 async function reservaWeb(s, rut, { bloque, nuevo } = {}) {
   const ini = await s.form("/agendar", { rut, lugar: "1", modo: "esp", esp: "Medicina General", consentimiento: "1", comunicaciones: "1" });
   const t = new URL(ini.headers.get("location"), s.base).searchParams.get("t");
