@@ -461,19 +461,25 @@ const CASOS = {
   "CP-28": { req: "RF28", titulo: "Comprobante en pantalla, WhatsApp y correo", async run(k) {
     const s = await sitio();
     try {
-      const { html, cita, t } = await reservaWeb(s, A);
-      const p = await s.c.catalogo.paciente(A), b = await s.c.catalogo.bloque(cita.idBloque), prof = await s.c.catalogo.profesional(b.idProfesional);
+      // Paciente NUEVA: al registrar su propia ficha queda registrado su consentimiento de comunicaciones, así el
+      // caso llega de verdad a la etapa de envío. Con una ficha ajena y sin verificar la identidad el sistema no
+      // registra el consentimiento a nombre de otra persona (correcto), y entonces el caso no probaría el envío.
+      const N = "30123456-2";
+      k.paso(`Una paciente nueva (${N}) reserva por la web con su celular con WhatsApp y acepta recibir avisos.`);
+      const { html, cita, t } = await reservaWeb(s, N, { nuevo: { nombres: "Paciente", apellidos: "Nueva", fechaNacimiento: "1990-01-01", genero: "FEMENINO", nacionalidad: "Chilena", telefono: "+56911112222", tieneWhatsapp: "1", correo: "", direccion: "Calle 1", idComuna: "1" } });
+      const p = await s.c.catalogo.paciente(N), b = await s.c.catalogo.bloque(cita.idBloque), prof = await s.c.catalogo.profesional(b.idProfesional);
       k.chk(html.includes(p.rut) && html.includes(prof.nombre) && html.includes(b.hora) && html.includes(prof.especialidad), "El comprobante en pantalla muestra paciente (RUT), policlínico, especialidad, profesional, fecha y hora.");
       k.chk(!/c[oó]digo de reserva/i.test(html), "El comprobante no muestra código de reserva.");
       const pdf = Buffer.from(await (await fetch(`${s.base}/agendar/comprobante.pdf?t=${t}`)).arrayBuffer());
       fs.writeFileSync(path.join(SALIDA, "EV-CP-28_comprobante.pdf"), pdf);
       const txt = pdf.toString("latin1");
       k.dato("Comprobante PDF", `${pdf.length} bytes, guardado como EV-CP-28_comprobante.pdf`);
-      k.chk(pdf.subarray(0, 5).toString() === "%PDF-" && txt.includes(A) && txt.includes("Medicina General") && !/C.digo de reserva:/i.test(txt), "El comprobante se descarga en PDF con los datos de la cita y sin código.");
+      k.chk(pdf.subarray(0, 5).toString() === "%PDF-" && txt.includes(N) && txt.includes("Medicina General") && !/C.digo de reserva:/i.test(txt), "El comprobante se descarga en PDF con los datos de la cita y sin código.");
       const envios = (s.c.extras.listar("comunicaciones") || []).filter((m) => m.idCita === cita.id && m.tipo === "Comprobante de reserva");
       k.dato("Envíos del comprobante registrados", envios.map((m) => `${m.canal}: ${m.estado} (${m.detalle})`));
+      k.chk(envios.length > 0, "El envío del comprobante se solicita por el canal del paciente y queda registrado en la bandeja.");
       k.chk(envios.some((m) => ["Enviado", "Entregado"].includes(m.estado)), "El comprobante fue enviado por el canal disponible (WhatsApp o correo).");
-      return k.ok ? "Comprobante en pantalla, en PDF y enviado por el canal disponible." : `El comprobante se muestra en pantalla y se descarga en PDF con paciente, policlínico, especialidad, profesional, fecha y hora, sin código. El envío por ${envios[0]?.canal || "WhatsApp"} quedó registrado como «${envios[0]?.estado || "sin registro"}»: no se entrega porque aún no hay proveedor de mensajería conectado.`;
+      return k.ok ? "Comprobante en pantalla, en PDF y enviado por el canal disponible." : `El comprobante se muestra en pantalla y se descarga en PDF con paciente, policlínico, especialidad, profesional, fecha y hora, sin código. El envío por ${envios[0]?.canal || "WhatsApp"} quedó registrado como «${envios[0]?.estado || "sin registro"}». ${envios[0]?.detalle || "No se registró un intento en la bandeja."} La prueba requiere evidencia de envío real.`;
     } finally { await s.cerrar(); }
   } },
 
