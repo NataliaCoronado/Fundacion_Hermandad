@@ -42,6 +42,7 @@ const MENSAJES = {
   NOTA_INVALIDA: 'La nota debe ser de 1 a 5.',
   SIN_ATENCION: 'No encontramos una atención registrada para responder la encuesta.',
   YA_RESPONDIDA: 'Ya respondiste la encuesta de tu última atención.',
+  YA_RESPONDIDA_AGENDAMIENTO: 'Ya respondiste la encuesta de esta reserva.',
   CREDENCIALES_INVALIDAS: 'Correo o contraseña incorrectos.',
   DEMASIADOS_INTENTOS: 'Demasiados intentos. Espera unos minutos.',
   WHATSAPP_NO_CONFIGURADO: 'WhatsApp real aún no está configurado.',

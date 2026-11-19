@@ -3,7 +3,7 @@ const crypto = require("node:crypto");
 const vistas = require("../views/reserva");
 const { normalizarRut, rutValido } = require("../util/rut");
 const { hoy, textoLocal } = require("../util/tiempo");
-const { error } = require("./mensajes");
+const { error, ok } = require("./mensajes");
 const { crearLimitador } = require("../util/limitador");
 const { comprobantePdf } = require("../services/ComprobanteService");
 const { MAX_BYTES } = require("../services/DocumentoService");
@@ -21,7 +21,7 @@ const FIRMAS = [Buffer.from("%PDF"), Buffer.from([0xff, 0xd8, 0xff]), Buffer.fro
 // así el RUT nunca viaja en la dirección de la página. Se apaga con RESERVA_WEB=0.
 // Pasos: buscar (RUT, lugar, especialidad o profesional) → calendario → datos y documentos → confirmar → comprobante.
 function crearReservaController(c) {
-  const { catalogo, agendamiento, pacientes, documentos, operacion: op, cuentas, auditoria } = c;
+  const { catalogo, agendamiento, pacientes, documentos, operacion: op, cuentas, auditoria, encuestas } = c;
   const flujos = new Map();
   const limitar = crearLimitador(VENTANA_MS);
   const excedido = (ip) => limitar(ip, LIMITE);
@@ -296,6 +296,23 @@ function crearReservaController(c) {
         if (["BLOQUE_OCUPADO", "BLOQUE_NO_DISPONIBLE"].includes(e.message))
           return { estado: 409, html: vistas.revisar({ t, r: await resumen(f), usuario, mensaje: { tipo: "error", texto: "Esa hora ya no está disponible. Elige otra hora en el calendario." } }) };
         return { estado: 400, html: vistas.revisar({ t, r: await resumen(f), usuario, mensaje: error(e) }) };
+      }
+    }),
+    // RF36: encuesta voluntaria sobre la experiencia de reservar, distinta de la encuesta posterior a la atención
+    // (RF30). Se responde con el token de la reserva recién hecha y no pide el RUT: así conocer un RUT no permite
+    // responder a nombre de otra persona, y solo se ofrece con una reserva ya completada.
+    encuestaAgendamiento: guard(async ({ t, f, usuario }) => {
+      if (!f.confirmada) return { redirigir: "/agendar" };
+      return { html: vistas.encuestaAgendamiento({ t, respondida: !!f.encuestaAgendamiento, usuario }) };
+    }),
+    responderEncuestaAgendamiento: guard(async ({ t, f, cuerpo: d, usuario }) => {
+      if (!f.confirmada) return { redirigir: "/agendar" };
+      try {
+        await encuestas.registrarAgendamiento({ idCita: f.confirmada.idCita, nota: d.nota, comentario: d.comentario });
+        f.encuestaAgendamiento = true;
+        return { html: vistas.encuestaAgendamiento({ t, respondida: true, mensaje: ok("Gracias por responder."), usuario }) };
+      } catch (e) {
+        return { estado: 400, html: vistas.encuestaAgendamiento({ t, respondida: false, mensaje: error(e), usuario }) };
       }
     }),
     comprobante: guard(async ({ f }) => {

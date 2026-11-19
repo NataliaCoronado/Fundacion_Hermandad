@@ -341,3 +341,39 @@ test('portal: el comprobante de una cita cancelada no falla: lleva a Consultar m
     assert.strictEqual(r.headers.get('location'), '/paciente/consulta');
   } finally { await s.cerrar(); }
 });
+
+// RF36 / CP-36: la encuesta de agendamiento es otra encuesta, distinta de la posterior a la atención (RF30).
+test('portal: la encuesta de agendamiento se ofrece tras reservar, es distinta de la de atención y se responde una vez', async () => {
+  const s = await levantar();
+  try {
+    const p = s.cliente();
+    const t = tokenDe(await p.req('/agendar', { rut: '13456789-9', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
+    const bloque = Number((await p.texto(`/agendar/calendario?t=${t}`)).match(/bloque=(\d+)/)[1]);
+    // Antes de confirmar la reserva no hay encuesta que responder.
+    assert.strictEqual((await p.req(`/agendar/encuesta?t=${t}`)).headers.get('location'), '/agendar');
+    await p.req(`/agendar/datos?t=${t}&bloque=${bloque}`);
+    assert.strictEqual((await p.req('/agendar/datos', { t, ...NUEVO, nombres: 'Carla' }, true)).status, 302);
+    const conf = await p.texto('/agendar/confirmar', { t });
+    assert.match(conf, /¿Cómo fue reservar tu hora\?/, 'la reserva confirmada invita a responderla');
+    assert.match(conf, /\/agendar\/encuesta/);
+    // El formulario pregunta por el agendamiento, no por la atención, y no pide el RUT.
+    const form = await p.texto(`/agendar/encuesta?t=${t}`);
+    assert.match(form, /fácil fue reservar tu hora/);
+    assert.match(form, /No es la encuesta de la atención/);
+    assert.doesNotMatch(form, /name="rut"/, 'no pide el RUT: se responde con el token de la reserva');
+    // Nota inválida: no se registra nada.
+    assert.match(await p.texto('/agendar/encuesta', { t, nota: '9' }), /La nota debe ser de 1 a 5/);
+    assert.strictEqual(s.c.extras.listar('encuestasAgendamiento').length, 0);
+    // Respuesta válida, guardada aparte de la encuesta de atención.
+    assert.match(await p.texto('/agendar/encuesta', { t, nota: '4', comentario: 'Fue sencillo' }), /quedó registrada/);
+    const [e] = s.c.extras.listar('encuestasAgendamiento');
+    assert.strictEqual(e.nota, 4);
+    assert.strictEqual(e.comentario, 'Fue sencillo');
+    assert.strictEqual(e.canal, 'WEB');
+    assert.deepStrictEqual(s.c.encuestas.resumenAgendamiento(), { respuestas: 1, promedio: 4 });
+    assert.deepStrictEqual(s.c.encuestas.resumen(), { respuestas: 0, promedio: null }, 'no contamina la encuesta de atención');
+    // Una sola respuesta por reserva.
+    assert.match(await p.texto('/agendar/encuesta', { t, nota: '1' }), /Ya respondiste la encuesta de esta reserva/);
+    assert.strictEqual(s.c.extras.listar('encuestasAgendamiento').length, 1);
+  } finally { await s.cerrar(); }
+});

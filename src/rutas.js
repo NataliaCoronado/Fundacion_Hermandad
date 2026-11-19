@@ -114,6 +114,8 @@ function crearRutas(c) {
     get("/agendar/revisar", null, reserva.revisar),
     post("/agendar/confirmar", null, reserva.confirmar),
     get("/agendar/comprobante.pdf", null, reserva.comprobante),
+    get("/agendar/encuesta", null, reserva.encuestaAgendamiento),
+    post("/agendar/encuesta", null, reserva.responderEncuestaAgendamiento),
     get("/ayuda", null, paciente.ayuda),
     get("/privacidad", null, paciente.privacidad),
     get("/login", null, auth.formulario),

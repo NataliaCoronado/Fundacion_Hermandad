@@ -578,6 +578,31 @@ const CASOS = {
     } finally { await s.cerrar(); }
   } },
 
+  "CP-36": { req: "RF36", titulo: "Encuesta voluntaria de agendamiento, distinta de la posterior a la atención", async run(k) {
+    const s = await sitio();
+    try {
+      k.paso("El paciente B reserva una hora por el portal y, al confirmar, se le ofrece la encuesta del agendamiento.");
+      const { html, cita, t } = await reservaWeb(s, B);
+      k.chk(/¿Cómo fue reservar tu hora\?/.test(html) && /\/agendar\/encuesta/.test(html), "La reserva confirmada ofrece la encuesta de agendamiento.");
+      const form = await (await fetch(`${s.base}/agendar/encuesta?t=${t}`)).text();
+      k.chk(/f[aá]cil fue reservar tu hora/.test(form), "La encuesta pregunta por la experiencia de reservar.");
+      k.chk(/No es la encuesta de la atenci[oó]n/.test(form), "Se distingue explícitamente de la encuesta posterior a la atención.");
+      k.chk(!/name="rut"/.test(form), "No pide el RUT: se responde con el token de la reserva recién hecha.");
+      k.paso("Responde con nota 4 y un comentario.");
+      const r1 = await (await s.form("/agendar/encuesta", { t, nota: "4", comentario: "Fue sencillo reservar" })).text();
+      const guardadas = s.c.extras.listar("encuestasAgendamiento");
+      k.dato("Encuestas de agendamiento", guardadas);
+      k.dato("Resumen agendamiento", s.c.encuestas.resumenAgendamiento());
+      k.dato("Resumen atención (RF30)", s.c.encuestas.resumen());
+      k.chk(/qued[oó] registrada/.test(r1) && guardadas.length === 1 && guardadas[0].nota === 4 && guardadas[0].idCita === cita.id, "La respuesta queda registrada y asociada a esa reserva.");
+      k.chk(s.c.encuestas.resumen().respuestas === 0, "No se mezcla con las respuestas de la encuesta posterior a la atención, que se guardan aparte.");
+      const r2 = await (await s.form("/agendar/encuesta", { t, nota: "1" })).text();
+      k.chk(/Ya respondiste la encuesta de esta reserva/.test(r2) && s.c.extras.listar("encuestasAgendamiento").length === 1, "No se puede responder dos veces por la misma reserva.");
+      k.chk((await s.c.citaRepo.buscarPorId(cita.id)).estadoReserva === "ACTIVA", "Responder (o no responder) la encuesta no altera la hora reservada: es voluntaria.");
+      return k.ok ? "Al confirmar la reserva web se ofrece una encuesta voluntaria sobre el agendamiento, distinta en texto, ruta y almacenamiento de la encuesta posterior a la atención; se responde una sola vez y no afecta la reserva." : null;
+    } finally { await s.cerrar(); }
+  } },
+
   "CP-39": { req: "RNF03", titulo: "Seguridad: roles, consulta protegida y consentimiento", async run(k) {
     const s = await sitio();
     try {

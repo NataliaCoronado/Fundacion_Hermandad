@@ -63,6 +63,15 @@ La sesión se limita al lugar principal asignado por Administración. Una cuenta
 - **Comunicaciones:** bandeja por sede, canal, reserva, estado, fecha, responsable y reintentos. Las llamadas se registran en Confirmaciones. El silencio no cancela una reserva ni elimina una solicitud de espera.
 - **Telemedicina:** operación separada, Reserva de Telemedicina, enlace HTTPS de atención y estados remotos (Enlace pendiente, Enlace enviado, Confirmada, Conectado, Atendida, No se conectó). Se conserva la misma restricción de sede.
 
+## Encuestas
+
+Son **dos encuestas distintas**, guardadas por separado para que sus promedios no se mezclen:
+
+- **Del agendamiento (RF36):** al confirmar una reserva en el portal se ofrece responder cómo fue reservar. Es voluntaria, se responde con el token de esa reserva (no pide el RUT, así conocer un RUT no permite responder por otra persona), una sola vez por reserva, y no afecta la hora ya reservada.
+- **De la atención (RF30):** en `/paciente/encuesta`, solo si hay una asistencia registrada.
+
+Las respuestas del agendamiento quedan en `encuestasAgendamiento` y se consultan con `encuestas.resumenAgendamiento()`. Todavía **no aparecen en los reportes de Administración**: mostrarlas ahí cambia la estructura de las descargas que respalda la evidencia de CP-23, así que es una decisión aparte.
+
 ## Mensajes automáticos
 
 Cada minuto el sistema procesa la bandeja de **Comunicaciones** (comprobante de reserva, avisos de cambio, cancelación o reprogramación y enlaces de Telemedicina). Con `BOT_WHATSAPP=1` también ejecuta los recordatorios del bot: una semana antes, la víspera a las 10:00 y un reintento a las 14:00. `MENSAJES_AUTOMATICOS=0` lo apaga.

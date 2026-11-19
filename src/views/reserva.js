@@ -193,11 +193,25 @@ const confirmada = ({ t, r, envio, cuenta, usuario }) => {
 ${envio ? `<p class="nota">${envio}</p>` : ''}</div>
 <div><div class="tarjeta"><h3>${r.tele ? 'Cómo conectarte' : 'Qué llevar'}</h3><p>${r.tele ? 'El equipo de Telemedicina te hará llegar el enlace de la videollamada antes de tu hora. Necesitas cámara, micrófono y buena conexión.' : 'Tu cédula de identidad y, si tienes, la orden o derivación. Llega 10 minutos antes.'}</p></div>
 <div class="tarjeta" style="margin-top:12px"><h3>¿Cancelar o cambiar?</h3><p>Escribe al WhatsApp ${esc(wa)} o comunícate con tu policlínico indicando el RUT; el personal registrará el cambio. Una reserva no se cancela por falta de respuesta.</p></div>
+<div class="tarjeta no-imprimir" style="margin-top:12px"><h3>¿Cómo fue reservar tu hora?</h3><p>Dos preguntas voluntarias sobre la experiencia de reservar. No es la encuesta de la atención: esa se responde cuando ya te hayan atendido.</p><a class="btn sec" href="/agendar/encuesta?${q({ t })}">Responder la encuesta</a></div>
 ${cuenta ? '' : '<div class="tarjeta no-imprimir" style="margin-top:12px"><h3>Tus datos quedaron guardados</h3><p>La reserva, los datos y los documentos quedaron registrados en la ficha del paciente, aunque no tengas cuenta. Si creas una cuenta (opcional), además puedes ver tus horas, tus datos, tus documentos y los de tus familiares vinculados.</p><a class="btn sec" href="/paciente/cuenta/crear">Crear mi cuenta</a></div>'}</div></div>
 <p class="no-imprimir" style="margin-top:24px"><a class="btn sec" href="/">Reservar otra hora</a></p>`,
   });
 };
 
+// RF36: encuesta del agendamiento. Separada de la encuesta de atención en texto, ruta y almacenamiento.
+const encuestaAgendamiento = ({ t, respondida, mensaje, usuario }) => pagina({
+  titulo: 'Encuesta de agendamiento', usuario, portal: true, activo: 'agendar', mensaje,
+  contenido: `<p class="lead">Dos preguntas voluntarias sobre <b>cómo fue reservar tu hora</b>. No es la encuesta de la atención: esa se responde cuando ya te hayan atendido.</p>
+${respondida
+    ? '<div class="tarjeta col"><p>Tu respuesta quedó registrada. Gracias por ayudarnos a mejorar el agendamiento.</p><a class="btn sec" href="/">Volver al inicio</a></div>'
+    : `<form method="post" action="/agendar/encuesta" class="tarjeta col"><input type="hidden" name="t" value="${esc(t)}">
+<label for="n">¿Qué tan fácil fue reservar tu hora? De 1 (muy difícil) a 5 (muy fácil)</label><select id="n" name="nota"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+<label for="c">¿Qué mejorarías? (opcional, máximo 300 letras)</label><textarea id="c" name="comentario" maxlength="300" rows="4"></textarea>
+<button class="btn blq" type="submit">Enviar respuesta</button></form>
+<p class="nota">Responder es opcional y no afecta tu hora ya reservada.</p>`}`,
+});
+
 const apagado = ({ usuario }) => pagina({ titulo: 'Reserva no disponible', usuario, portal: true, activo: 'agendar', contenido: `<div class="aviso err">La reserva por internet no está disponible por ahora. Escríbenos por WhatsApp al ${WHATSAPP}.</div>` });
 
-module.exports = { inicio, calendario, datos, revisar, confirmada, apagado, mascaraNombre, ESTILOS };
+module.exports = { inicio, calendario, datos, revisar, confirmada, encuestaAgendamiento, apagado, mascaraNombre, ESTILOS };
