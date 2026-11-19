@@ -23,7 +23,7 @@ class CorreoSimulado {
 //   Enviado   → el proveedor real aceptó el mensaje (no significa que el paciente lo haya recibido).
 //   Pendiente → falló y se reintenta (hasta 3 veces), o no hay proveedor para ese canal.
 //   Error     → sin consentimiento, sin datos del destinatario o 3 intentos fallidos.
-// Nunca escribe "Entregado": eso requiere el estado de entrega que informa el proveedor.
+// Este despachador nunca escribe "Entregado": solo lo hace el webhook de WhatsApp cuando Meta confirma la entrega.
 class DespachadorComunicaciones {
   constructor({ extras, catalogo, citaRepo, transportes, ahora = textoLocal }) {
     Object.assign(this, { extras, catalogo, citaRepo, transportes, ahora });

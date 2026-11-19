@@ -24,6 +24,7 @@ const { DocumentoService } = require("./services/DocumentoService");
 const { AuditoriaService } = require("./services/AuditoriaService");
 const { AuthService } = require("./services/AuthService");
 const { ReporteService } = require("./services/ReporteService");
+const { WebhookWhatsApp } = require("./services/WebhookWhatsApp");
 const {
   DespachadorComunicaciones,
   CorreoSimulado,
@@ -88,6 +89,7 @@ function crearContenedor({
       Correo: whatsapp === "meta" ? null : new CorreoSimulado(extras),
     },
   });
+  const webhook = new WebhookWhatsApp({ extras, catalogo, citaRepo, bot, auditoria });
   const cambios = new CambioAgendaService({ citaRepo, catalogo, extras });
   const encuestas = new EncuestaService({ citaRepo, extras });
   const documentos = new DocumentoService({ catalogo, extras });
@@ -135,6 +137,7 @@ function crearContenedor({
     espera,
     bot,
     despachador,
+    webhook,
     cambios,
     encuestas,
     documentos,

@@ -104,8 +104,53 @@ function crearServidor(c, modo = "todo") {
       }),
     );
   });
+  // Webhook de WhatsApp (Meta). Va aparte del resto: no usa sesión ni formulario, y la firma se comprueba sobre
+  // el cuerpo exactamente como llegó. Sin WHATSAPP_APP_SECRET y WHATSAPP_VERIFY_TOKEN no existe (404).
+  async function webhookWhatsApp(req, res, url) {
+    const w = c.webhook;
+    const responder = (estado, texto) => {
+      res.writeHead(estado, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      res.end(texto);
+    };
+    if (!w?.activo) return responder(404, "No encontrado.");
+    if (req.method === "GET") {
+      const r = w.verificarSuscripcion(url.searchParams);
+      return responder(r.estado, r.cuerpo);
+    }
+    if (req.method !== "POST") return responder(405, "Método no permitido.");
+    const trozos = [];
+    let total = 0;
+    for await (const t of req) {
+      total += t.length;
+      if (total > 1024 * 1024) return responder(413, "Aviso demasiado grande.");
+      trozos.push(t);
+    }
+    const cruda = Buffer.concat(trozos);
+    if (!w.firmaValida(cruda, req.headers["x-hub-signature-256"])) return responder(401, "Firma inválida.");
+    let cuerpo;
+    try {
+      cuerpo = JSON.parse(cruda.toString("utf8"));
+    } catch {
+      return responder(400, "JSON inválido.");
+    }
+    const anterior = c.colaMutacion;
+    let liberar;
+    c.colaMutacion = new Promise((r) => (liberar = r));
+    await anterior;
+    try {
+      await w.procesar(cuerpo);
+      c.guardar?.();
+      return responder(200, "EVENT_RECEIVED");
+    } catch (e) {
+      console.error("Webhook de WhatsApp:", e);
+      return responder(500, "Error al procesar el aviso."); // Meta lo reintentará
+    } finally {
+      liberar();
+    }
+  }
   async function atender(req, res, paciente, tokenPaciente) {
     const url = new URL(req.url, "http://localhost");
+    if (url.pathname === "/webhook/whatsapp") return webhookWhatsApp(req, res, url);
     const cabeceras = {
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",

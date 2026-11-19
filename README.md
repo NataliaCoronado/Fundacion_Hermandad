@@ -78,14 +78,24 @@ Cada minuto el sistema procesa la bandeja de **Comunicaciones** (comprobante de 
 
 Reglas: solo se envía con el **consentimiento** de comunicaciones del paciente; el silencio nunca cancela ni confirma una cita; si el proveedor falla se reintenta hasta 3 veces (esperas de 5 y 10 minutos) y luego queda en Error, con aviso a TENS/TONS para llamar.
 
-Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: no salió ningún mensaje real), **Enviado** (el proveedor real aceptó el mensaje), **Pendiente** (en reintento o sin proveedor para ese canal) y **Error**. No escribe *Entregado*: eso requiere el estado de entrega que informa el proveedor.
+Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: no salió ningún mensaje real), **Enviado** (el proveedor real aceptó el mensaje), **Pendiente** (en reintento o sin proveedor para ese canal) y **Error**. *Entregado* lo escribe solo el webhook, cuando Meta confirma que el mensaje llegó al teléfono (o que se leyó).
 
 | Modo (`WHATSAPP_MODO`) | Comportamiento |
 |---|---|
 | `simulado` (predeterminado) | Demostración. Los mensajes quedan en una bandeja interna rotulados como simulados. El correo solo existe en este modo. |
 | `meta` | API oficial de WhatsApp Cloud (Meta). Requiere `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` y `WHATSAPP_PLANTILLA` (plantilla aprobada por Meta, con una variable de cuerpo). |
 
-**Estado real:** el modo `meta` está implementado según la documentación oficial y probado solo contra un servidor simulado; falta probarlo con una cuenta real. Tampoco incluye el *webhook* para recibir las respuestas de los pacientes ni los estados de entrega. No hay proveedor de correo conectado. Crea `.env` a partir de `.env.example`; nunca subas el `.env`.
+### Webhook de WhatsApp
+
+`/webhook/whatsapp` recibe de Meta las respuestas de los pacientes y los estados de entrega. Se activa definiendo `WHATSAPP_APP_SECRET` (secreto de la app en Meta) y `WHATSAPP_VERIFY_TOKEN` (texto que eliges tú y escribes también en el panel de Meta); sin ambos, la ruta no existe.
+
+- Solo acepta avisos con firma válida (`X-Hub-Signature-256`) y procesa cada aviso una sola vez, aunque Meta lo repita.
+- Los botones del recordatorio confirman o cancelan la cita (con origen WhatsApp). Para eso, la plantilla aprobada en Meta debe tener botones de respuesta rápida con las etiquetas exactas **Confirmar** y **Cancelar mi hora**.
+- La respuesta se asocia a la cita por el mensaje que el paciente respondió. Si no viene esa referencia, se usa el teléfono solo cuando hay **una única** hora consultada; con dos o más no se adivina y queda un aviso para TENS/TONS.
+- Si un recordatorio no se pudo entregar, el personal recibe un aviso para llamar. La cita nunca se cancela por eso.
+- El webhook debe ser accesible por HTTPS desde internet; en local se necesita un túnel o el despliegue en la nube.
+
+**Estado real:** el envío (modo `meta`) y el webhook están implementados según la documentación oficial de Meta y probados con avisos firmados en el formato de Meta, no contra una cuenta real. No hay proveedor de correo conectado. Crea `.env` a partir de `.env.example`; nunca subas el `.env`.
 
 ## Almacenamiento
 

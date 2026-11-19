@@ -62,8 +62,9 @@ class BotWhatsAppService {
         await this.avisarSinWhatsapp(cita, d, 'SIN_CONSENTIMIENTO');
         continue;
       }
+      let enviado;
       try {
-        await this.transporte.enviar({ telefono: d.pac.telefono, idCita: cita.id, texto: this.texto(m.tipo, d), botones: BOTONES, iniciado: true });
+        enviado = await this.transporte.enviar({ telefono: d.pac.telefono, idCita: cita.id, texto: this.texto(m.tipo, d), botones: BOTONES, iniciado: true });
       } catch (e) {
         // Un fallo del proveedor no detiene el ciclo: se reintenta más tarde y, al agotar los intentos, se avisa para llamar.
         const intentos = (m.intentos || 0) + 1;
@@ -76,7 +77,9 @@ class BotWhatsAppService {
         errores++;
         continue;
       }
-      await this.extras.actualizar('mensajes', m.id, { estado: 'ENVIADO', enviadoEn: ahora });
+      // Con el proveedor real se guarda el identificador de Meta: así el webhook asocia el estado de entrega y la
+      // respuesta del paciente a este recordatorio y a su cita.
+      await this.extras.actualizar('mensajes', m.id, { estado: 'ENVIADO', enviadoEn: ahora, proveedorId: this.transporte.simulado === false ? enviado?.id ?? null : null });
       enviados++;
       // Último intento del bot: la cita queda para llamada, pero sigue reservada.
       if (m.tipo === 'REINTENTO' && cita.estadoConfirmacion === 'PENDIENTE') await this.citaRepo.actualizar({ ...cita, estadoConfirmacion: 'SIN_RESPUESTA' });
