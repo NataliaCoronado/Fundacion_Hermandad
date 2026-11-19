@@ -9,3 +9,5 @@ datos/
 work/
 *.log
 
+# Respaldos: contienen datos personales. Nunca al repositorio.
+respaldos/

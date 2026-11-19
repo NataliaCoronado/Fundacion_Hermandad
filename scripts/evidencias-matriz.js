@@ -5,6 +5,8 @@
 // Uso: node scripts/evidencias-matriz.js <carpeta-de-salida>
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
+const os = require("node:os");
 const { crearContenedor } = require("../src/contenedor");
 const { crearServidor } = require("../src/server");
 const { textoLocal, hoy, sumarDias } = require("../src/util/tiempo");
@@ -12,8 +14,8 @@ const { textoLocal, hoy, sumarDias } = require("../src/util/tiempo");
 const SALIDA = path.resolve(process.argv[2] || "Evidencias_Pruebas");
 const A = "11111111-1", B = "22222222-2", C = "33333333-3";
 
-async function sitio() {
-  const c = crearContenedor();
+async function sitio(opciones = {}) {
+  const c = crearContenedor(opciones);
   await c.inicializar();
   const srv = crearServidor(c);
   await new Promise((r) => srv.listen(0, "127.0.0.1", r));
@@ -607,6 +609,92 @@ const CASOS = {
       k.chk((await s.c.citaRepo.buscarPorId(cita.id)).estadoReserva === "ACTIVA", "Responder (o no responder) la encuesta no altera la hora reservada: es voluntaria.");
       return k.ok ? "Al confirmar la reserva web se ofrece una encuesta voluntaria sobre el agendamiento, distinta en texto, ruta y almacenamiento de la encuesta posterior a la atención; se responde una sola vez y no afecta la reserva." : null;
     } finally { await s.cerrar(); }
+  } },
+
+  "CP-42": { req: "RNF06", titulo: "Trazabilidad de operaciones y restauración de datos y archivos desde un respaldo", async run(k) {
+    // Sistema completo por HTTP con los datos guardados en disco, como en uso normal (no en memoria).
+    const R = require("../src/util/respaldo");
+    const { Persistencia } = require("../src/repositories/Persistencia");
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "cp42-"));
+    const datos = path.join(raiz, "datos"), respaldos = path.join(raiz, "respaldos"), archivo = path.join(datos, "estado.json");
+    const docsPrevio = process.env.DIR_DOCUMENTOS;
+    process.env.DIR_DOCUMENTOS = path.join(datos, "documentos");
+    let s;
+    try {
+      s = await sitio({ persistencia: new Persistencia(archivo) });
+      const cuenta = await cuentaDe(s, A, "1980-01-01", "1111");
+      const b1 = await bloqueLibre(s.c, { idPoliclinico: 1 });
+      const b2 = (await s.c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).filter((b) => b.id !== b1.id)[0];
+      const pdf = new Blob([Buffer.from("%PDF-1.4 cartola de prueba CP-42")], { type: "application/pdf" });
+      let nueva, doc;
+      k.paso("Se ejecutan 10 operaciones con TENS/TONS, Administración y el paciente; cada una debe quedar en la auditoría.");
+      const operaciones = [
+        ["TENS/TONS agenda una cita por teléfono", () => s.req("/tens/agendar", s.t, { rut: C, idBloque: String(b1.id) })],
+        ["TENS/TONS registra un llamado sin respuesta", () => s.req("/tens/confirmaciones", s.t, { idCita: "1", resultado: "No contestó", canal: "Llamada" })],
+        ["TENS/TONS registra la llegada", () => s.req("/tens/flujo", s.t, { idCita: "1", estado: "Llegó" })],
+        ["TENS/TONS pasa al paciente a sala", () => s.req("/tens/flujo", s.t, { idCita: "1", estado: "En sala" })],
+        ["TENS/TONS termina la atención", () => s.req("/tens/flujo", s.t, { idCita: "1", estado: "Atendida" })],
+        ["TENS/TONS cancela la cita agendada a pedido del paciente", async () => { nueva = (await s.c.citaRepo.buscarPorRut(C)).find((x) => x.idBloque === b1.id); return s.req("/tens/cancelar", s.t, { idCita: String(nueva.id), motivo: "Paciente viaja", canal: "Llamada", destino: "Disponible" }); }],
+        ["Administración bloquea un cupo", () => s.req("/admin/cupo/estado", s.a, { idBloque: String(b2.id), estado: "Bloqueado" })],
+        ["El paciente sube su Cartola FONASA", () => cuenta.multi("/paciente/mis-documentos", { rut: A, tipo: "Cartola FONASA", archivo: [pdf, "cartola-cp42.pdf"] })],
+        ["TENS/TONS revisa el documento", async () => { doc = s.c.documentos.listar().find((d) => d.rut === A && d.adjunto?.original === "cartola-cp42.pdf"); return s.req("/tens/documentos/verificar", s.t, { id: String(doc.id) }); }],
+        ["Administración cancela una reserva por motivo institucional", () => s.req("/admin/cancelaciones", s.a, { idCitas: "2", motivo: "Corte de luz", destino: "Bloqueado" })],
+      ];
+      let registradas = 0;
+      for (const [nombre, hacer] of operaciones) {
+        const antes = s.c.extras.listar("auditoria").length;
+        const r = await hacer();
+        const nuevas = s.c.extras.listar("auditoria").slice(antes);
+        const completa = nuevas.some((x) => x.fecha && x.usuario && x.accion);
+        if (completa) registradas++;
+        k.dato(nombre, `${typeof r === "string" ? "respuesta recibida" : `HTTP ${r.status}`} → auditoría: ${nuevas.length ? nuevas.map((x) => `${x.fecha} · ${x.usuario} · ${x.accion}`).join(" | ") : "SIN REGISTRO"}`);
+      }
+      k.chk(registradas === operaciones.length, `${registradas} de ${operaciones.length} operaciones quedaron en la auditoría con fecha, responsable y operación.`);
+      const rutaDoc = path.join(process.env.DIR_DOCUMENTOS, doc.adjunto.guardado);
+      const huellaDoc = crypto.createHash("sha256").update(fs.readFileSync(rutaDoc)).digest("hex");
+      const foto = async (c) => ({
+        citas: (await c.citaRepo.listar()).map((x) => `${x.id}:${x.estadoReserva}:${x.estadoConfirmacion}:${x.asistencia}`).join(" "),
+        auditoria: c.extras.listar("auditoria").length,
+        documentos: c.documentos.listar().length,
+      });
+      const alRespaldar = await foto(s.c);
+
+      k.paso("Se crea el respaldo de la base de datos (estado) y de los archivos.");
+      const { carpeta, manifiesto } = R.crearRespaldo({ datos, destino: respaldos, baseDatos: "" });
+      fs.writeFileSync(path.join(SALIDA, "EV-CP-42_manifiesto.json"), JSON.stringify(manifiesto, null, 2));
+      k.dato("Respaldo", `${manifiesto.archivos.length} archivos con huella SHA-256 (manifiesto en EV-CP-42_manifiesto.json)`);
+      k.chk(R.verificarRespaldo(carpeta).ok, "El respaldo está íntegro: cada archivo coincide con su huella.");
+
+      k.paso("Incidente simulado después del respaldo: se agenda una cita nueva y se pierde el archivo del documento.");
+      const b3 = await bloqueLibre(s.c, { idPoliclinico: 1 });
+      await s.req("/tens/agendar", s.t, { rut: C, idBloque: String(b3.id) });
+      fs.rmSync(rutaDoc);
+      k.chk(!fs.existsSync(rutaDoc), "El archivo del documento ya no está en disco.");
+      await s.cerrar(); s = null;   // la aplicación se detiene antes de restaurar
+
+      k.paso("Se restaura el respaldo con la aplicación detenida y se vuelve a iniciar desde disco.");
+      const r = R.restaurar({ respaldo: carpeta, datos, destinoSeguridad: respaldos, baseDatos: "" });
+      k.chk(!!r.seguridad && fs.existsSync(r.seguridad), "Antes de restaurar se respaldó automáticamente el estado del incidente (se puede deshacer).");
+      const restaurada = await sitio({ persistencia: new Persistencia(archivo) });
+      s = restaurada;
+      const despues = await foto(s.c);
+      k.dato("Al respaldar", alRespaldar);
+      k.dato("Tras restaurar", despues);
+      k.chk(despues.citas === alRespaldar.citas, "Las citas quedan exactamente como al respaldar (incluidas las 10 operaciones).");
+      k.chk(!(await s.c.citaRepo.buscarPorRut(C)).some((x) => x.idBloque === b3.id && x.estadoReserva === "ACTIVA"), "La cita agendada después del respaldo no aparece: la restauración no mezcla.");
+      const aud = s.c.extras.listar("auditoria");
+      k.chk(aud.slice(0, alRespaldar.auditoria).every((x) => x.fecha && x.usuario && x.accion), "La auditoría de las 10 operaciones se conserva tras restaurar.");
+      const posteriores = aud.slice(alRespaldar.auditoria).map((x) => x.accion);
+      k.dato("Entradas de auditoría posteriores a la restauración", posteriores);
+      k.chk(posteriores.every((x) => x === "Inicio de sesión"), "Las únicas entradas nuevas son los inicios de sesión al volver a abrir el sistema: no reaparece nada del incidente.");
+      const restaurado = fs.existsSync(rutaDoc) && crypto.createHash("sha256").update(fs.readFileSync(rutaDoc)).digest("hex") === huellaDoc;
+      k.chk(restaurado, "El archivo del documento vuelve idéntico al original (misma huella SHA-256).");
+      return k.ok ? `Las 10 operaciones quedaron en la auditoría con fecha, responsable y operación. Tras un incidente simulado, la restauración devolvió la base de datos (estado JSON) y los archivos al momento del respaldo, sin mezclar lo posterior y dejando una copia de seguridad previa. Probado en el modo sin PostgreSQL; el volcado con pg_dump no se ejecutó en este entorno.` : null;
+    } finally {
+      if (s) await s.cerrar();
+      if (docsPrevio === undefined) delete process.env.DIR_DOCUMENTOS; else process.env.DIR_DOCUMENTOS = docsPrevio;
+      fs.rmSync(raiz, { recursive: true, force: true });
+    }
   } },
 
   "CP-39": { req: "RNF03", titulo: "Seguridad: roles, consulta protegida y consentimiento", async run(k) {

@@ -95,6 +95,22 @@ Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: 
 
 Esta arquitectura requiere **una instancia de la aplicación** y conservar esos directorios junto con la base de datos. Los metadatos adicionales no están migrados a tablas normalizadas. Las sesiones son temporales: reiniciar solicita un nuevo inicio de sesión. La sesión caduca tras 30 minutos de inactividad y como máximo a las 8 horas.
 
+### Respaldo y restauración
+
+```bash
+npm run respaldo                          # crea un respaldo en respaldos/
+npm run respaldo -- listar                # muestra los respaldos disponibles
+npm run respaldo -- verificar respaldos/<carpeta>
+npm run restaurar -- respaldos/<carpeta>  # restaura (detén antes la aplicación)
+```
+
+El respaldo copia toda la carpeta `datos/` (estado, metadatos, documentos y fotos privadas) y, si `DATABASE_URL` está definida, un volcado de PostgreSQL hecho con `pg_dump`. Cada respaldo trae un `manifiesto.json` con el tamaño y la huella SHA-256 de cada archivo, y `verificar` comprueba que nada se haya dañado.
+
+Al restaurar, el sistema primero comprueba el respaldo, luego respalda automáticamente lo que hay ahora (carpeta `..._antes-de-restaurar`, para poder deshacer) y recién entonces reemplaza `datos/` completa: lo posterior al respaldo no se mezcla. Se niega a restaurar si la aplicación está en marcha, porque la volvería a sobrescribir con lo que tiene en memoria.
+
+- Los respaldos contienen **datos personales**: `respaldos/` está fuera del repositorio y de la imagen Docker. Guarda una copia fuera del computador; si el equipo se pierde, el respaldo se pierde con él.
+- **Probado** en el modo sin base de datos (caso CP-42). El volcado de PostgreSQL necesita `pg_dump` y `pg_restore` instalados y no se ha ejecutado contra un servidor real. La imagen Docker aún no incluye el script.
+
 ### Docker / PostgreSQL
 
 ```bash
