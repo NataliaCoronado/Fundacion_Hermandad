@@ -183,4 +183,121 @@ body.portal header.sup{display:none}
   body.portal .menu-btn{display:inline-grid;margin-left:auto}
   body.portal.menu-abierto{overflow:hidden}
 }
+
+/* ===== Ajuste visual del portal: más compacto, azul institucional y turquesa solo en acciones ===== */
+/* 1. Barra lateral: algo más angosta y con mejor ritmo de espacios */
+body.portal .side{width:232px}
+body.portal .side-marca{padding:18px 14px 16px;gap:10px}
+body.portal .side-marca b{font-size:.84rem;white-space:nowrap}
+body.portal .side .pie-s a span{font-size:.8rem;white-space:nowrap}
+body.portal .side nav{padding:6px 10px 14px}
+body.portal .side h3{margin:16px 8px 8px;font-size:.64rem;color:#8fb0b9}
+body.portal .side nav a{padding:10px 12px;gap:11px;margin-bottom:4px;border-radius:8px}
+body.portal .side a.act{background:rgba(255,255,255,.12);box-shadow:inset 3px 0 0 #fff;color:#fff;font-weight:600}
+body.portal .side a:hover:not(.act){background:rgba(255,255,255,.06)}
+body.portal .side .pie-s{padding:12px 10px 16px}
+body.portal .side .pie-s a{padding:7px 12px;gap:10px}
+
+/* 2. Encabezado: menos alto */
+body.portal .portada{padding:22px 0 20px;margin:0 0 24px}
+body.portal .portada h1{font-size:clamp(1.55rem,1.2rem + 1vw,2.05rem);margin:0 auto 4px}
+body.portal .portada .lead{font-size:.98rem;line-height:1.45}
+body.portal .portada-txt .volver{margin-bottom:12px;min-height:36px;padding:5px 12px 5px 8px}
+body.portal .portada-acc{margin-top:16px}
+
+/* 6. Marca de agua más discreta */
+body.portal .portada-sello{width:300px;height:300px;right:-90px;opacity:.05}
+
+/* 3. Indicador de pasos compacto: número y etiqueta en una sola línea */
+body.portal .portada .barra{display:flex;align-items:center;max-width:640px;margin:16px auto 0;gap:0}
+body.portal .portada .barra li{flex:1 1 0;flex-direction:row;align-items:center;gap:8px;font-size:.92rem;white-space:nowrap}
+body.portal .portada .barra li:last-child{flex:0 0 auto}
+body.portal .portada .barra li::before{display:none}
+body.portal .portada .barra li:not(:last-child)::after{content:'';flex:1;min-width:16px;height:1.5px;margin:0 12px;background:rgba(195,218,224,.35);border-radius:2px}
+body.portal .portada .barra li.hecho:not(:last-child)::after{background:var(--sobre-tinta)}
+body.portal .portada .barra .cuenta{width:24px;height:24px;flex:none;font-size:.78rem;border-width:1.5px}
+body.portal .portada .barra .hecho .cuenta{background:var(--sobre-tinta);border-color:var(--sobre-tinta);color:var(--tinta)}
+body.portal .portada .barra .actual .cuenta{box-shadow:0 0 0 3px rgba(255,255,255,.16)}
+
+/* 4. Formulario de búsqueda: más arriba y más ancho, en dos columnas */
+body.portal main>form#buscar{max-width:960px;padding:24px 28px}
+#buscar .buscar-g{display:grid;grid-template-columns:1fr 1fr;gap:4px 28px;align-items:start}
+#buscar .buscar-c>label:first-child,#buscar .buscar-c>div>label:first-child,#buscar .buscar-c>[hidden]+div>label:first-child{margin-top:0}
+#buscar .buscar-c .nota{margin-top:6px}
+#buscar .buscar-modo{border:0;padding:0;margin:14px 0 0;display:flex;flex-wrap:wrap;gap:6px 24px;align-items:center}
+#buscar .buscar-modo legend{font-weight:600;padding:0;margin-bottom:8px;float:left;width:100%}
+#buscar .buscar-modo .check{margin:0}
+#buscar .buscar-c:last-child{margin-top:14px}
+#buscar .buscar-ok{margin-top:18px;padding-top:16px;border-top:1px solid var(--borde);display:grid;gap:8px}
+#buscar .buscar-ok .check{margin:0}
+#buscar>button{margin-top:18px}
+body.portal main>form#buscar+.ayuda-l{margin-top:14px}
+
+/* 5. Turquesa reservado para acciones; los controles de selección usan el azul institucional */
+body.portal input[type=checkbox],body.portal input[type=radio]{accent-color:var(--tinta)}
+
+@media(max-width:760px){
+  #buscar .buscar-g{grid-template-columns:1fr}
+  #buscar .buscar-c+.buscar-c{margin-top:14px}
+  body.portal main>form#buscar{padding:20px}
+}
+@media(max-width:560px){
+  body.portal .portada .barra li{gap:6px}
+  body.portal .portada .barra li:not(:last-child)::after{margin:0 6px}
+}
+
+/* ===== Flujo de reserva: formulario a la izquierda, resumen «Tu reserva» a la derecha ===== */
+.flujo{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start}
+.flujo-main{container-type:inline-size;min-width:0}
+body.portal .flujo-main>:is(.tarjeta,.mes,.aviso,.ayuda-l,.col){max-width:none;margin-left:0;margin-right:0}
+body.portal .flujo-main>form.tarjeta{padding:24px 28px}
+body.portal .flujo-main>.ayuda-l{text-align:left}
+.flujo-resumen{position:sticky;top:20px;padding:18px 20px;border:1px solid var(--borde);border-radius:8px;background:var(--sup);box-shadow:var(--sombra-c)}
+.flujo-resumen h2{margin:0 0 12px;font-size:1.05rem;text-align:left}
+.flujo-resumen dl{margin:0;display:grid;gap:12px}
+.flujo-resumen dt{font-size:.8125rem;color:var(--muted);margin:0}
+.flujo-resumen dd{margin:2px 0 0;color:var(--navy);font-weight:600;overflow-wrap:anywhere}
+.flujo-resumen .pend{color:var(--suave);font-weight:400}
+.flujo-resumen .cambiar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.flujo-resumen .ayuda{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--borde);font-size:.875rem;color:var(--muted)}
+body.portal .flujo .tarjeta details.docs{box-shadow:none;background:#f7fafb;border-radius:6px;margin:16px 0}
+body.portal .flujo .tarjeta .ficha-res{background:#f7fafb}
+
+/* Día y hora en el mismo paso */
+.fecha-hora{display:grid;gap:22px;align-items:start}
+body.portal .fecha-hora .mes{max-width:none;margin:0}
+body.portal .dia-panel .dia-t{text-align:left;margin:0 0 12px;font-size:1.2rem}
+body.portal .dia-panel .profs{justify-content:flex-start;gap:14px}
+body.portal .dia-panel .profs>.prof{flex:1 1 100%;min-width:0}
+@container (min-width:700px){.fecha-hora{grid-template-columns:minmax(300px,360px) minmax(0,1fr)}}
+
+/* Calendario con filas de altura fija: la cantidad de horas ya no agranda el día */
+body.portal .mes-g{grid-template-rows:auto;grid-auto-rows:56px}
+body.portal .mes .mes-g a,body.portal .mes .mes-g span{min-height:0;height:100%}
+body.portal .mes .mes-g small{align-self:end}
+body.portal .mes .mes-g a i{font-size:.75rem;line-height:1}
+
+/* Cabecera en una sola línea en pantallas amplias */
+@media (min-width:1025px){
+  body.portal .portada:has(.barra){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:40px;max-width:1080px;margin-inline:auto;padding:18px 0}
+  body.portal .portada:has(.barra) .portada-txt{text-align:left}
+  body.portal .portada:has(.barra) h1,body.portal .portada:has(.barra) .lead{margin-left:0;margin-right:0}
+  body.portal .portada:has(.barra) .portada-txt .volver{margin:0 0 10px;width:max-content}
+  body.portal .portada:has(.barra) .barra{margin:0;max-width:520px;min-width:440px}
+}
+@media (max-width:1024px){
+  .flujo{grid-template-columns:minmax(0,1fr)}
+  .flujo-resumen{position:static}
+  .flujo-resumen:not([data-paso="1"]){order:-1}
+  .flujo-resumen dl{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+}
+@media (max-width:640px){
+  .flujo{gap:16px}
+  .flujo-resumen{padding:12px 14px}
+  .flujo-resumen h2,.flujo-resumen .ayuda{display:none}
+  .flujo-resumen[data-paso="1"] .ayuda{display:none}
+  .flujo-resumen dl{grid-template-columns:1fr;gap:6px}
+  .flujo-resumen dd{font-size:.9375rem}
+  .flujo-resumen .cambiar{margin-top:10px}
+}
 `;

@@ -92,6 +92,8 @@ class AgendamientoService {
       fecha: textoLocal(),
       idPoliclinico: b.idPoliclinico || prof.idPoliclinico,
       leida: false,
+      idBloque: b.id,
+      especialidad: b.especialidad || prof.especialidad,
       texto: `Cupo liberado: ${b.fecha} ${b.hora}, ${prof.especialidad}, ${sede ? sede.nombre : ""}. Revisa la lista de espera.`,
     });
   }

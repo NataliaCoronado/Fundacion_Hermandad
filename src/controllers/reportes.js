@@ -4,6 +4,7 @@ const V = require("../views/operacion"),
 const { hoy, sumarDias, lunesDe } = require("../util/tiempo");
 const { fechaValida } = require("../services/OperacionService");
 const Exportar = require("../services/ExportacionService");
+const G = require("../views/graficos");
 function crearReportesController(c) {
   const ESTADO = (x) =>
     x.estadoReserva !== "ACTIVA" ? "CAN" : x.asistencia === "ASISTIO" ? "ATE" : x.asistencia === "NO_ASISTIO" ? "NOA" : x.estadoConfirmacion === "CONFIRMADA" ? "CON" : "PEN";
@@ -192,8 +193,8 @@ function crearReportesController(c) {
       edad: { titulo: "Pacientes atendidos por tramo de edad", desc: "Cada barra es un tramo de edad. Mientras más larga, más pacientes distintos de esa edad se atendieron." },
       nacionalidad: { titulo: "Pacientes atendidos por nacionalidad", desc: "Cada barra es una nacionalidad. Mientras más larga, más pacientes distintos atendidos." },
       adultos: { titulo: "Adultos y niños", desc: "Compara adultos con niños y adolescentes. «Edad sin registrar» son fichas de pacientes a las que les falta la fecha de nacimiento." },
-      demanda: { titulo: "Profesionales con más reservas", desc: "Cada barra es un profesional y su largo, las reservas que tuvo en el período. Se muestran los 8 con más reservas; el resto está en «Ver datos y descargar».", top: 8, ordenar: true },
-      ocupacion: { titulo: "Ocupación de los profesionales (%)", desc: "De los cupos publicados, qué porcentaje se reservó. 100 % es agenda llena; un valor bajo significa horas sin usar. Se muestran los 8 con más ocupación.", top: 8, ordenar: true, sufijo: " %", max: 100 },
+      demanda: { titulo: "Profesionales con más reservas", desc: "Cada barra es un profesional y su largo, las reservas que tuvo en el período. Se muestran todos los profesionales, de mayor a menor número de reservas.", ordenar: true },
+      ocupacion: { titulo: "Ocupación de los profesionales (%)", desc: "De los cupos publicados, qué porcentaje se reservó. 100 % es agenda llena; un valor bajo significa horas sin usar. Se muestran todos los profesionales, de mayor a menor ocupación.", ordenar: true, sufijo: " %", max: 100 },
       espera: { titulo: "Pacientes en lista de espera", desc: "Cantidad de pacientes esperando una hora hoy, por especialidad. No depende del período elegido arriba.", ordenar: true },
       especialidad: { titulo: "Reservas por especialidad", desc: "Cada barra es una especialidad y su largo, las reservas del período. Muestra dónde está la mayor demanda.", top: 8, ordenar: true },
       atencion: { titulo: "Qué pasó con las reservas", desc: "Reparte las reservas del período: atendidas, ausencias (el paciente no llegó), sin registro todavía y canceladas.", colores: ["#2e7a4f", "#c0843a", "#9fb3bb", "#c9d5d9"] },
@@ -217,6 +218,19 @@ function crearReportesController(c) {
   const fSemana = (t) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(t));
     return m ? `${Number(m[3])} ${["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(m[2]) - 1]}` : String(t);
+  };
+  // En pantalla se dibuja con ECharts; svg() queda solo para las descargas (PNG/PDF).
+  const PALETA = ["#0b3b4c", "#16808b", "#b8742a", "#9aabb3", "#c9d5d9"];
+  const echart = (g) => {
+    const filas = filasGrafico(g);
+    const t = { titulo: g.titulo, tabla: false };
+    if (g.siluetas || ["adultos", "atencion"].includes(g.id)) {
+      const colores = g.id === "atencion" ? ["#16808b", "#b8742a", "#9aabb3", "#c9d5d9"] : PALETA;
+      return G.segmentada(filas.map((x, i) => ({ nombre: x.nombre, n: x.n, color: colores[i % colores.length] })), g.titulo, { tabla: false, unidad: g.id === "atencion" ? "reservas" : "pacientes" });
+    }
+    if (g.tipo === "columnas")
+      return G.lineas({ ...t, etiquetas: filas.map((x) => x.nombre), series: [{ nombre: "Citas activas", color: "#16808b", valores: filas.map((x) => x.n) }], etiquetaX: (e) => `Semana del ${fSemana(e)}`, ejeFecha: fSemana, alto: 280 });
+    return G.barras(filas, { ...t, sufijo: g.sufijo || "", max: g.max, color: g.id === "perdida" ? G.COLOR.ambar : G.COLOR.teal, vacio: "Sin datos para el período." });
   };
   const svg = (g) => {
     const rows = filasGrafico(g),
@@ -286,10 +300,10 @@ function crearReportesController(c) {
           formato,
         });
       const chart = (x) =>
-        `<section class="work-panel graf-r" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div><p class="como-leer"><b>Cómo leerlo:</b> ${esc(x.desc || "")}</p>${svg(x)}<div class="chart-detail" aria-live="polite">Toca una barra para ver su valor.</div><details class="datos-r"><summary>Ver datos y descargar</summary>${tabla(
+        `<section class="work-panel graf-r" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div><p class="como-leer"><b>Cómo leerlo:</b> ${esc(x.desc || "")}</p>${echart(x)}<div class="chart-actions" role="group" aria-label="Descargar este gráfico">${V.btn("PDF", enlace(x.id, "pdf"), true)}${V.btn("Excel", enlace(x.id, "xlsx"), true)}${V.btn("PNG", enlace(x.id, "png"), true)}</div><details class="datos-r"><summary>Ver datos</summary>${tabla(
           ["Categoría", "Valor"],
           x.filas.map((r) => [r.nombre, `${r.n}${x.sufijo || ""}`]),
-        )}<div class="chart-actions">${V.btn("PDF", enlace(x.id, "pdf"), true)}${V.btn("Excel", enlace(x.id, "xlsx"), true)}${V.btn("PNG", enlace(x.id, "png"), true)}</div></details></section>`;
+        )}</details></section>`;
       const formulario = `<form class="filters"><input type="hidden" name="seccion" value="${seccion}">${V.select("sede", "Lugar", [{ id: "", nombre: "Toda la red" }, ...ctx.listaSedes], f.idPoliclinico || "")}${V.select("esp", "Especialidad", [{ id: "", nombre: "Todas" }, ...V.opcionesTexto(await c.catalogo.especialidades())], f.especialidad || "")}${V.select("prof", "Profesional", [{ id: "", nombre: "Todos" }, ...ctx.listaProfs], f.idProfesional || "")}${V.select(
               "periodo",
               "Período",
@@ -317,12 +331,12 @@ function crearReportesController(c) {
       return {
         html: V.page(
           u,
-          "Reportes",
+          "Reportes institucionales",
           `<style>.tabs-r{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--borde);margin:0 0 6px}.tabs-r a{padding:11px 16px;font-weight:600;font-size:.9rem;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px}.tabs-r a:hover{color:var(--navy)}.tabs-r a.act{color:var(--teal-t);border-bottom-color:var(--teal)}.tab-desc{color:var(--muted);margin:10px 0 18px;font-size:.92rem}.como-leer{background:#f4f9fa;border-left:3px solid var(--teal);border-radius:4px;padding:9px 12px;margin:0 0 14px;font-size:.84rem;color:#35525e;line-height:1.5}.graf-r svg{width:100%;height:auto;display:block}.graf-r .chart-heading h3{font-size:1.02rem;margin:0 0 10px}.datos-r{margin-top:10px;border-top:1px solid var(--borde);padding-top:8px}.datos-r summary{font-size:.84rem;color:var(--muted);cursor:pointer}.datos-r .chart-actions{justify-content:flex-start;margin-top:12px}.chart-grid{align-items:start}</style>` +
           V.cab(
-            "Reportes institucionales",
             "Indicadores agregados de la red y de sus lugares de atención.",
             V.btn("Reporte completo PDF", enlace("todos", "pdf"), true) +
+              V.btn("Todos los gráficos PNG (ZIP)", enlace("todos", "png"), true) +
               V.btn("Reporte completo Excel", enlace("todos", "xlsx")),
           ) +
             `${formulario}` +
@@ -346,7 +360,6 @@ function crearReportesController(c) {
           ),
         };
       const formato = q.get("formato");
-      if(formato==="png"&&g.length!==1) return {estado:400,html:"Selecciona un gráfico individual para PNG."};
       if (!["pdf", "xlsx", "png"].includes(formato))
         return { estado: 400, html: "Formato inválido" };
       c.operacion.aud(
@@ -357,16 +370,23 @@ function crearReportesController(c) {
         null,
         { periodo: d.filtro, formato },
       );
+      const zipPng = formato === "png" && g.length > 1;
       return {
         binario:
           formato === "pdf"
             ? Exportar.pdf(g, d.contexto)
-            : formato === "png" ? Exportar.png(svg(g[0]),g[0].titulo,d.contexto) : Exportar.excel(g, d.contexto),
+            : formato === "png"
+              ? zipPng
+                ? Exportar.zip(Object.fromEntries(g.map((x) => [`${x.id}.png`, Exportar.png(svg(x), x.titulo, d.contexto)])))
+                : Exportar.png(svg(g[0]), g[0].titulo, d.contexto)
+              : Exportar.excel(g, d.contexto),
         mime:
           formato === "pdf"
             ? "application/pdf"
-            : formato === "png" ? "image/png" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        nombreArchivo: `reporte-${q.get("grafico")}.${formato}`,
+            : formato === "png"
+              ? zipPng ? "application/zip" : "image/png"
+              : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        nombreArchivo: `reporte-${q.get("grafico")}.${zipPng ? "zip" : formato}`,
       };
     },
   };

@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { calendario } = require("../src/views/operacion");
 
-test("Agenda semanal separa citas simultáneas y que cruzan de hora", () => {
+test("Agenda semanal (TENS/TONS) separa citas simultáneas y que cruzan de hora", () => {
   const sede = { id: 1, nombre: "Sede de prueba" };
   const listaProfs = Array.from({ length: 4 }, (_, i) => ({
     id: i + 1,
@@ -33,16 +33,16 @@ test("Agenda semanal separa citas simultáneas y que cruzan de hora", () => {
     meta: { sedes: {}, especialidades: {} },
   };
   const html = calendario({
-    u: { rol: "ADMINISTRACION", nombre: "Administración" },
-    q: new URLSearchParams({ sede: "1", fecha: "2026-11-23", vista: "semana" }),
-    admin: true,
+    u: { rol: "TENS_TONS", nombre: "TENS", idPoliclinico: 1 },
+    q: new URLSearchParams({ fecha: "2026-11-23", vista: "semana" }),
+    admin: false,
     citas: [],
     op,
     ctx,
   });
 
   const tarjetas = new Map(
-    [...html.matchAll(/<a class="schedule-block" style="([^"]+)" href="\/admin\/cupo\?idBloque=(\d+)"/g)]
+    [...html.matchAll(/<a class="schedule-block" style="([^"]+)" href="\/tens\/reserva\?idBloque=(\d+)[^"]*"/g)]
       .map(([, style, id]) => [Number(id), style]),
   );
   assert.deepEqual([...tarjetas.keys()], [101, 102, 105, 103, 104]);

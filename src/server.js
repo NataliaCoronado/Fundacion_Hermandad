@@ -8,12 +8,19 @@ const { crearContenedor } = require("./contenedor");
 const { crearRutas } = require("./rutas");
 const { leerCookie, DURACION_MS } = require("./auth/Sesiones");
 const { permitido, rutaInicio } = require("./auth/permisos");
+const { correr } = require("./util/contextoSolicitud");
+const { esValidacion } = require("./util/rechazos");
 const { pagina } = require("./views/layout");
 const { prohibido } = require("./views/auth");
 const { conPeticion } = require("./views/contextoPortal");
 
-const TIPOS = { ".jpg": "image/jpeg", ".png": "image/png" };
+const TIPOS = { ".jpg": "image/jpeg", ".png": "image/png", ".js": "text/javascript; charset=utf-8" };
 function archivoEstatico(pathname) {
+  // ECharts se sirve desde el propio servidor (sin CDN, sin cookies ni datos hacia terceros).
+  if (pathname === "/vendor/echarts.min.js") {
+    const ruta = path.join(__dirname, "..", "node_modules", "echarts", "dist", "echarts.min.js");
+    return fs.existsSync(ruta) ? { ruta, tipo: TIPOS[".js"] } : null;
+  }
   const m = /^\/img\/([a-z0-9_-]+\.(?:jpg|png))$/.exec(pathname);
   if (!m) return null;
   const ruta = m[1].startsWith("profesional-") ? path.join(__dirname,"../datos/fotos",m[1]) : path.join(__dirname, "..", "public", "img", m[1]);
@@ -157,6 +164,24 @@ function crearServidor(c, modo = "todo") {
     };
     const token = leerCookie(req.headers.cookie, "sid");
     const usuario = token ? c.sesiones.obtener(token) : null;
+    // Contexto de la solicitud: sirve para registrar quién hizo cada cambio y los intentos rechazados.
+    const solicitud = { usuario, ruta: url.pathname, metodo: req.method, registrado: false };
+    const rechazar = (accion, detalle) => {
+      if (solicitud.registrado) return;
+      solicitud.registrado = true;
+      c.auditoria.rechazo(usuario, accion, detalle, { registro: url.pathname, idPoliclinico: usuario?.idPoliclinico || null });
+      c.guardar?.();
+    };
+    solicitud.registrarRechazo = (e) => {
+      if (esValidacion(e.message)) return;
+      const nombre = {
+        CREDENCIALES_INVALIDAS: "Inicio de sesión rechazado",
+        DEMASIADOS_INTENTOS: "Límite de intentos superado",
+        FUERA_DE_SEDE: "Acceso rechazado",
+      }[e.message];
+      // Sin correo ni contraseña en el detalle: solo el motivo.
+      rechazar(nombre || "Operación rechazada", String(e.message).slice(0, 200));
+    };
     const est = req.method === "GET" && archivoEstatico(url.pathname);
     if (est) {
       if(url.pathname.startsWith('/img/profesional-')) {
@@ -187,7 +212,8 @@ function crearServidor(c, modo = "todo") {
           contenido: "<p>La página no existe.</p>",
         }),
       );
-    if (req.method === "POST" && req.headers.origin && hostDeOrigen(req.headers.origin) !== req.headers.host)
+    if (req.method === "POST" && req.headers.origin && hostDeOrigen(req.headers.origin) !== req.headers.host) {
+      rechazar("Solicitud rechazada", `${req.method} ${url.pathname} · origen no permitido`);
       return enviar(
         403,
         pagina({
@@ -196,6 +222,7 @@ function crearServidor(c, modo = "todo") {
           contenido: "<p>Origen no permitido.</p>",
         }),
       );
+    }
     if (ruta.area && !usuario) {
       res.writeHead(302, {
         Location: `/login?volver=${encodeURIComponent(url.pathname)}`,
@@ -203,8 +230,10 @@ function crearServidor(c, modo = "todo") {
       });
       return res.end();
     }
-    if (ruta.area && !permitido(usuario.rol, ruta.area))
+    if (ruta.area && !permitido(usuario.rol, ruta.area)) {
+      rechazar("Acceso rechazado", `${req.method} ${url.pathname} · rol ${usuario.rol}`);
       return enviar(403, prohibido(usuario));
+    }
     const cuerpo = req.method === "POST" ? await leerCuerpo(req) : {};
     let liberar;
     if (req.method === "POST" && !cuerpo.__excedido) {
@@ -233,15 +262,21 @@ function crearServidor(c, modo = "todo") {
           url.searchParams,
           cuerpo,
         );
-      const r = await ruta.manejador({
-        consulta: url.searchParams,
-        cuerpo,
-        ip: ipCliente(req),
-        usuario,
-        token,
-        paciente,
-        tokenPaciente,
-      });
+      const r = await correr(solicitud, () =>
+        ruta.manejador({
+          consulta: url.searchParams,
+          cuerpo,
+          ip: ipCliente(req),
+          usuario,
+          token,
+          paciente,
+          tokenPaciente,
+        }),
+      );
+      if (r.estado === 401) rechazar("Inicio de sesión rechazado", `${req.method} ${url.pathname}`);
+      else if (r.estado === 429) rechazar("Límite de intentos superado", `${req.method} ${url.pathname}`);
+      else if (r.estado === 403) rechazar("Acceso rechazado", `${req.method} ${url.pathname}`);
+      else if (r.estado === 400 && r.rechazo) solicitud.registrarRechazo({ message: r.rechazo });
       c.guardar?.();
       if (r.binario) {
         res.writeHead(200, {
@@ -290,8 +325,10 @@ function crearServidor(c, modo = "todo") {
           "CITA_NO_ENCONTRADA",
           "ESPERA_NO_ENCONTRADA",
         ].includes(e.message)
-      )
+      ) {
+        rechazar("Acceso rechazado", `${e.message} · ${req.method} ${url.pathname}`);
         return enviar(403, prohibido(usuario));
+      }
       console.error(e);
       enviar(
         500,

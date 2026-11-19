@@ -103,7 +103,7 @@ Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: 
 
 **Sin DATABASE_URL:** el estado se guarda en `datos/estado.json`, con escritura mediante reemplazo de archivo y permisos privados. No se pierde al reiniciar. `DATOS_DEMO=0` inicia con el conjunto mínimo de ejemplo si aún no existe el archivo; no borra un estado guardado.
 
-**Con PostgreSQL:** los catálogos, pacientes, bloques, citas, usuarios y contactos usan los repositorios SQL. Los metadatos adicionales, documentos, instrucciones, comunicaciones y auditoría se conservan en `datos/extras.json`; los adjuntos están en `datos/documentos/` y las fotos privadas del equipo en `datos/fotos/`.
+**Con PostgreSQL:** los catálogos, pacientes, bloques, citas, usuarios y contactos usan los repositorios SQL. La auditoría (con resultado: exitoso o rechazado), los documentos (estado de revisión, revisor y fecha) y el historial de cada cita se guardan en las tablas `auditoria`, `documento` y `cita_historial`; al iniciar, lo que hubiera en `datos/extras.json` se migra una sola vez. Los metadatos adicionales, instrucciones y comunicaciones se conservan en `datos/extras.json`; las bases creadas antes de este cambio se actualizan con `db/04_migracion_auditoria_documentos.sql`; los adjuntos están en `datos/documentos/` y las fotos privadas del equipo en `datos/fotos/`.
 
 Esta arquitectura requiere **una instancia de la aplicación** y conservar esos directorios junto con la base de datos. Los metadatos adicionales no están migrados a tablas normalizadas. Las sesiones son temporales: reiniciar solicita un nuevo inicio de sesión. La sesión caduca tras 30 minutos de inactividad y como máximo a las 8 horas.
 

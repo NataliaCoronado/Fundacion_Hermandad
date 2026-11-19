@@ -307,8 +307,8 @@ test("HTTP: Lista del día filtra por RUT, mantiene filtros y registra llegada d
     assert.match(html, /aria-current="page">Lista del día/);
     assert.match(html, /<ul class="agenda-lista"/);
     assert.equal((html.match(/<li class="agenda-fila">/g) || []).length, 1);
-    assert.match(html, /Paciente de prueba A/);
-    assert.doesNotMatch(html, /Paciente de prueba B|<option value="No se conectó"/);
+    assert.match(html, /Paciente A/);
+    assert.doesNotMatch(html, /Paciente B|<option value="No se conectó"/);
     assert.match(html, /<option value="Llegó"/);
     assert.match(html, /Registrar llegada/);
     assert.match(html, /name="volverAgenda" value="\/tens\/agenda\?/);
@@ -324,7 +324,7 @@ test("HTTP: Lista del día filtra por RUT, mantiene filtros y registra llegada d
 
     filtros.set("estado", "Llegó");
     const actualizado = await (await s.req("/tens/agenda?" + filtros, s.t)).text();
-    assert.match(actualizado, /Paciente de prueba A/);
+    assert.match(actualizado, /Paciente A/);
     assert.match(actualizado, />Llegó<\/span>/);
     assert.doesNotMatch(actualizado, /Registrar llegada/);
   } finally {
@@ -422,7 +422,7 @@ test("HTTP: Telemedicina no ve sede presencial; enlace HTTPS y flujo remoto", as
       await s.req("/tens/agenda?sede=1&fecha=2026-11-23", s.tm)
     ).text();
     assert.ok(h.includes("Gestión de Telemedicina"));
-    assert.ok(!h.includes("Paciente de prueba B"));
+    assert.ok(!h.includes("Paciente B"));
   } finally {
     await s.cerrar();
   }

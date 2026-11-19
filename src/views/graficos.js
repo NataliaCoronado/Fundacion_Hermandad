@@ -1,79 +1,70 @@
 'use strict';
 const { esc, tabla } = require('./util');
 
-const COLOR = { azul: '#2a78d6', naranja: '#eb6834', aqua: '#1baf7a', gris: '#c9d5d9', teal: '#16808b' };
+// Paleta institucional: azul petróleo como color principal, verde azulado de apoyo y ámbar solo para alertas.
+const COLOR = {
+  navy: '#0b3b4c', azul: '#1f5f7a', teal: '#16808b', aqua: '#2c9a8f', naranja: '#b8742a', ambar: '#b8742a',
+  pizarra: '#657a86', previo: '#9aabb3', gris: '#c9d5d9',
+};
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const fechaCorta = (f) => { const [, m, d] = String(f).split('-').map(Number); return `${d} ${MES[m - 1]}`; };
 const fechaLarga = (f) => { const [a, m, d] = String(f).split('-').map(Number); return `${d} ${MES[m - 1]} ${a}`; };
 const num = (n) => Number(n).toLocaleString('es-CL');
 
-function escala(max) {
-  const m = Math.max(1, max); const bruto = m / 4; const p = 10 ** Math.floor(Math.log10(bruto));
-  const paso = [1, 2, 2.5, 5, 10].map((f) => f * p).find((v) => v >= bruto);
-  const tope = Math.ceil(m / paso) * paso;
-  const marcas = []; for (let v = 0; v <= tope + 1e-9; v += paso) marcas.push(Math.round(v * 100) / 100);
-  return { tope, marcas };
-}
-const leyenda = (items) => `<ul class="leyenda-g">${items.map((i) => `<li><i style="background:${i.color}"></i>${esc(i.nombre)}</li>`).join('')}</ul>`;
 const vistaTabla = (columnas, filas) => `<details class="vista-tabla"><summary>Ver datos en tabla</summary>${tabla(columnas, filas)}</details>`;
-const tip = (html) => `data-tip="${esc(html)}"`;
+const sinJs = '<noscript><p class="nota">Activa JavaScript para ver el gráfico; los mismos datos están en la tabla de abajo.</p></noscript>';
+// Cada gráfico es un contenedor con su especificación; graficos.script.js lo dibuja con ECharts.
+const lienzo = (spec, alto, titulo) => `<div class="ec" data-ec="${esc(JSON.stringify(spec))}" style="height:${alto}px" role="img" aria-label="${esc(titulo)}"></div>${sinJs}`;
+const leyenda = (items) => `<ul class="leyenda-g">${items.map((i) => `<li><i style="background:${i.color}"></i>${esc(i.nombre)}</li>`).join('')}</ul>`;
+const fmt = (v, sufijo = '') => (v == null ? 'Sin datos' : `${num(v)}${sufijo}`);
 
-function lineas({ etiquetas, series, titulo, formato = num, sufijo = '', etiquetaX = (e) => `Semana del ${fechaCorta(e)}` }) {
-  if (!etiquetas.length) return '<p class="vacio">Sin datos en este periodo.</p>';
-  const W = 760; const H = 260; const L = 44; const R = 14; const T = 14; const B = 30;
-  const { tope, marcas } = escala(Math.max(...series.flatMap((s) => s.valores)));
-  const x = (i) => L + (etiquetas.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (etiquetas.length - 1));
-  const y = (v) => T + (H - T - B) * (1 - v / tope);
-  const grid = marcas.map((v) => `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="eje" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${formato(v)}${sufijo}</text>`).join('');
-  const salto = Math.ceil(etiquetas.length / 8);
-  const ejeX = etiquetas.map((e, i) => (i % salto === 0 ? `<text class="eje" x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(fechaCorta(e))}</text>` : '')).join('');
-  const trazos = series.map((s) => {
-    const d = s.valores.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
-    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${s.valores.map((v, i) => `<circle class="pt" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="${s.color}" stroke="#fff" stroke-width="2"/>`).join('')}`;
-  }).join('');
-  const ancho = (W - L - R) / Math.max(1, etiquetas.length - 1);
-  const cols = etiquetas.map((e, i) => `<g class="col"><line class="guia" x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${H - B}"/><rect class="hit" x="${(x(i) - ancho / 2).toFixed(1)}" y="${T}" width="${ancho.toFixed(1)}" height="${H - T - B}" ${tip(`<b>${esc(etiquetaX(e))}</b>${series.map((s) => `<span class="tt"><i style="background:${s.color}"></i>${esc(s.nombre)}: <b>${formato(s.valores[i])}${sufijo}</b></span>`).join('')}`)}/></g>`).join('');
-  return `<figure class="graf"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}" preserveAspectRatio="xMidYMid meet">${grid}${ejeX}${trazos}${cols}</svg>
-${series.length > 1 ? leyenda(series) : ''}${vistaTabla(['Periodo', ...series.map((s) => s.nombre)], etiquetas.map((e, i) => [etiquetaX(e), ...series.map((s) => `${formato(s.valores[i])}${sufijo}`)]))}</figure>`;
+function lineas({
+  etiquetas, series, titulo, sufijo = '', etiquetaX = (e) => `Semana del ${fechaCorta(e)}`,
+  ejeFecha = fechaCorta, interactivo = false, maximo, formato, tabla: conTabla = true, alto,
+}) {
+  const hayDatos = series.some((s) => s.valores.some((v) => v != null));
+  if (!etiquetas.length || !hayDatos) return '<p class="vacio">Sin datos en este período.</p>';
+  const spec = {
+    tipo: 'lineas', ejes: etiquetas.map(ejeFecha), titulos: etiquetas.map(etiquetaX), sufijo, max: maximo, entero: !sufijo,
+    series: series.map((s) => ({ nombre: s.nombre, color: s.color, valores: s.valores, trazo: !!s.trazo, previo: !!s.previo })),
+  };
+  const f = formato || ((v) => fmt(v, sufijo));
+  return `<figure class="graf">${lienzo(spec, alto || (interactivo ? 250 : 300), titulo)}
+${conTabla ? vistaTabla(['Periodo', ...series.map((s) => s.nombre)], etiquetas.map((e, i) => [etiquetaX(e), ...series.map((s) => f(s.valores[i]))])) : ''}</figure>`;
 }
 
 function columnasApiladas({ etiquetas, segmentos, titulo }) {
   if (!etiquetas.length) return '<p class="vacio">Sin datos.</p>';
-  const W = 760; const H = 250; const L = 44; const R = 10; const T = 12; const B = 34;
-  const totales = etiquetas.map((_, i) => segmentos.reduce((s, g) => s + g.valores[i], 0));
-  const { tope, marcas } = escala(Math.max(...totales));
-  const paso = (W - L - R) / etiquetas.length; const ancho = Math.min(34, paso * 0.62);
-  const y = (v) => T + (H - T - B) * (1 - v / tope);
-  const grid = marcas.map((v) => `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="eje" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${num(v)}</text>`).join('');
-  const barras = etiquetas.map((e, i) => {
-    const cx = L + paso * i + paso / 2; let acumulado = 0; let ultimo = -1;
-    segmentos.forEach((g, k) => { if (g.valores[i] > 0) ultimo = k; });
-    const partes = segmentos.map((g, k) => {
-      const v = g.valores[i]; if (!v) return '';
-      const y1 = y(acumulado + v); const y0 = y(acumulado); acumulado += v;
-      const x0 = cx - ancho / 2; const x1 = cx + ancho / 2; const r = k === ultimo ? Math.min(4, (y0 - y1) / 2) : 0;
-      return `<path d="M${x0} ${y0} V${y1 + r} ${r ? `Q${x0} ${y1} ${x0 + r} ${y1} H${x1 - r} Q${x1} ${y1} ${x1} ${y1 + r}` : `H${x1}`} V${y0} Z" fill="${g.color}" stroke="#fff" stroke-width="2"/>`;
-    }).join('');
-    const detalle = `<b>${esc(fechaLarga(e))}</b>${segmentos.map((g) => `<span class="tt"><i style="background:${g.color}"></i>${esc(g.nombre)}: <b>${num(g.valores[i])}</b></span>`).join('')}`;
-    return `<g class="col"><rect class="fondo-col" x="${cx - paso / 2}" y="${T}" width="${paso}" height="${H - T - B}"/>${partes}<text class="eje" x="${cx}" y="${H - 16}" text-anchor="middle">${esc(fechaCorta(e).split(' ')[0])}</text><text class="eje flojo" x="${cx}" y="${H - 4}" text-anchor="middle">${esc(fechaCorta(e).split(' ')[1])}</text><rect class="hit" x="${cx - paso / 2}" y="${T}" width="${paso}" height="${H - T - B}" ${tip(detalle)}/></g>`;
-  }).join('');
-  return `<figure class="graf"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}">${grid}${barras}</svg>${leyenda(segmentos)}
+  const spec = { tipo: 'apiladas', ejes: etiquetas.map(fechaCorta), titulos: etiquetas.map(fechaLarga), series: segmentos.map((g) => ({ nombre: g.nombre, color: g.color, valores: g.valores })) };
+  return `<figure class="graf">${lienzo(spec, 290, titulo)}
 ${vistaTabla(['Día', ...segmentos.map((g) => g.nombre)], etiquetas.map((e, i) => [fechaLarga(e), ...segmentos.map((g) => num(g.valores[i]))]))}</figure>`;
 }
 
-function barras(filas, { color = COLOR.azul, formato = num, max, sufijo = '', vacio = 'Sin datos.' } = {}) {
+function barras(filas, { color = COLOR.azul, formato = num, max, sufijo = '', vacio = 'Sin datos.', titulo = 'Gráfico de barras', tabla: conTabla = true } = {}) {
   if (!filas.length) return `<p class="vacio">${esc(vacio)}</p>`;
-  const m = max || Math.max(1, ...filas.map((f) => f.n || 0));
-  return `<div class="bh">${filas.map((f) => `<div class="b" ${tip(`<b>${esc(f.nombre)}</b><span class="tt">${formato(f.n || 0)}${sufijo}${f.extra ? ` · ${esc(f.extra)}` : ''}</span>`)}><span class="n" title="${esc(f.nombre)}">${esc(f.nombre)}</span><span class="tr"><i style="width:${Math.max(f.n ? 1 : 0, Math.round(((f.n || 0) / m) * 100))}%;background:${color}"></i></span><b>${formato(f.n || 0)}${sufijo}</b></div>`).join('')}</div>`;
+  const spec = { tipo: 'barras', color, sufijo, max, filas: filas.map((f) => ({ nombre: f.nombre, n: f.n || 0, extra: f.extra || '' })) };
+  return `<figure class="graf">${lienzo(spec, 52 + filas.length * 34, titulo)}
+${conTabla ? vistaTabla(['Categoría', 'Valor', 'Detalle'], filas.map((f) => [f.nombre, `${formato(f.n || 0)}${sufijo}`, f.extra || '—'])) : ''}</figure>`;
 }
 
-function segmentada(partes, titulo) {
+function segmentada(partes, titulo, { tabla: conTabla = true, unidad = 'citas' } = {}) {
   const total = partes.reduce((s, p) => s + p.n, 0);
   if (!total) return '<p class="vacio">Sin citas en este periodo.</p>';
-  return `<figure class="graf"><div class="seg" role="img" aria-label="${esc(titulo)}">${partes.filter((p) => p.n).map((p) => `<i style="flex:${p.n};background:${p.color}" ${tip(`<b>${esc(p.nombre)}</b><span class="tt">${num(p.n)} · ${Math.round((p.n / total) * 100)} %</span>`)}></i>`).join('')}</div>
-<ul class="leyenda-g l-datos">${partes.map((p) => `<li><i style="background:${p.color}"></i>${esc(p.nombre)}<b>${num(p.n)}</b><small>${Math.round((p.n / total) * 100)} %</small></li>`).join('')}</ul></figure>`;
+  const spec = { tipo: 'anillo', total, unidad, partes: partes.filter((p) => p.n).map((p) => ({ nombre: p.nombre, n: p.n, color: p.color })) };
+  return `<figure class="graf">${lienzo(spec, 270, titulo)}
+${conTabla ? vistaTabla(['Estado', 'Citas', 'Porcentaje'], partes.map((p) => [p.nombre, num(p.n), `${Math.round((p.n / total) * 100)} %`])) : ''}</figure>`;
 }
 
-const medidor = (v, { alerta = false, invertir = false } = {}) => (v === null || v === undefined ? '<span class="suave">—</span>' : `<span class="med"><span class="tr"><i style="width:${Math.min(100, v)}%;background:${alerta ? COLOR.naranja : COLOR.teal}"></i></span><b>${v} %</b></span>`);
+// Mapa de calor: solo se usa donde la combinación de dos ejes (día × hora) aporta información.
+function mapaCalor({ x, y, datos, titulo, unidad = 'citas' }) {
+  const max = Math.max(0, ...datos.map((d) => d[2]));
+  if (!max) return '<p class="vacio">Sin datos en este período.</p>';
+  const spec = { tipo: 'calor', x, y, datos, max, unidad };
+  const celda = new Map(datos.map(([i, j, v]) => [`${i}|${j}`, v]));
+  return `<figure class="graf">${lienzo(spec, 96 + y.length * 38, titulo)}
+${vistaTabla(['Día', ...x], y.map((d, j) => [d, ...x.map((_, i) => celda.get(`${i}|${j}`) || 0)]))}</figure>`;
+}
 
-module.exports = { lineas, columnasApiladas, barras, segmentada, medidor, leyenda, fechaCorta, fechaLarga, num, COLOR };
+const medidor = (v, { alerta = false } = {}) => (v === null || v === undefined ? '<span class="suave">—</span>' : `<span class="med"><span class="tr"><i style="width:${Math.min(100, v)}%;background:${alerta ? COLOR.naranja : COLOR.teal}"></i></span><b>${v} %</b></span>`);
+
+module.exports = { lineas, columnasApiladas, barras, segmentada, mapaCalor, medidor, leyenda, fechaCorta, fechaLarga, num, COLOR };

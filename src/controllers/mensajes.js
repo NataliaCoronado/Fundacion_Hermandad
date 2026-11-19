@@ -48,6 +48,7 @@ const MENSAJES = {
 };
 const legible = (m) => /\s/.test(String(m || '')) && !/^\w+Error\b|is not|undefined|Cannot /.test(m);
 const error = (e) => {
+  require('../util/contextoSolicitud').actual()?.registrarRechazo?.(e);
   if (MENSAJES[e.message]) return { tipo: 'error', texto: MENSAJES[e.message] };
   if (legible(e.message)) return { tipo: 'error', texto: e.message };
   console.error(e);

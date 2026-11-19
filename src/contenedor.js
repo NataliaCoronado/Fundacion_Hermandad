@@ -57,7 +57,19 @@ function crearContenedor({
     catalogo = new CatalogoRepositoryMemoria(base);
   }
   if (db && guardado) base.extras = guardado;
-  const extras = new ExtrasRepositoryMemoria(base.extras);
+  base.extras.historial ||= [];
+  for (const a of base.extras.auditoria || []) a.resultado ||= "EXITOSO";
+  // Con PostgreSQL, la auditoría, los documentos y el historial de citas se guardan en sus tablas.
+  // Lo que hubiera en extras.json se migra una sola vez al iniciar.
+  const TABLAS_EN_BD = ["auditoria", "documentos", "historial"];
+  const rezagados = base.extras.legado_no_migrado || {};
+  const heredado = db ? Object.fromEntries(TABLAS_EN_BD.map((t) => [t, [...(base.extras[t] || []), ...(rezagados[t] || [])]])) : {};
+  if (db) delete base.extras.legado_no_migrado;
+  const extras = db
+    ? new (require("./repositories/ExtrasRepositoryPg").ExtrasRepositoryPg)(base.extras, db)
+    : new ExtrasRepositoryMemoria(base.extras);
+  let extrasCargados = !db;
+  citaRepo = new (require("./repositories/CitaRepositoryConHistorial").CitaRepositoryConHistorial)(citaRepo, extras);
   const sesiones = new Sesiones();
   const transporte =
     whatsapp === "meta" ? new WhatsAppMeta() : new WhatsAppSimulado(extras);
@@ -108,6 +120,10 @@ function crearContenedor({
       agendamiento,
     });
   async function inicializar() {
+    if (!extrasCargados) {
+      await extras.cargar(heredado);
+      extrasCargados = true;
+    }
     const demo = process.env.CLAVE_DEMO || (db ? null : "demo1234");
     if (demo) await auth.sembrarClaveDemo(demo);
   }
@@ -118,7 +134,12 @@ function crearContenedor({
     citaRepo,
   });
   return {
-    guardar: () => persistencia?.guardar(db ? base.extras : base),
+    guardar: () => {
+      if (!db) return persistencia?.guardar(base);
+      const { auditoria, documentos, historial, ...resto } = base.extras;
+      if (Object.values(extras.legado || {}).some((l) => l.length)) resto.legado_no_migrado = extras.legado;
+      return persistencia?.guardar(resto);
+    },
     operacion,
     sesionesPaciente,
     cuentas,

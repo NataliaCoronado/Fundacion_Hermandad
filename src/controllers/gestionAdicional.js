@@ -112,9 +112,8 @@ function crearGestionAdicionalController(c) {
     return {
       html: V.page(
         u,
-        "Reprogramar reserva",
+        "Reprogramar reserva cancelada",
         V.cab(
-          "Reprogramar reserva cancelada",
           `${esc(it.paciente)} · ${esc(it.rut)} — antes: ${esc(it.fecha)} ${esc(it.hora)}, ${esc(it.especialidad)}, ${esc(it.lugar)}.`,
           V.btn("Volver a cancelaciones", "/admin/cancelaciones", true),
         ) + V.panel("Horas disponibles", cuerpo),
@@ -168,9 +167,8 @@ function crearGestionAdicionalController(c) {
     return {
       html: V.page(
         u,
-        "Cancelaciones",
+        "Cancelaciones institucionales",
         V.cab(
-          "Cancelaciones institucionales",
           "Cancela reservas en lote con motivo y aviso al paciente. La falta de respuesta no es motivo de cancelación.",
           V.btn("Volver a agendas", "/admin/agendas", true) +
             V.btn("Estado de notificaciones", "/admin/comunicaciones", true),
@@ -192,7 +190,6 @@ function crearGestionAdicionalController(c) {
         u,
         "Cupos por rango",
         V.cab(
-          "Cambiar cupos por rango",
           "Publica, bloquea o deja sin publicar todos los cupos libres de un periodo. Los cupos con reserva activa no se modifican.",
           V.btn("Volver a agendas", "/admin/agendas", true),
         ) +

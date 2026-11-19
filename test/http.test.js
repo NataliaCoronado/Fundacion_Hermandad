@@ -278,7 +278,7 @@ test('administración: cupos en serie, liberación masiva, filtros de reportes y
     const csv = await (await fetch(`${base}/admin/reportes/citas.csv?desde=2027-03-01&hasta=2027-03-07`, { headers: { Cookie: a } })).text();
     assert.strictEqual(csv.trim().split('\r\n').length, 1, 'sin citas en ese rango: solo encabezado');
     assert.ok(c.auditoria.listar().some((x) => x.accion === 'Reporte descargado'));
-    assert.ok(!/Paciente demo|11111111/.test(await (await fetch(`${base}/admin/reportes`, { headers: { Cookie: a } })).text()));
+    assert.ok(!/\bPaciente [A-C0-9]+\b|11111111/.test(await (await fetch(`${base}/admin/reportes`, { headers: { Cookie: a } })).text()));
   } finally { await new Promise((r) => srv.close(r)); }
 });
 
@@ -311,7 +311,7 @@ test('resumen: Administración y TENS/TONS ven su dashboard con alertas crítica
     const t = (await ingresar(s.base, 'tens@ejemplo.cl')).cookie;
     const ha = await (await fetch(`${s.base}/admin/resumen`, { headers: { Cookie: a } })).text();
     assert.match(ha, /Alertas críticas y pendientes/);
-    assert.match(ha, /Situación por policlínico/);
+    assert.doesNotMatch(ha, /Situación por policlínico/, 'el Resumen ya no trae paneles extra');
     assert.match(ha, /Citas con profesional inactivo/);
     assert.ok(!ha.includes('href="/tens/'), 'el resumen de Administración no enlaza a TENS/TONS');
     const ht = await (await fetch(`${s.base}/tens/resumen`, { headers: { Cookie: t } })).text();

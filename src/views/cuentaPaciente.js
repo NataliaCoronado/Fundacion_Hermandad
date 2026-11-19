@@ -1,6 +1,6 @@
 "use strict";
 const { pagina, WHATSAPP } = require("./layout");
-const { esc } = require("./util");
+const { esc, etiquetaDocumento } = require("./util");
 const { fechaLarga, fila } = require("./paciente");
 const { ESTILOS } = require("./reserva");
 
@@ -116,7 +116,7 @@ const misDocumentos = ({ cuenta, personas, docs, tipos, pendientes, mensaje }) =
     contenido: `<div class="tarjeta" style="max-width:820px"><h2>Documentos guardados</h2>
 <p class="nota">Quedan en el registro del paciente, se reutilizan en próximas reservas y solo los ve el personal autorizado.</p>
 ${pendientes.length ? `<div class="aviso"><b>Requisitos pendientes de revisión:</b> ${pendientes.map(esc).join(", ")}.</div>` : ""}
-${docs.length ? docs.map((d) => `<div class="fila"><span>${esc(d.persona)}</span><b>${esc(d.tipo)} · ${esc(d.fecha.slice(0, 10))} · ${d.verificado ? "revisado" : "pendiente de revisión"}${d.adjunto ? ` · <a href="/paciente/mis-documentos/archivo?id=${d.id}">Descargar</a>` : ""}</b></div>`).join("") : '<div class="vacio">Aún no hay documentos.</div>'}</div>
+${docs.length ? docs.map((d) => `<div class="fila"><span>${esc(d.persona)}</span><b>${esc(d.tipo)} · ${esc(d.fecha.slice(0, 10))} · ${esc(etiquetaDocumento(d))}${d.adjunto ? ` · <a href="/paciente/mis-documentos/archivo?id=${d.id}">Descargar</a>` : ""}</b></div>`).join("") : '<div class="vacio">Aún no hay documentos.</div>'}</div>
 <form method="post" action="/paciente/mis-documentos" enctype="multipart/form-data" class="tarjeta" style="max-width:820px;margin-top:18px"><h2>Adjuntar un documento</h2>
 <p class="nota">Certificados FONASA y CESFAM, órdenes de derivación y otros respaldos en PDF, JPG o PNG (máximo 5 MB).</p>
 <div class="form2"><div><label for="rutDoc">Paciente ${AST}</label><select id="rutDoc" name="rut" required>${opciones(personas, cuenta.rut)}</select></div>
@@ -132,7 +132,7 @@ const familiares = ({ cuenta, lista, mensaje }) =>
     contenido: `<p class="lead">Aquí aparecen las personas cuyo registro te indica como adulto responsable. Conocer el RUT de otra persona no da acceso a su información.</p>
 ${lista.length ? lista.map((f) => `<section class="familiar"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0">${esc(f.nombre)}</h2><p class="nota">RUT ${esc(f.rut)} · ${esc(f.relacion || "Familiar")}</p></div><a class="btn sec" href="/?quien=${encodeURIComponent(f.rut)}">Reservar para ${esc(f.nombre.split(" ")[0])}</a></div>
 <p class="sec-t">PRÓXIMAS HORAS</p>${f.proximas.length ? f.proximas.map((h) => tarjetaHora(h)).join("") : '<p class="nota">Sin horas próximas.</p>'}
-<p class="sec-t">DOCUMENTOS</p>${f.docs.length ? f.docs.map((d) => fila(d.tipo, `${d.fecha.slice(0, 10)} · ${d.verificado ? "revisado" : "pendiente de revisión"}`)).join("") : '<p class="nota">Sin documentos.</p>'}</section>`).join("") : '<div class="vacio">No tienes familiares vinculados.</div>'}
+<p class="sec-t">DOCUMENTOS</p>${f.docs.length ? f.docs.map((d) => fila(d.tipo, `${d.fecha.slice(0, 10)} · ${esc(etiquetaDocumento(d))}`)).join("") : '<p class="nota">Sin documentos.</p>'}</section>`).join("") : '<div class="vacio">No tienes familiares vinculados.</div>'}
 <form method="post" action="/paciente/familiares/solicitar" class="tarjeta" style="max-width:820px;margin-top:18px"><h2>Solicitar vinculación de un familiar</h2>
 <p class="nota">El personal del policlínico revisará la solicitud y la autorización correspondiente antes de vincularlo.</p>
 <div class="form2">${campo("rutFamiliar", "RUT del familiar", "", { req: true })}${campo("relacion", "Relación", "", { req: true, extra: 'placeholder="Hijo/a, madre, padre…"' })}

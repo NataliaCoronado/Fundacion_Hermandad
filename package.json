@@ -16,12 +16,14 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "echarts": "^6.1.0",
     "pg": "^8.13.0"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16"
+    "@electric-sql/pglite": "^0.5.16",
+    "playwright-core": "^1.65.1"
   }
 }

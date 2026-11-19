@@ -73,7 +73,7 @@ const CASOS = {
     try {
       k.paso("TENS/TONS (San Isidro) abre la ficha de un paciente existente (RUT 11.111.111-1).");
       const h = await (await s.req(`/tens/pacientes/editar?rut=${A}`, s.t)).text();
-      k.chk(h.includes("Dirección de prueba 1") && h.includes("+56911111111"), "La ficha aparece con los datos existentes precargados (dirección y teléfono).");
+      k.chk(h.includes("Dirección 1") && h.includes("+56911111111"), "La ficha aparece con los datos existentes precargados (dirección y teléfono).");
       k.paso("TENS/TONS abre el formulario para un paciente nuevo (RUT 12.345.678-5).");
       const f = await (await s.req("/tens/pacientes?nuevo=1", s.t)).text();
       k.chk(/name="nombres"/.test(f) && /name="rut"/.test(f), "«+ Registrar paciente» abre el formulario de paciente nuevo.");
@@ -128,7 +128,7 @@ const CASOS = {
       const h = await (await s.req(`/admin/agendas?prof=3&fecha=${b0.fecha}`, s.a)).text();
       const columnas = [...h.matchAll(/professional-head[\s\S]*?<b>([^<]+)<\/b>/g)].map((m) => m[1]).filter((n) => n.startsWith("Profesional"));
       k.dato("Columnas de profesionales mostradas", columnas);
-      k.chk(columnas.length === 1 && columnas[0] === "Profesional de prueba 3", "La agenda filtrada muestra solo al profesional seleccionado.");
+      k.chk(columnas.length === 1 && columnas[0] === "Profesional 3", "La agenda filtrada muestra solo al profesional seleccionado.");
       return k.ok ? `Con sede 1 + Medicina General + ${b0.fecha} se obtuvieron ${lista.length} cupos, todos publicados y conformes; el cupo despublicado desapareció; Telemedicina devolvió ${tele.length} cupos propios; el filtro por profesional mostró solo al profesional 3.` : null;
     } finally { await s.cerrar(); }
   } },
@@ -197,7 +197,7 @@ const CASOS = {
       const sinEsp = h.replace(/\s/g, "");
       k.chk(h.includes(await nombreDe(s.c, A)), "Aparece la cita pendiente del paciente A.");
       k.chk(/56911111111|911111111|91111\D?1111/.test(sinEsp), "Aparece el teléfono de contacto del paciente.");
-      return k.ok ? "El listado mostró la cita pendiente de Paciente de prueba A con su teléfono de contacto." : null;
+      return k.ok ? "El listado mostró la cita pendiente de Paciente A con su teléfono de contacto." : null;
     } finally { await s.cerrar(); }
   } },
 
@@ -256,7 +256,7 @@ const CASOS = {
       k.chk(/2 reservas afectadas/.test(h), "El sistema indica «2 reservas afectadas».");
       k.chk(h.includes(await nombreDe(s.c, A)) && h.includes(await nombreDe(s.c, B)), "Lista a los dos pacientes afectados.");
       k.chk(/Agenda actual/.test(h) && /Cambio propuesto/.test(h), "Muestra la agenda actual frente al cambio propuesto.");
-      return k.ok ? `Antes de aplicar la ausencia del ${b.fecha}, el sistema listó 2 reservas afectadas (Paciente de prueba A y B) y comparó agenda actual con cambio propuesto.` : null;
+      return k.ok ? `Antes de aplicar la ausencia del ${b.fecha}, el sistema listó 2 reservas afectadas (Paciente A y B) y comparó agenda actual con cambio propuesto.` : null;
     } finally { await s.cerrar(); }
   } },
 
@@ -505,8 +505,8 @@ const CASOS = {
   "CP-31": { req: "RF31", titulo: "Desactivación de profesional con reservas", async run(k) {
     const s = await sitio();
     try {
-      const h = await (await s.req("/admin/profesionales?q=Profesional de prueba 1", s.a)).text();
-      k.chk(/Profesional de prueba 1/.test(h), "Administración encuentra al profesional 1 en la búsqueda.");
+      const h = await (await s.req("/admin/profesionales?q=Profesional 1", s.a)).text();
+      k.chk(/Profesional 1/.test(h), "Administración encuentra al profesional 1 en la búsqueda.");
       const vig = (await s.c.citaRepo.listar()).filter((x) => x.estadoReserva === "ACTIVA" && [1, 2].includes(x.id));
       k.paso(`El profesional 1 tiene ${vig.length} reservas vigentes. Administración intenta desactivarlo.`);
       const r = await s.req("/admin/profesionales/estado", s.a, { idProfesional: "1", activo: "0" });
@@ -747,7 +747,7 @@ const CASOS = {
       k.chk(/ASISTENCIA CONFIRMADA/.test(pac), "Paciente: la consulta muestra «Asistencia confirmada».");
       k.chk(/Confirmada/.test(tens), "TENS/TONS: la reserva muestra «Confirmada».");
       const agenda = await (await s.req(`/admin/agendas?prof=1&fecha=${(await s.c.catalogo.bloque(1)).fecha}`, s.a)).text();
-      const fila = (agenda.match(/[^<>]*<\/[^>]+>\s*<[^>]+>[^<]*Paciente de prueba A/) || [""])[0];
+      const fila = (agenda.match(/[^<>]*<\/[^>]+>\s*<[^>]+>[^<]*Paciente A/) || [""])[0];
       k.dato("Administración — detalle del cupo de la cita 1", (adm.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").match(/Estado \S+/) || ["—"])[0]);
       k.chk(/Confirmada/.test(adm.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, "")) || /Confirmada/.test(fila), "Administración: la reserva muestra «Confirmada».");
       k.dato("Tiempo total hasta verlo en los tres perfiles", `${ms} ms`);

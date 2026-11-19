@@ -43,7 +43,7 @@ const panel = ({ usuario, a30, a12, op, espera, cambios, auditoria, ctx }) => {
     titulo: 'Citas activas e inasistencias por semana', etiquetas: a12.semanal.map((s) => s.semana),
     series: [{ nombre: 'Citas activas', color: G.COLOR.azul, valores: a12.semanal.map((s) => s.activas) }, { nombre: 'No asistieron', color: G.COLOR.naranja, valores: a12.semanal.map((s) => s.noAsistio) }],
   });
-  const sedes = G.barras([...a30.porPoliclinico].sort((x, y) => y.citas - x.citas).map((x) => ({ nombre: x.policlinico, n: x.citas, extra: `ocupación ${pct(x.ocupacion)}` })), { vacio: 'Sin citas en el periodo.' });
+  const sedes = G.barras([...a30.porPoliclinico].sort((x, y) => y.citas - x.citas).map((x) => ({ nombre: x.policlinico, n: x.citas, extra: `ocupación ${pct(x.ocupacion)}` })), { vacio: 'Sin citas en el periodo.', titulo: 'Citas por policlínico' });
   const fechaCambio = (f) => String(f || '').slice(5).split('-').reverse().join('/');
   return pagina({
     titulo: 'Inicio', usuario, lienzo: true,
@@ -209,13 +209,13 @@ ${caja('Estado de las citas', `<p class="sub-p">${G.num(r.totalCitas)} citas reg
 </div>
 <div class="paneles dos-g">
 ${caja('Inasistencia semanal', `<p class="sub-p">Porcentaje de citas con atención registrada en que el paciente no llegó.</p>${inasist}`)}
-${caja('Demanda por especialidad', `<p class="sub-p">Citas activas y ocupación de los cupos publicados.</p>${G.barras(a.porEspecialidad.map((e) => ({ nombre: e.nombre, n: e.citas, extra: `ocupación ${pct(e.ocupacion)} · inasistencia ${pct(e.tasaInasistencia)}` })), { vacio: 'Sin citas en el periodo.' })}`)}
+${caja('Demanda por especialidad', `<p class="sub-p">Citas activas y ocupación de los cupos publicados.</p>${G.barras(a.porEspecialidad.map((e) => ({ nombre: e.nombre, n: e.citas, extra: `ocupación ${pct(e.ocupacion)} · inasistencia ${pct(e.tasaInasistencia)}` })), { vacio: 'Sin citas en el periodo.', titulo: 'Demanda por especialidad' })}`)}
 </div>
 <div class="hola" style="margin-top:8px"><div><h2>Caracterización de pacientes</h2><p>${G.num(k.conCita)} pacientes con citas en el periodo, de ${G.num(k.registrados)} fichas registradas.</p></div></div>
 <div class="tres">
-${caja('Por día de la semana', G.barras(a.porDia.map((d) => ({ nombre: d.nombre, n: d.n })), { color: G.COLOR.teal }))}
-${caja('Edad de los pacientes', `<p class="sub-p">${G.num(k.mayores)} adultos mayores (60+) · ${G.num(k.ninos)} niños y adolescentes.</p>${G.barras(rel(k.edades), { color: G.COLOR.azul })}`)}
-${caja('Sexo y nacionalidad', `<h3 class="mini-t">Sexo</h3>${G.barras(rel(k.generos), { color: G.COLOR.azul })}<h3 class="mini-t">Nacionalidad</h3>${G.barras(rel(k.nacionalidades), { color: G.COLOR.azul })}`)}
+${caja('Por día de la semana', G.barras(a.porDia.map((d) => ({ nombre: d.nombre, n: d.n })), { color: G.COLOR.teal, titulo: 'Citas por día de la semana' }))}
+${caja('Edad de los pacientes', `<p class="sub-p">${G.num(k.mayores)} adultos mayores (60+) · ${G.num(k.ninos)} niños y adolescentes.</p>${G.barras(rel(k.edades), { color: G.COLOR.azul, titulo: 'Pacientes por tramo de edad' })}`)}
+${caja('Sexo y nacionalidad', `<h3 class="mini-t">Sexo</h3>${G.barras(rel(k.generos), { color: G.COLOR.azul, titulo: 'Pacientes por sexo' })}<h3 class="mini-t">Nacionalidad</h3>${G.barras(rel(k.nacionalidades), { color: G.COLOR.azul, titulo: 'Pacientes por nacionalidad' })}`)}
 </div>
 <div class="cont" style="margin-top:20px"><h2>Por policlínico</h2>${tabla(['Policlínico', 'Citas', 'Asistieron', 'No asistieron', 'Canceladas', 'Inasistencia', 'Ocupación'], a.porPoliclinico.map((x) => [raw(`<b>${esc(x.policlinico)}</b>`), x.citas, x.asistio, x.noAsistio, x.canceladas, x.tasaInasistencia === null ? '—' : `${x.tasaInasistencia} %`, raw(G.medidor(x.ocupacion))]))}
 <h2>Demanda por profesional</h2><p>${conDemanda.length} de ${a.porProfesional.length} profesionales tienen citas en el periodo (se muestran los 15 con más demanda; la descarga incluye a todos).</p>

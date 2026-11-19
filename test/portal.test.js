@@ -111,7 +111,7 @@ test('portal: paciente nuevo completa datos y documentos, confirma, obtiene PDF 
     const conf = await p.texto('/agendar/confirmar', { t });
     assert.match(conf, /Tu hora fue reservada correctamente/);
     assert.match(conf, /Descargar comprobante \(PDF\)/);
-    assert.match(conf, /quedó registrado/);
+    assert.match(conf, /no se envió ningún mensaje/);
     const ficha = await s.c.catalogo.paciente('12345678-5');
     assert.strictEqual(ficha.nombre, 'Ana Prueba');
     const cita = (await s.c.citaRepo.buscarPorRut('12345678-5')).find((x) => x.idBloque === bloque);
@@ -147,25 +147,26 @@ test('portal: paciente existente: sin sesión no ve sus datos ni se le pide veri
     const sin = await p.texto(`/agendar/datos?t=${t}&bloque=${bloque}`);
     assert.match(sin, /ya tiene un registro/);
     assert.doesNotMatch(sin, /celular4|Verificar/, 'el flujo de reserva ya no pide verificar');
-    assert.doesNotMatch(sin, /Paciente de prueba A|Dirección de prueba 1|56911111111/, 'no muestra datos personales sin sesión');
+    assert.match(sin, /Paciente A/, 'el nombre se muestra siempre');
+    assert.doesNotMatch(sin, /Dirección 1|56911111111/, 'no muestra los datos de contacto sin sesión');
     assert.strictEqual((await p.req('/agendar/verificar', { t })).status, 404, 'la ruta de verificación ya no existe');
     const clave = 'una clave de prueba larga';
     assert.strictEqual((await p.req('/paciente/cuenta/acceso', { modo: 'crear', rut: '111111111', fechaNacimiento: '1980-01-01', celular4: '1111', clave, confirmarClave: clave, acepto: '1' })).status, 302);
     const t2 = tokenDe(await p.req('/agendar', { quien: '11111111-1', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
     const con = await p.texto(`/agendar/datos?t=${t2}&bloque=${bloque}`);
     assert.match(con, /Revisa los datos del paciente/);
-    assert.match(con, /id="nombreVista"[^>]*value="Paciente de prueba A"[^>]*readonly/);
-    assert.match(con, /id="direccion"[^>]*value="Dirección de prueba 1"/);
+    assert.match(con, /id="nombreVista"[^>]*value="Paciente A"[^>]*readonly/);
+    assert.match(con, /id="direccion"[^>]*value="Dirección 1"/);
     const ficha = await s.c.catalogo.paciente('11111111-1');
     await p.req('/agendar/datos', { t: t2, telefono: ficha.telefono, tieneWhatsapp: '1', correo: 'a@ejemplo.cl', direccion: 'Nueva 99', idComuna: '1', genero: ficha.genero, nacionalidad: ficha.nacionalidad, nombres: 'Intento', apellidos: 'Cambio' }, true);
     assert.match(await p.texto('/agendar/confirmar', { t: t2 }), /reservada correctamente/);
     const nueva = await s.c.catalogo.paciente('11111111-1');
     assert.strictEqual(nueva.direccion, 'Nueva 99');
-    assert.strictEqual(nueva.nombre, 'Paciente de prueba A', 'el nombre bloqueado no cambia');
+    assert.strictEqual(nueva.nombre, 'Paciente A', 'el nombre bloqueado no cambia');
   } finally { await s.cerrar(); }
 });
 
-test('portal: sin verificar la identidad el nombre de una ficha ajena va enmascarado, pero la reserva se registra', async () => {
+test('portal: sin iniciar sesión el nombre de la ficha se muestra completo y la reserva se registra', async () => {
   const s = await levantar();
   try {
     const p = s.cliente();
@@ -174,14 +175,13 @@ test('portal: sin verificar la identidad el nombre de una ficha ajena va enmasca
     await p.req(`/agendar/datos?t=${t}&bloque=${bloque}`);
     await p.req('/agendar/datos', { t }, true);
     const rev = await p.texto(`/agendar/revisar?t=${t}`);
-    assert.doesNotMatch(rev, /Paciente de prueba B/, 'el resumen no revela el nombre');
-    assert.match(rev, /P\*\*\*/, 'lo muestra enmascarado');
+    assert.match(rev, /Paciente B/, 'el resumen muestra el nombre');
+    assert.doesNotMatch(rev, /P\*\*\*/, 'sin asteriscos');
     const conf = await p.texto('/agendar/confirmar', { t });
     assert.match(conf, /reservada correctamente/);
-    assert.doesNotMatch(conf, /Paciente de prueba B/, 'el comprobante en pantalla tampoco');
+    assert.match(conf, /Paciente B/, 'el comprobante en pantalla también');
     const pdf = Buffer.from(await (await p.req(`/agendar/comprobante.pdf?t=${t}`)).arrayBuffer()).toString('latin1');
     assert.match(pdf, /^%PDF/);
-    assert.ok(!pdf.includes('Paciente de prueba B'), 'el PDF tampoco');
     assert.ok((await s.c.citaRepo.buscarPorRut('22222222-2')).some((x) => x.idBloque === bloque && x.estadoReserva === 'ACTIVA'));
   } finally { await s.cerrar(); }
 });
@@ -200,8 +200,8 @@ test('cuenta del paciente: crear con verificación, ingresar, mis horas, datos, 
     assert.ok(!c.extras.extras.cuentasPaciente[0].hash.includes(clave), 'la contraseña no se guarda en texto');
     assert.match(await p.texto('/'), /Mi cuenta/);
     const fam = await p.texto('/paciente/familiares');
-    assert.match(fam, /Paciente de prueba C/);
-    assert.doesNotMatch(fam, /Paciente de prueba A/);
+    assert.match(fam, /Paciente C/);
+    assert.doesNotMatch(fam, /Paciente A/);
     const bc = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 }))[0];
     const citaC = await c.agendamiento.agendar({ rut: '33333333-3', idBloque: bc.id });
     assert.strictEqual((await p.req(`/paciente/comprobante.pdf?idCita=${citaC.id}`)).headers.get('content-type'), 'application/pdf');
@@ -224,7 +224,7 @@ test('cuenta del paciente: crear con verificación, ingresar, mis horas, datos, 
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '33333333-3', tipo: 'Otro', reemplazar: String(idDoc), archivo: pdf }, true), /no corresponde a ese paciente/);
     assert.strictEqual((await p.req(`/paciente/mis-documentos/archivo?id=${idDoc}`)).headers.get('content-type'), 'application/pdf');
     assert.match(await p.texto('/paciente/familiares/solicitar', { rutFamiliar: '11.111.111-1', relacion: 'Hijo' }), /Solicitud enviada/);
-    assert.doesNotMatch(await p.texto('/paciente/familiares'), /Paciente de prueba A/);
+    assert.doesNotMatch(await p.texto('/paciente/familiares'), /Paciente A/);
     await p.req('/paciente/salir', {});
     assert.strictEqual((await p.req('/paciente/mis-horas')).headers.get('location'), '/paciente/cuenta');
     const q = s.cliente();
@@ -265,15 +265,17 @@ test('portal: sin sesión los documentos y el cambio de datos se guardan igual (
     const bloque = Number((await p.texto(`/agendar/calendario?t=${t}`)).match(/bloque=(\d+)/)[1]);
     const sin = await p.texto(`/agendar/datos?t=${t}&bloque=${bloque}`);
     assert.match(sin, /name="doc1"/, 'se pueden adjuntar documentos sin cuenta');
-    assert.match(sin, /name="cambioDatos"/);
+    assert.match(sin, /name="nTelefono"/, 'el celular se puede cambiar');
+    assert.match(sin, /name="nIdComuna"/, 'la comuna se puede cambiar');
+    assert.match(sin, /Actual: \*+\d{4}/, 'muestra el celular actual oculto como referencia');
     const pdf = { blob: new Blob([Buffer.from('%PDF-1.4 x')], { type: 'application/pdf' }), nombre: 'cartola.pdf' };
-    assert.strictEqual((await p.req('/agendar/datos', { t, tipo1: 'Cartola FONASA', doc1: pdf, cambioDatos: 'Mi nuevo celular es +56987654321' }, true)).status, 302);
+    assert.strictEqual((await p.req('/agendar/datos', { t, tipo1: 'Cartola FONASA', doc1: pdf, nTelefono: '+56987654321' }, true)).status, 302);
     assert.match(await p.texto(`/agendar/revisar?t=${t}`), /CAMBIO DE DATOS SOLICITADO/);
     assert.match(await p.texto('/agendar/confirmar', { t }), /reservada correctamente/);
     const docs = s.c.documentos.listar().filter((d) => d.rut === '22222222-2');
     assert.strictEqual(docs.length, 1, 'el documento quedó guardado en la ficha');
     assert.match(JSON.stringify(docs[0]), /sin iniciar sesión/);
-    assert.ok(s.c.extras.listar('solicitudesPaciente').some((x) => x.rut === '22222222-2' && /celular/.test(x.detalle)), 'el cambio de datos llega como solicitud');
+    assert.ok(s.c.extras.listar('solicitudesPaciente').some((x) => x.rut === '22222222-2' && /celular: \+56987654321/i.test(x.detalle)), 'el cambio de datos llega como solicitud');
     assert.strictEqual((await s.c.catalogo.paciente('22222222-2')).telefono, antes.telefono, 'sin sesión no se sobrescribe la ficha');
     assert.strictEqual(s.c.operacion.meta.pacientes['22222222-2']?.consentimiento, undefined, 'el consentimiento no se registra a nombre de otro');
   } finally { await s.cerrar(); }

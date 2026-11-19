@@ -213,7 +213,7 @@ test("despachador: un enlace de Telemedicina reemplazado no se envía con la sol
   await c.operacion.comunicar(tele, vigente, "WhatsApp", "Enlace de atención");
   await c.despachador.procesar();
   assert.match(bandejaSaliente(c)[0].texto, /SALA-B$/);
-  assert.strictEqual(c.operacion.estadoEnvioEnlace(vigente).estado, "Enlace simulado");
+  assert.strictEqual(c.operacion.estadoEnvioEnlace(vigente).estado, "Enlace no enviado (envío aún no activo)");
 });
 
 test("despachador: el enlace que no cambió se envía igual que antes", async () => {

@@ -3,6 +3,8 @@ const { esc } = require("./util");
 const { permitido, rutaInicio } = require("../auth/permisos");
 const css = require("./estilos");
 const pulido = require("./pulido.css");
+const personalCss = require("./personal.css");
+const personalScript = require("./personal.script");
 
 const botonMenu = (id) =>
   `<button type="button" class="menu-btn" data-menu aria-controls="${id}" aria-expanded="false" aria-label="Abrir menú"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>`;
@@ -30,8 +32,10 @@ const MENU = [
     items: [
       ["/tens/resumen", "Resumen", "inicio"],
       ["/tens/agenda", "Agendas y reservas", "calendario"],
+      ["/tens/recepcion", "Recepción", "puerta"],
       ["/tens/espera", "Lista de espera", "lista"],
       ["/tens/pacientes", "Pacientes", "usuarios"],
+      ["/tens/documentos?pendiente=1", "Documentos", "documento"],
       ["/tens/comunicaciones", "Comunicaciones", "chat"],
     ],
   },
@@ -47,19 +51,17 @@ const URL_PORTAL = () => process.env.URL_PORTAL || "http://localhost:3000";
 const ROLES = {
   ADMINISTRACION: "Administración",
   TENS_TONS: "TENS/TONS",
-  TELEMEDICINA: "Telemedicina",
+  TELEMEDICINA: "Gestión de Telemedicina",
 };
 const marca =
   '<a class="marca" href="/" aria-label="Instituto de Caridad Hermandad de Dolores, inicio"><img class="logo" src="/img/logo.png" alt="Instituto de Caridad Hermandad de Dolores · +200 Años al servicio de Chile" width="170" height="46"></a>';
-const script = `<script>(function(){var h=document.documentElement;function s(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-function g(k){try{return localStorage.getItem(k)}catch(e){return null}}
-document.querySelectorAll('.side a:not(.side-marca)').forEach(function(a){if(a.getAttribute('href')===location.pathname)a.classList.add('act')});
+const script = `<script>(function(){
 document.addEventListener('input',function(e){var c=e.target;if(!c.matches||!c.matches('input[name=rut],input[name=respRut],input[name=rutFamiliar],input[data-rut]'))return;
 var v=c.value.toUpperCase().replace(/[^0-9K]/g,'');var k=v.slice(-1)==='K';v=v.replace(/K/g,'')+(k?'K':'');v=v.slice(0,9);c.value=v.length>1?v.slice(0,-1)+'-'+v.slice(-1):v});
-var mb=document.querySelector('[data-menu]');function menu(abrir){document.body.classList.toggle('menu-abierto',abrir);if(mb)mb.setAttribute('aria-expanded',abrir?'true':'false')}
-document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('menu-abierto')){menu(false);if(mb)mb.focus()}});
+var mb=document.querySelector('body.portal [data-menu]');if(mb){document.querySelectorAll('.side a:not(.side-marca)').forEach(function(a){if(a.getAttribute('href')===location.pathname)a.classList.add('act')});function menu(abrir){document.body.classList.toggle('menu-abierto',abrir);mb.setAttribute('aria-expanded',abrir?'true':'false')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('menu-abierto')){menu(false);mb.focus()}});
 document.addEventListener('click',function(e){if(e.target.closest('[data-menu]')){menu(!document.body.classList.contains('menu-abierto'));return}
-if(e.target.closest('.velo')||(document.body.classList.contains('menu-abierto')&&e.target.closest('.nav a,.side a'))){menu(false)}});
+if(e.target.closest('.velo')||(document.body.classList.contains('menu-abierto')&&e.target.closest('.nav a,.side a'))){menu(false)}});}
 var tp=null;function mover(e){var t=e.target.closest&&e.target.closest('[data-tip]');if(!t){if(tp)tp.classList.remove('ver');return}
 if(!tp){tp=document.createElement('div');tp.id='tip';tp.setAttribute('role','tooltip');document.body.appendChild(tp)}
 tp.innerHTML=t.getAttribute('data-tip');tp.classList.add('ver');var w=tp.offsetWidth,hh=tp.offsetHeight,x=e.clientX+14,y=e.clientY+14;
@@ -76,6 +78,7 @@ const iniciales = (n) =>
     .toUpperCase() || "·";
 const hoyLargo = () => {
   const t = new Date().toLocaleDateString("es-CL", {
+    timeZone: "America/Santiago",
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -145,7 +148,7 @@ function pagina({
       .map(
         (g) =>
           `<h3>${g.titulo}</h3>${g.items
-            .filter(([href]) => botActivo || href !== "/tens/bot")
+            .filter(([href]) => (botActivo || href !== "/tens/bot") && (usuario.rol !== "TELEMEDICINA" || href !== "/tens/recepcion"))
             .map(
               ([href, t, i]) =>
                 `<a href="${href}">${ico(i)}<span>${esc(t)}</span></a>`,
@@ -153,12 +156,15 @@ function pagina({
             .join("")}`,
       )
       .join("");
-    cuerpo = `<aside class="side" id="menu-personal" aria-label="Menú del personal"><a class="side-marca" href="${rutaInicio(usuario.rol)}"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>${permitido(usuario.rol, "admin") ? "Administración" : usuario.rol === "TELEMEDICINA" ? "Gestión de Telemedicina" : "TENS/TONS"}</small></span></a>
-<nav>${grupos}</nav><div class="pie-s">${usuario.rol === "ADMINISTRACION" ? `<a href="/admin/usuarios">${ico("llave")}<span>Configuración / perfil</span></a>` : ""}<div class="side-user"><b>${esc(usuario.nombre)}</b><span>${esc(usuario.rol === "ADMINISTRACION" ? "Red institucional" : usuario.rol === "TELEMEDICINA" ? "Telemedicina" : (require("../models/sedesInfo").infoSede(usuario.idPoliclinico)?.nombre||"Lugar asignado"))}</span><form method="post" action="/logout" class="micro"><button type="submit">Cerrar sesión</button></form></div><a href="${esc(URL_PORTAL())}" target="_blank" rel="noopener">${ico("externo")}<span>Portal de pacientes</span></a></div></aside>
+    const sedeUsuario = usuario.rol === "ADMINISTRACION"
+      ? "Red institucional"
+      : require("../models/sedesInfo").infoSede(usuario.idPoliclinico)?.nombre || ROLES[usuario.rol] || "Lugar asignado";
+    const aviso = mensaje ? `<div class="personal-aviso"><p class="aviso ${mensaje.tipo === "error" ? "err" : "okk"}" role="${mensaje.tipo === "error" ? "alert" : "status"}">${ico(mensaje.tipo === "error" ? "campana" : "check")}<span>${esc(mensaje.texto)}</span></p></div>` : "";
+    cuerpo = `<aside class="side" id="menu-personal" aria-label="Menú del personal"><div class="side-head"><a class="side-marca" href="${rutaInicio(usuario.rol)}"><img src="/img/sello.png" alt="" width="36" height="36"><span><b>Hermandad de Dolores</b><small>${esc(ROLES[usuario.rol] || usuario.rol)}</small></span></a><button class="side-close" type="button" aria-label="Cerrar menú">${ico("cerrar")}</button></div>
+<nav aria-label="Principal">${grupos}</nav><div class="pie-s"><a href="${esc(URL_PORTAL())}" target="_blank" rel="noopener">${ico("externo")}<span>Portal de pacientes</span></a>${usuario.rol === "ADMINISTRACION" ? `<a href="/admin/usuarios">${ico("llave")}<span>Configuración / perfil</span></a>` : ""}<div class="side-user"><span class="side-avatar" aria-hidden="true">${esc(iniciales(usuario.nombre))}</span><span><b>${esc(usuario.nombre)}</b><small>${esc(sedeUsuario)}</small></span></div><form method="post" action="/logout"><button class="side-logout" type="submit">${ico("puerta")} Cerrar sesión</button></form></div></aside>
 <div class="velo" aria-hidden="true"></div>
-<div class="app"><header class="top"><div class="top-izq">${botonMenu("menu-personal")}<h1>${esc(titulo)}</h1></div><div class="der"><span class="fecha-hoy">${ico("calendario")}${esc(hoyLargo())}</span>
-<div class="yo"><span class="av" aria-hidden="true">${esc(iniciales(usuario.nombre))}</span><span><b>${esc(usuario.nombre)}</b><small>${esc(ROLES[usuario.rol] || usuario.rol)}</small></span><form method="post" action="/logout"><button type="submit" class="sec">Salir</button></form></div></div></header>
-<main id="contenido">${msg}${lienzo ? contenido : `<div class="cont">${contenido}</div>`}</main></div>`;
+<div class="app"><header class="top"><div class="top-izq">${botonMenu("menu-personal")}<h1>${esc(titulo)}</h1></div><div class="der"><span class="fecha-hoy">${ico("calendario")}${esc(hoyLargo())}</span></div></header>
+<main id="contenido" tabindex="-1">${aviso}${lienzo ? contenido : `<div class="cont">${contenido}</div>`}</main></div><div class="personal-actividad" role="status" aria-live="polite" aria-atomic="true"></div>`;
   } else {
     cuerpo = `<header><div class="cab">${marca}<nav class="nav"><a class="cta" href="/">Ir al inicio</a></nav></div></header>
 <main id="contenido"><div class="cont solo"><h1>${esc(titulo)}</h1>${msg}${contenido}</div></main>`;
@@ -170,7 +176,7 @@ function pagina({
 <meta name="theme-color" content="#183b4e">${portal ? '<meta name="color-scheme" content="light">' : ""}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
-<style>${css}${usuario ? require("./operacion.css") : ""}${pulido}${portal ? require("./portal.css") : ""}</style></head>
-<body${clase ? ` class="${clase}"` : ""}><a class="saltar" href="#contenido">Saltar al contenido</a>${cuerpo}${script}${usuario ? require("./operacion.script") : ""}</body></html>`;
+<style>${css}${clase === "pers" ? require("./operacion.css") : ""}${pulido}${clase === "pers" ? personalCss : ""}${portal ? require("./portal.css") : ""}</style></head>
+<body${clase ? ` class="${clase}"` : ""}><a class="saltar" href="#contenido">Saltar al contenido</a>${cuerpo}${script}${String(contenido).includes('data-ec=') ? require("./graficos.script") : ""}${clase === "pers" ? personalScript + require("./operacion.script") : ""}</body></html>`;
 }
 module.exports = { pagina, WHATSAPP, CORREO, DIRECCION, iniciales };

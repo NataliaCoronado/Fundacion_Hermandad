@@ -7,24 +7,28 @@ const { hoy, sumarDias, textoLocal } = require("../util/tiempo");
 const { infoSede } = require("../models/sedesInfo");
 const { fechaValida, ids } = require("../services/OperacionService");
 const RUTA_AGENDA_PERSONAL = "/tens/agenda";
+const RUTA_AGENDA_ADMIN = "/admin/agendas";
 
-function urlAgendaPersonal(valor) {
+function urlAgenda(valor, ruta) {
   if (typeof valor !== "string" || valor.length > 4096) return undefined;
-  if (valor === RUTA_AGENDA_PERSONAL) return valor;
-  if (!valor.startsWith(RUTA_AGENDA_PERSONAL + "?")) return undefined;
+  if (valor === ruta) return valor;
+  if (!valor.startsWith(ruta + "?")) return undefined;
 
-  const filtros = new URLSearchParams(valor.slice(RUTA_AGENDA_PERSONAL.length + 1));
+  const filtros = new URLSearchParams(valor.slice(ruta.length + 1));
   const destino = new URLSearchParams();
   const fecha = filtros.get("fecha");
   const vista = filtros.get("vista");
   if (fechaValida(fecha)) destino.set("fecha", fecha);
   if (["dia", "semana", "lista"].includes(vista)) destino.set("vista", vista);
-  for (const nombre of ["esp", "prof", "estado", "q"]) {
+  const nombres = ruta === RUTA_AGENDA_ADMIN ? ["sede", "esp", "prof", "estado", "q"] : ["esp", "prof", "estado", "q"];
+  for (const nombre of nombres) {
     const filtro = filtros.get(nombre);
     if (filtro) destino.set(nombre, filtro);
   }
-  return destino.size ? RUTA_AGENDA_PERSONAL + "?" + destino : RUTA_AGENDA_PERSONAL;
+  return destino.size ? ruta + "?" + destino : ruta;
 }
+const urlAgendaPersonal = (valor) => urlAgenda(valor, RUTA_AGENDA_PERSONAL);
+const urlAgendaAdmin = (valor) => urlAgenda(valor, RUTA_AGENDA_ADMIN);
 
 function crearOperacionController(c) {
   const {
@@ -41,8 +45,8 @@ function crearOperacionController(c) {
     comunas: await catalogo.comunas(),
     especialidades: await catalogo.especialidades(),
   });
-  const visible = async (u) => {
-    const ctx = await contexto();
+  const visible = async (u, contextoExistente) => {
+    const ctx = contextoExistente || await contexto();
     return (await citaRepo.listar()).filter(
       (x) =>
         op.sedeBloque(
@@ -57,31 +61,31 @@ function crearOperacionController(c) {
     } catch (e) {
       if (e.message === "FUERA_DE_SEDE") throw e;
       const destino = typeof volver === "function" ? volver(r) : volver;
-      return { estado: 400, html: V.errorPage(r.usuario, e, destino) };
+      return { estado: 400, html: V.errorPage(r.usuario, e, destino), rechazo: e.message };
     }
   };
   const redirect = (redirigir) => ({ redirigir });
-  const detalleReserva = (idCita, volver) => {
+  const detalleReserva = (idCita, volver, admin = false) => {
     const params = new URLSearchParams({ idCita });
-    const volverAgenda = urlAgendaPersonal(volver);
+    const volverAgenda = admin ? urlAgendaAdmin(volver) : urlAgendaPersonal(volver);
     if (volverAgenda) params.set("volverAgenda", volverAgenda);
-    return "/tens/reserva?" + params;
+    return (admin ? "/admin/cupo?" : "/tens/reserva?") + params;
   };
   const volverAgenda = ({ cuerpo }) =>
     urlAgendaPersonal(cuerpo.volverAgenda) || RUTA_AGENDA_PERSONAL;
-  const getAgenda = async ({ usuario: u, consulta: q, token }, admin) => ({
-    html: V.calendario({
-      u,
-      q,
-      ctx: await contexto(),
-      citas: admin ? await citaRepo.listar() : await visible(u),
-      op,
-      admin,
-      mensaje: admin
-        ? undefined
-        : c.sesiones.tomarAviso(token, urlAgendaPersonal(RUTA_AGENDA_PERSONAL + "?" + q)),
-    }),
-  });
+  const volverAgendaAdmin = ({ cuerpo }) =>
+    urlAgendaAdmin(cuerpo.volverAgenda) || RUTA_AGENDA_ADMIN;
+  const getAgenda = async ({ usuario: u, consulta: q, token }, admin) => {
+    const ruta = admin ? RUTA_AGENDA_ADMIN : RUTA_AGENDA_PERSONAL;
+    const ctx = await contexto();
+    return {
+      html: V.calendario({
+        u, q, ctx, op, admin,
+        citas: admin ? await citaRepo.listar() : await visible(u, ctx),
+        mensaje: c.sesiones.tomarAviso(token, urlAgenda(ruta + "?" + q, ruta)),
+      }),
+    };
+  };
   const pacienteVisible = async (u, rut) => {
     await op.exigirPaciente(u, rut);
     return catalogo.paciente(normalizarRut(rut));
@@ -173,7 +177,6 @@ function crearOperacionController(c) {
         u,
         "Cambios de agenda",
         V.cab(
-          "Cambios de agenda",
           "Revisa las reservas afectadas antes de aplicar una modificación.",
           V.btn("Volver a agendas", "/admin/agendas", true)+V.btn("Estado de notificaciones","/admin/comunicaciones",true),
         ) +
@@ -241,21 +244,28 @@ function crearOperacionController(c) {
     };
   };
   return {
-    resumen: async ({ usuario: u }) => {
+    resumen: async ({ usuario: u, consulta = new URLSearchParams() }) => {
       const R = require("../views/resumen");
+      const { indicadoresResumen, pct } = require("./resumen");
       const admin = u.rol === "ADMINISTRACION";
       const ctx = await contexto();
       const ahora = textoLocal();
       const fHoy = ahora.slice(0, 10),
         hora = ahora.slice(11),
         manana = sumarDias(fHoy, 1),
-        semana = sumarDias(fHoy, 7),
+        semana = sumarDias(fHoy, 6),
         hace30 = sumarDias(fHoy, -30);
       const sedeDe = (b) => op.sedeBloque(b, ctx.profs.get(b?.idProfesional));
       const miSede = (idSede) => admin || idSede === Number(u.idPoliclinico);
-      const citas = (admin ? await citaRepo.listar() : await visible(u))
+      const citas = (await citaRepo.listar())
         .map((x) => ({ x, b: ctx.bloques.get(x.idBloque) }))
-        .filter(({ b }) => b);
+        .filter(({ b }) => b && miSede(sedeDe(b)));
+      const base = admin ? "/admin" : "/tens";
+      const sedes = ctx.listaSedes.filter((s) => miSede(s.id));
+      const profesionales = ctx.listaProfs.filter((p) => p.activo).map((p) => ({ id: p.id, nombre: p.nombre, sedes: op.lugares(p) })).sort((x, y) => x.nombre.localeCompare(y.nombre, "es", { numeric: true }));
+      const indicadores = indicadoresResumen({ consulta, fecha: fHoy, bloques: ctx.bloques, citas, sedes, sedeDe, idPoliclinico: admin ? undefined : Number(u.idPoliclinico), profesionales });
+      if (consulta.get("fragmento") === "indicadores")
+        return { html: R.indicadores(indicadores, base, consulta.get("alerta")) };
       const activas = citas.filter(({ x }) => x.estadoReserva === "ACTIVA");
       const tele = (b) => !!ctx.sedes.get(sedeDe(b))?.telemedicina;
       const esPendiente = ({ x }) => !x.asistencia && x.estadoConfirmacion !== "CONFIRMADA";
@@ -266,68 +276,88 @@ function crearOperacionController(c) {
       const sinEnlace = proximas48.filter(({ x, b }) => tele(b) && !x.asistencia && ["Enlace pendiente", "Error de envío"].includes(op.estadoEnvioEnlace(x).estado));
       const reservados = new Set(activas.map(({ x }) => x.idBloque));
       const cuposSemana = [...ctx.bloques.values()].filter((b) => b.publicado && b.fecha >= fHoy && b.fecha <= semana && miSede(sedeDe(b)));
+      const ocupadosSemana = cuposSemana.filter((b) => reservados.has(b.id)).length;
       const libresSemana = cuposSemana.filter((b) => !reservados.has(b.id) && (b.fecha > fHoy || b.hora > hora));
       const esperaV = (await espera.vigentes()).filter((e) => miSede(e.idPoliclinico));
       const esperaConCupo = esperaV.filter((e) => e.estado === "EN_ESPERA" && e.cupos.length);
       const esperaAntigua = esperaV.filter((e) => e.registradaEn && e.registradaEn <= hace30);
       const comErr = extras.listar("comunicaciones").filter((m) => m.estado === "Error" && (admin || m.idPoliclinico === +u.idPoliclinico));
-      const docsPend = extras.listar("documentos").filter((d) => !d.verificado && !d.archivado && (admin || d.idPoliclinico === +u.idPoliclinico));
+      const docsPend = extras.listar("documentos").filter((d) => (d.estadoRevision || (d.verificado ? "VALIDADO" : "PENDIENTE")) === "PENDIENTE" && !d.archivado && (admin || d.idPoliclinico === +u.idPoliclinico));
       const ultimos30 = citas.filter(({ x, b }) => b.fecha >= hace30 && b.fecha <= fHoy && x.asistencia);
-      const inasist = R.pct(ultimos30.filter(({ x }) => x.asistencia === "NO_ASISTIO").length, ultimos30.length);
+      const inasist = pct(ultimos30.filter(({ x }) => x.asistencia === "NO_ASISTIO").length, ultimos30.length);
       const profInactivos = activas.filter(({ x, b }) => b.fecha >= fHoy && !x.idProfesionalReemplazo && ctx.profs.get(b.idProfesional)?.activo === false);
       const confirmadasHoy = hoyC.filter(({ x }) => x.estadoConfirmacion === "CONFIRMADA").length;
       const atendidasHoy = hoyC.filter(({ x }) => x.asistencia === "ASISTIO").length;
-      const base = admin ? "/admin" : "/tens";
       const agendaDia = admin ? "/admin/agendas?vista=lista" : "/tens/agenda?vista=lista";
+      const urlAlerta = (alerta) => {
+        const filtro = new URLSearchParams(consulta);
+        filtro.set("alerta", alerta);
+        return `${base}/resumen?${filtro}#detalle-alerta`;
+      };
       const kpis = [
-        { href: agendaDia, clase: "dest", icono: "calendario", valor: hoyC.length, texto: "Citas hoy", nota: `${atendidasHoy} atendidas · ${confirmadasHoy} confirmadas` },
-        { href: admin ? "/admin/comunicaciones" : "/tens/confirmaciones", clase: sinConfirmar.length ? "am" : "", icono: "telefono", valor: sinConfirmar.length, texto: "Por confirmar (hoy y mañana)" },
-        { href: `${base}/espera`, clase: "az", icono: "lista", valor: esperaV.length, texto: "Pacientes en lista de espera", nota: esperaConCupo.length ? `${esperaConCupo.length} con cupo disponible` : "" },
+        { href: agendaDia, icono: "calendario", valor: hoyC.length, texto: "Citas hoy", nota: `${atendidasHoy} atendidas · ${confirmadasHoy} confirmadas` },
+        { href: admin && sinConfirmar.length ? urlAlerta("confirmaciones") : admin ? "/admin/comunicaciones" : "/tens/confirmaciones", clase: sinConfirmar.length ? "res-kpi-aviso" : "", icono: "telefono", valor: sinConfirmar.length, texto: "Por confirmar", nota: "Hoy y mañana" },
+        { href: `${base}/espera`, icono: "lista", valor: esperaV.length, texto: "En lista de espera", nota: esperaConCupo.length ? `${esperaConCupo.length} con cupo disponible` : "Solicitudes vigentes" },
         admin
-          ? { href: "/admin/reportes", clase: inasist >= 20 ? "rojo" : "gr", icono: "grafico", valor: inasist == null ? "—" : `${inasist}%`, texto: "Inasistencia últimos 30 días", nota: `Ocupación 7 días: ${(R.pct(cuposSemana.length - libresSemana.length, cuposSemana.length) ?? "—") + (cuposSemana.length ? "%" : "")}` }
-          : { href: "/tens/agenda?vista=semana", clase: "gr", icono: "reloj", valor: libresSemana.length, texto: "Cupos libres próximos 7 días" },
+          ? { href: `/admin/reportes?seccion=lugares&desde=${hace30}&hasta=${fHoy}`, clase: inasist >= 20 ? "res-kpi-crit" : "", icono: "grafico", valor: inasist == null ? "—" : `${inasist}%`, texto: "Inasistencia en 30 días", nota: `Ocupación 7 días: ${cuposSemana.length ? `${pct(ocupadosSemana, cuposSemana.length)}%` : "—"}` }
+          : { href: "/tens/agenda?vista=semana&estado=Disponible", icono: "reloj", valor: libresSemana.length, texto: "Cupos libres", nota: "Próximos 7 días" },
       ];
       const alertas = [
-        { nivel: "crit", titulo: "Citas de hoy sin registrar asistencia", detalle: "La hora ya pasó y falta marcar si llegó o no", n: sinAsistencia.length, href: agendaDia },
-        { nivel: "crit", titulo: "Citas de hoy o mañana sin confirmar", detalle: "Llamar o enviar recordatorio al paciente", n: sinConfirmar.length, href: admin ? "/admin/comunicaciones" : "/tens/confirmaciones" },
+        { id: "asistencia", nivel: "crit", titulo: "Citas de hoy sin registrar asistencia", detalle: "Falta registrar el resultado de la atención.", filas: sinAsistencia, origen: admin ? agendaDia : "/tens/recepcion", accion: admin ? "Abrir agenda" : "Abrir recepción" },
+        { id: "confirmaciones", nivel: "crit", titulo: "Citas de hoy o mañana sin confirmar", detalle: "Requieren contacto con el paciente.", filas: sinConfirmar, origen: admin ? "/admin/comunicaciones" : "/tens/confirmaciones", accion: admin ? "Abrir comunicaciones" : "Gestionar confirmaciones" },
         ...(admin || tele({ idPoliclinico: +u.idPoliclinico })
-          ? [{ nivel: "crit", titulo: "Telemedicina sin enlace enviado", detalle: "Citas de hoy o mañana sin enlace de atención o con error de envío", n: sinEnlace.length, href: agendaDia }]
+          ? [{ id: "enlaces", nivel: "crit", titulo: "Telemedicina sin enlace enviado", detalle: "Citas de hoy o mañana con enlace pendiente o error de envío.", filas: sinEnlace, origen: agendaDia, accion: "Abrir agenda" }]
           : []),
         ...(admin
-          ? [{ nivel: "crit", titulo: "Citas con profesional inactivo", detalle: "Reservas futuras sin reemplazo asignado: reagendar o reasignar", n: profInactivos.length, href: "/admin/cancelaciones" }]
+          ? [{ id: "profesionales", nivel: "crit", titulo: "Citas con profesional inactivo", detalle: "Reservas futuras sin reemplazo asignado.", filas: profInactivos, origen: "/admin/cancelaciones", accion: "Abrir cancelaciones" }]
           : []),
-        { nivel: "crit", titulo: "Mensajes con error de envío", detalle: "Comunicaciones que no llegaron al paciente", n: comErr.length, href: `${base}/comunicaciones` },
-        { nivel: "aviso", titulo: "Lista de espera con cupo disponible", detalle: "Hay horas libres que calzan con la solicitud", n: esperaConCupo.length, href: `${base}/espera` },
-        { nivel: "aviso", titulo: "Solicitudes en espera hace más de 30 días", detalle: "Revisar prioridad o contactar al paciente", n: esperaAntigua.length, href: `${base}/espera` },
-        ...(admin ? [] : [{ nivel: "aviso", titulo: "Documentos por revisar", detalle: "Órdenes o documentos subidos sin verificar", n: docsPend.length, href: "/tens/documentos" }]),
-      ].sort((a, z) => (z.n ? 1 : 0) - (a.n ? 1 : 0) || (a.nivel === "crit" ? -1 : 1) - (z.nivel === "crit" ? -1 : 1));
-      const citasHoy = hoyC.slice(0, admin ? 10 : 12).map(({ x, b }) => {
-        const prof = ctx.profs.get(b.idProfesional);
+        { nivel: "crit", titulo: "Mensajes con error de envío", detalle: "Comunicaciones que requieren revisión o reenvío.", n: comErr.length, href: `${base}/comunicaciones?estado=Error` },
+        { nivel: "aviso", titulo: "Lista de espera con cupo disponible", detalle: "Hay horas libres compatibles con la solicitud.", n: esperaConCupo.length, href: `${base}/espera?pendiente=con-cupo` },
+        { nivel: "aviso", titulo: "Solicitudes en espera hace más de 30 días", detalle: "Requieren revisar la prioridad o contactar al paciente.", n: esperaAntigua.length, href: `${base}/espera?pendiente=antigua` },
+        ...(admin ? [] : [{ nivel: "aviso", titulo: "Documentos por revisar", detalle: "Documentos administrativos pendientes de verificar.", n: docsPend.length, href: "/tens/documentos?pendiente=1#documentos-registrados" }]),
+      ].map((a) => a.filas ? { ...a, n: a.filas.length, href: urlAlerta(a.id) } : a);
+      const aCita = ({ x, b }) => {
+        const prof = ctx.profs.get(x.idProfesionalReemplazo || b.idProfesional);
         const est = V.estado(x, tele(b), op);
         return {
           fecha: b.fecha,
           hora: b.hora,
           paciente: ctx.pacientes.get(x.rut)?.nombre || x.rut,
-          detalle: [b.especialidad, prof?.nombre, admin ? ctx.sedes.get(sedeDe(b))?.nombre : ""].filter(Boolean).join(" · "),
+          detalle: [b.especialidad || prof?.especialidad, prof?.nombre, admin ? ctx.sedes.get(sedeDe(b))?.nombre : ""].filter(Boolean).join(" · "),
           href: admin ? "/admin/cupo?idCita=" + x.id : detalleReserva(x.id),
           badge: V.badge(est),
         };
+      };
+      const citasHoy = hoyC.slice(0, admin ? 10 : 12).map(aCita);
+      const seleccion = alertas.find((a) => a.id && a.id === consulta.get("alerta"));
+      const detalleAlerta = seleccion && {
+        ...seleccion,
+        filas: [...seleccion.filas]
+          .sort((a, z) => a.b.fecha.localeCompare(z.b.fecha) || a.b.hora.localeCompare(z.b.hora))
+          .map(aCita),
+      };
+      const capacidad = admin ? null : Array.from({ length: 7 }, (_, i) => {
+        const dia = sumarDias(fHoy, i);
+        const delDia = cuposSemana.filter((b) => b.fecha === dia);
+        const ocupados = delDia.filter((b) => reservados.has(b.id)).length;
+        return { fecha: dia, reservados: ocupados, libres: delDia.length - ocupados };
       });
       const porSede = admin
         ? ctx.listaSedes.map((s) => {
             const deSede = (b) => sedeDe(b) === s.id;
             const cs = cuposSemana.filter(deSede);
             return {
+              id: s.id,
               nombre: s.nombre,
               hoy: hoyC.filter(({ b }) => deSede(b)).length,
               porConfirmar: sinConfirmar.filter(({ b }) => deSede(b)).length,
               espera: esperaV.filter((e) => e.idPoliclinico === s.id).length,
-              ocupacion: R.pct(cs.filter((b) => reservados.has(b.id)).length, cs.length),
+              ocupacion: pct(cs.filter((b) => reservados.has(b.id)).length, cs.length),
             };
           })
         : null;
       return {
-        html: R.resumen({ usuario: u, admin, sede: ctx.sedes.get(+u.idPoliclinico), kpis, alertas, citasHoy, porSede, hora }),
+        html: R.resumen({ usuario: u, admin, sede: ctx.sedes.get(+u.idPoliclinico), kpis, alertas, detalleAlerta, citasHoy, porSede, capacidad, indicadores, hora, consulta }),
       };
     },
     adminAgenda: (r) => getAgenda(r, true),
@@ -348,16 +378,15 @@ function crearOperacionController(c) {
     ),
     bloqueGuardar: safe(
       "/admin/bloque/nuevo",
-      async ({ usuario: u, cuerpo: d }) => {
+      async ({ usuario: u, cuerpo: d, token }) => {
         await op.crearSerie(d, u);
-        return redirect(
-          "/admin/agendas?" +
-            new URLSearchParams({
-              fecha: d.desde,
-              sede: d.idPoliclinico,
-              prof: d.idProfesional,
-            }),
-        );
+        const destino = RUTA_AGENDA_ADMIN + "?" + new URLSearchParams({
+          fecha: d.desde,
+          sede: d.idPoliclinico,
+          prof: d.idProfesional,
+        });
+        c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El bloque horario se guardó." });
+        return redirect(destino);
       },
     ),
     equipo: async ({ usuario: u, consulta: q }) => ({
@@ -505,8 +534,7 @@ function crearOperacionController(c) {
         u,
         "Colores de agenda",
         V.cab(
-          "Colores de agenda",
-          "En Toda la red se usa el color del lugar; al elegir una sede se usa el color de especialidad.",
+          "Los cupos de toda la red muestran el color del lugar. Al elegir una sede, muestran el color de la especialidad.",
         ) +
           V.btn("Colores por lugar", "/admin/policlinicos", true) +
           V.btn(
@@ -609,17 +637,31 @@ function crearOperacionController(c) {
       );
       return redirect("/admin/cambios");
     }),
-    cupo: async ({ usuario: u, consulta: q }) => {
-      const x = q.get("idCita")
+    cupo: async ({ usuario: u, consulta: q, token }) => {
+      let x = q.get("idCita")
           ? await op.exigirCita(u, q.get("idCita"))
           : null,
         b = await catalogo.bloque(x?.idBloque || q.get("idBloque"));
       if (!b) throw new Error("CITA_NO_ENCONTRADA");
+      if (!x) {
+        const activa = await citaRepo.buscarActivaPorBloque(b.id);
+        if (activa) x = await op.exigirCita(u, activa.id);
+      }
+      const ctx = await contexto();
+      if (x?.estadoReserva === "ACTIVA") {
+        ctx.disponibles = await agendamiento.bloquesDisponibles({
+          especialidad: b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad,
+        });
+      }
       return {
-        html: V.reserva({ u, ctx: {...await contexto(), disponibles:await agendamiento.bloquesDisponibles({especialidad:b.especialidad||(await catalogo.profesional(b.idProfesional)).especialidad})}, c: x, b, op, admin: true }),
+        html: V.reserva({
+          u, ctx, c: x, b, op, admin: true,
+          volverAgenda: urlAgendaAdmin(q.get("volverAgenda")),
+          mensaje: x && c.sesiones.tomarAviso(token, detalleReserva(x.id, q.get("volverAgenda"), true)),
+        }),
       };
     },
-    cupoEstado: safe("/admin/agendas", async ({ usuario: u, cuerpo: d }) => {
+    cupoEstado: safe(volverAgendaAdmin, async ({ usuario: u, cuerpo: d, token }) => {
       const b = await catalogo.bloque(d.idBloque);
       if (!b || !["Disponible", "Bloqueado", "Sin publicar"].includes(d.estado))
         throw new Error("Cupo o estado inválido.");
@@ -636,7 +678,9 @@ function crearOperacionController(c) {
       op.aud(u, "Estado del cupo actualizado", "Agendas", b.id, b, {
         estado: d.estado,
       });
-      return redirect("/admin/agendas?fecha=" + b.fecha);
+      const destino = urlAgendaAdmin(d.volverAgenda) || RUTA_AGENDA_ADMIN + "?fecha=" + b.fecha;
+      c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El estado del cupo se guardó." });
+      return redirect(destino);
     }),
     pacientes: async ({ usuario: u, consulta: q }) => {
       if (q.get("nuevo"))
@@ -708,8 +752,8 @@ function crearOperacionController(c) {
       );
       return redirect("/tens/pacientes");
     }),
-    reserva: async ({ usuario: u, consulta: q }) => {
-      const x = q.get("idCita")
+    reserva: async ({ usuario: u, consulta: q, token }) => {
+      let x = q.get("idCita")
           ? await op.exigirCita(u, q.get("idCita"))
           : null,
         b = await catalogo.bloque(x?.idBloque || q.get("idBloque")),
@@ -719,15 +763,21 @@ function crearOperacionController(c) {
         op.sedeBloque(b, ctx.profs.get(b.idProfesional)) !== +u.idPoliclinico
       )
         throw new Error("FUERA_DE_SEDE");
-      ctx.disponibles = await agendamiento.bloquesDisponibles({
-        idPoliclinico: u.idPoliclinico,
-        especialidad:
-          b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad,
-      });
+      if (!x) {
+        const activa = await citaRepo.buscarActivaPorBloque(b.id);
+        if (activa) x = await op.exigirCita(u, activa.id);
+      }
+      if (x?.estadoReserva === "ACTIVA") {
+        ctx.disponibles = await agendamiento.bloquesDisponibles({
+          idPoliclinico: u.idPoliclinico,
+          especialidad: b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad,
+        });
+      }
       return {
         html: V.reserva({
           u, ctx, c: x, b, op,
           volverAgenda: urlAgendaPersonal(q.get("volverAgenda")),
+          mensaje: x && c.sesiones.tomarAviso(token, detalleReserva(x.id, q.get("volverAgenda"))),
         }),
       };
     },
@@ -763,7 +813,7 @@ function crearOperacionController(c) {
       });
       return redirect(destino);
     }),
-    cancelar: safe("/tens/agenda", async ({ usuario: u, cuerpo: d }) => {
+    cancelar: safe(volverAgenda, async ({ usuario: u, cuerpo: d }) => {
       camposCancelacion(d);
       if (!["WhatsApp", "Llamada", "Presencial"].includes(d.canal))
         throw new Error("Canal de solicitud inválido.");
@@ -787,35 +837,43 @@ function crearOperacionController(c) {
       });
       return redirect("/tens/espera");
     }),
-    reagendar: safe("/tens/agenda", async ({ usuario: u, cuerpo: d }) => {
-      const x = await op.exigirCita(u, d.idCita),
-        b = await catalogo.bloque(d.idBloque),
-        p = b && (await catalogo.profesional(b.idProfesional));
-      if (!b || (u.rol!=="ADMINISTRACION" && op.sedeBloque(b, p) !== +u.idPoliclinico))
-        throw new Error("FUERA_DE_SEDE");
-      if (!d.motivo?.trim()) throw new Error("Indica un motivo.");
-      const nueva = await agendamiento.agendar({
-        rut: x.rut,
-        idBloque: b.id,
-        idUsuario: u.id,
-      });
-      try {
-        await agendamiento.cancelar(x.id, "ASISTIDA");
-      } catch (e) {
-        await agendamiento.cancelar(nueva.id, "ASISTIDA");
-        throw e;
-      }
-      op.aud(u, "Reserva reprogramada", "Reservas", x.id, x, {
-        nuevaReserva: nueva.id,
-        motivo: d.motivo,
-      });
-      if(u.rol==="ADMINISTRACION"){await op.comunicar(u,nueva,"Correo","Reprogramación institucional");return redirect("/admin/cupo?idCita="+nueva.id);}
-      return redirect("/tens/reserva?idCita=" + nueva.id);
-    }),
-    espera: async ({ usuario: u, consulta: q }) => ({
+    reagendar: safe(
+      (r) => r.usuario.rol === "ADMINISTRACION" ? volverAgendaAdmin(r) : volverAgenda(r),
+      async ({ usuario: u, cuerpo: d, token }) => {
+        const admin = u.rol === "ADMINISTRACION";
+        const x = await op.exigirCita(u, d.idCita),
+          b = await catalogo.bloque(d.idBloque),
+          p = b && (await catalogo.profesional(b.idProfesional));
+        if (!b || (!admin && op.sedeBloque(b, p) !== +u.idPoliclinico))
+          throw new Error("FUERA_DE_SEDE");
+        if (!d.motivo?.trim()) throw new Error("Indica un motivo.");
+        const nueva = await agendamiento.agendar({
+          rut: x.rut,
+          idBloque: b.id,
+          idUsuario: u.id,
+        });
+        try {
+          await agendamiento.cancelar(x.id, "ASISTIDA");
+        } catch (e) {
+          await agendamiento.cancelar(nueva.id, "ASISTIDA");
+          throw e;
+        }
+        op.aud(u, "Reserva reprogramada", "Reservas", x.id, x, {
+          nuevaReserva: nueva.id,
+          motivo: d.motivo,
+        });
+        if (admin) await op.comunicar(u, nueva, "Correo", "Reprogramación institucional");
+        const destino = detalleReserva(nueva.id, d.volverAgenda, admin);
+        c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "La reserva se reprogramó." });
+        return redirect(destino);
+      },
+    ),
+    espera: async ({ usuario: u, consulta: q, token }) => ({
       html: V.espera({
         u,
         q,
+        mensaje: c.sesiones.tomarAviso(token, "/tens/espera"),
+        avisos: c.extras.listar("notificaciones").filter((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idPoliclinico === +u.idPoliclinico),
         ctx: {
           ...(await contexto()),
           listaProfs:(await catalogo.profesionales()).filter(p=>op.lugares(p).includes(+u.idPoliclinico)),
@@ -863,24 +921,24 @@ function crearOperacionController(c) {
       );
       return redirect("/tens/espera");
     }),
-    comunicaciones: async ({ usuario: u }) => {
+    comunicaciones: async ({ usuario: u, consulta = new URLSearchParams() }) => {
       const admin = u.rol === "ADMINISTRACION",
+        errores = consulta.get("estado") === "Error",
+        ruta = admin ? "/admin/comunicaciones" : "/tens/comunicaciones",
         lista = extras
           .listar("comunicaciones")
-          .filter((m) => admin || m.idPoliclinico === +u.idPoliclinico);
+          .filter((m) => (admin || m.idPoliclinico === +u.idPoliclinico) && (!errores || m.estado === "Error"));
       return {
         html: V.page(
           u,
           "Comunicaciones",
           V.cab(
-            "Comunicaciones",
             "Confirmaciones, recordatorios y contacto administrativo. Los envíos permanecen pendientes hasta conectar un proveedor.",
-            !admin
-              ? V.btn("Confirmaciones / llamadas", "/tens/confirmaciones", true)
-              : "",
+            (errores ? V.btn("Ver todos los mensajes", ruta, true) : "") +
+              (!admin ? V.btn("Confirmaciones / llamadas", "/tens/confirmaciones", true) : ""),
           ) +
             V.panel(
-              "Bandeja operativa",
+              errores ? "Mensajes con error de envío" : "Bandeja operativa",
               tabla(
                 [
                   "Destinatario",
@@ -909,6 +967,7 @@ function crearOperacionController(c) {
                     ),
                   ),
                 ]),
+                errores ? "No hay mensajes con error de envío." : undefined,
               ),
             ) +
             (!admin
@@ -944,7 +1003,7 @@ function crearOperacionController(c) {
         return redirect(u.rol === "ADMINISTRACION" ? "/admin/comunicaciones" : "/tens/comunicaciones");
       },
     ),
-    enlace: safe("/tens/agenda", async ({ usuario: u, cuerpo: d }) => {
+    enlace: safe(volverAgenda, async ({ usuario: u, cuerpo: d, token }) => {
       if (u.rol !== "TELEMEDICINA") throw new Error("FUERA_DE_SEDE");
       const x = await op.exigirCita(u, d.idCita);
       let url;
@@ -958,7 +1017,9 @@ function crearOperacionController(c) {
       op.aud(u, "Enlace de Telemedicina actualizado", "Telemedicina", x.id, x, {
         enlace: url.href,
       });
-      return redirect(detalleReserva(x.id, d.volverAgenda));
+      const destino = detalleReserva(x.id, d.volverAgenda);
+      c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El enlace de atención se guardó." });
+      return redirect(destino);
     }),
     documentoArchivar: safe(
       "/tens/pacientes",
@@ -984,7 +1045,6 @@ function crearOperacionController(c) {
           u,
           "Usuarios y permisos",
           V.cab(
-            "Usuarios y permisos",
             "Configuración administrativa de accesos y lugares.",
             V.btn("Auditoría", "/admin/auditoria", true),
           ) +
@@ -1094,6 +1154,7 @@ function crearOperacionController(c) {
             (!q.get("accion") ||
               x.accion.toLowerCase().includes(q.get("accion").toLowerCase())) &&
             (!q.get("sede") || x.idPoliclinico === +q.get("sede")) &&
+            (!q.get("resultado") || x.resultado === q.get("resultado")) &&
             (!q.get("q") ||
               `${x.accion} ${x.detalle}`
                 .toLowerCase()
@@ -1104,15 +1165,15 @@ function crearOperacionController(c) {
           u,
           "Auditoría",
           V.cab(
-            "Auditoría",
             "Registro de accesos y operaciones sensibles, con valores anteriores y posteriores.",
           ) +
-            `<form class="filters">${V.input("desde", "Desde", q.get("desde") || "", "date")}${V.input("hasta", "Hasta", q.get("hasta") || "", "date")}${V.input("usuario", "Usuario", q.get("usuario") || "")}${V.input("accion", "Acción", q.get("accion") || "")}${V.select("sede", "Lugar", [{ id: "", nombre: "Todos" }, ...(await catalogo.policlinicos())], q.get("sede") || "")}<button type="submit">Filtrar</button></form>` +
+            `<form class="filters">${V.input("desde", "Desde", q.get("desde") || "", "date")}${V.input("hasta", "Hasta", q.get("hasta") || "", "date")}${V.input("usuario", "Usuario", q.get("usuario") || "")}${V.input("accion", "Acción", q.get("accion") || "")}${V.select("sede", "Lugar", [{ id: "", nombre: "Seleccionar lugar…" }, ...(await catalogo.policlinicos())], q.get("sede") || "")}${V.select("resultado", "Resultado", [{ id: "", nombre: "Seleccionar resultado…" }, { id: "EXITOSO", nombre: "Exitoso" }, { id: "RECHAZADO", nombre: "Rechazado" }, { id: "ERROR", nombre: "Error" }], q.get("resultado") || "")}<button type="submit">Filtrar</button></form>` +
             tabla(
               [
                 "Fecha",
                 "Usuario",
                 "Acción",
+                "Resultado",
                 "Módulo / registro",
                 "Antes / después",
               ],
@@ -1122,7 +1183,8 @@ function crearOperacionController(c) {
                   x.fecha,
                   x.usuario,
                   x.accion,
-                  `${x.modulo || ""} ${x.registro || x.detalle}`,
+                  raw(V.badge({ EXITOSO: "Exitoso", RECHAZADO: "Rechazado", ERROR: "Error" }[x.resultado] || "Exitoso")),
+                  x.resultado === "RECHAZADO" ? `${x.modulo || ""} ${x.registro || ""} · ${x.detalle}` : `${x.modulo || ""} ${x.registro || x.detalle}`,
                   raw(
                     `<details><summary>Ver valores</summary><pre>${esc(JSON.stringify({ antes: x.antes, despues: x.despues }, null, 2))}</pre></details>`,
                   ),

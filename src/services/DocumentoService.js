@@ -134,17 +134,37 @@ class DocumentoService {
       registradoPor: usuario.nombre,
       fecha: textoLocal(),
       verificado: false,
+      estadoRevision: "PENDIENTE",
       verificadoPor: null,
+      verificadoPorId: null,
+      revisadoEn: null,
+      registradoPorId: usuario.id || null,
       adjunto,
     });
   }
-  async verificar(id, usuario) {
+  revisar(id, usuario, estado, observacion) {
     const d = this.extras.buscar("documentos", id);
     if (!d) throw new Error("DOCUMENTO_NO_ENCONTRADO");
     return this.extras.actualizar("documentos", id, {
-      verificado: true,
+      verificado: estado === "VALIDADO",
+      estadoRevision: estado,
       verificadoPor: usuario.nombre,
+      verificadoPorId: usuario.id || null,
+      revisadoEn: textoLocal(),
+      ...(observacion !== undefined ? { observacion } : {}),
     });
+  }
+  async verificar(id, usuario) {
+    return this.revisar(id, usuario, "VALIDADO");
+  }
+  // El documento no sirve tal como está: queda observado, con el motivo, a la espera de uno nuevo.
+  async observar(id, usuario, motivo) {
+    const m = String(motivo || "").trim();
+    if (!m) throw new Error("MOTIVO_REQUERIDO");
+    return this.revisar(id, usuario, "OBSERVADO", m.slice(0, 300));
+  }
+  static estado(d) {
+    return d.estadoRevision || (d.verificado ? "VALIDADO" : "PENDIENTE");
   }
   archivo(id) {
     const d = this.extras.buscar("documentos", id);

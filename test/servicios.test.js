@@ -124,7 +124,7 @@ test('reportes: resumen y CSV sin datos de pacientes', async () => {
   assert.strictEqual(r.tasaInasistencia, 100);
   const csv = await c.reportes.csvDetalle();
   assert.ok(csv.startsWith('﻿Fecha;Hora'));
-  assert.ok(!csv.includes(A) && !csv.includes('Paciente de prueba'));
+  assert.ok(!csv.includes(A) && !csv.includes('Paciente'));
 });
 
 test('ficha: adulto responsable obligatorio en menores, opcional en adultos, y la ficha se puede corregir', async () => {
@@ -170,7 +170,7 @@ test('reportes: caracterización de pacientes y demanda por profesional, sin dat
   const pp = await c.reportes.porProfesional();
   assert.strictEqual(pp.length, 47);
   assert.deepStrictEqual([pp[0].citas, pp[0].asistio, pp[0].cupos], [3, 1, 8]);
-  for (const texto of [await c.reportes.csvProfesionales(), await c.reportes.csvResumen()]) assert.ok(!/11111111|Paciente de prueba/.test(texto));
+  for (const texto of [await c.reportes.csvProfesionales(), await c.reportes.csvResumen()]) assert.ok(!/11111111|\bPaciente [A-C0-9]+\b/.test(texto));
 });
 
 test('documentos: adjunto PDF/JPG/PNG reconocido por contenido; se rechaza otro formato o más de 5 MB', async () => {

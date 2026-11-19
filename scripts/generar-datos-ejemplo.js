@@ -23,7 +23,7 @@ ${SEDES.flatMap((s) => s.especialidades.map((e) => ` (${s.id},${idEsp(e)})`)).jo
 
 const horas = [['09:00', '09:30'], ['09:30', '10:00'], ['10:00', '10:30'], ['10:30', '11:00']];
 const seccion2 = `INSERT INTO profesional (rut, nombres, apellidos, correo_institucional) VALUES
-${profs.map((p) => ` ('${18000000 + p.id}-${dv(18000000 + p.id)}','Profesional de prueba','${p.id}','profesional${p.id}@ejemplo.cl')`).join(',\n')};
+${profs.map((p) => ` ('${18000000 + p.id}-${dv(18000000 + p.id)}','Profesional','${p.id}','profesional${p.id}@ejemplo.cl')`).join(',\n')};
 
 INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especialidad) VALUES
 ${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)})`).join(',\n')};

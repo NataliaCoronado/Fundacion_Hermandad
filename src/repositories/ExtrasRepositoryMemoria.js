@@ -14,6 +14,7 @@ class ExtrasRepositoryMemoria {
     Object.assign(o, cambios);
     return o;
   }
+  esperarEscrituras() { return Promise.resolve(); }
   buscar(tipo, id) { return this.extras[tipo].find((x) => x.id === Number(id)) || null; }
 }
 module.exports = { ExtrasRepositoryMemoria };

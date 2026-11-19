@@ -25,7 +25,7 @@ ${fila('Policlínico', c.policlinico)}${c.whatsapp ? fila('WhatsApp', formatoTel
   return pagina({
     titulo: 'Consulta tu reserva', usuario, portal: true, activo: 'consulta',
     contenido: `<p class="lead">Para proteger tu información, verifica tus datos antes de ver tus reservas.</p>
-<form method="post" action="/paciente/consulta" class="tarjeta col"><label for="rut">RUT del paciente <span aria-hidden="true">*</span></label><input id="rut" name="rut" placeholder="12345678-5" maxlength="10" autocomplete="off" autocomplete="off" required>
+<form method="post" action="/paciente/consulta" class="tarjeta col"><label for="rut">RUT del paciente <span aria-hidden="true">*</span></label><input id="rut" name="rut" placeholder="12345678-5" maxlength="12" autocomplete="off" autocomplete="off" required>
 <label for="fechaNacimiento">Fecha de nacimiento <span aria-hidden="true">*</span></label><input id="fechaNacimiento" name="fechaNacimiento" type="date" required>
 <label for="celular4">Últimos 4 dígitos del celular registrado <span aria-hidden="true">*</span></label><input id="celular4" name="celular4" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required>
 <button class="btn blq" type="submit">Consultar</button></form>
@@ -47,7 +47,7 @@ const encuesta = ({ mensaje, usuario }) => pagina({
 const ayuda = (usuario, sedes) => pagina({
   titulo: 'Ayuda y contacto', usuario, portal: true, activo: 'ayuda',
   contenido: `<p class="lead">Escríbenos por WhatsApp o correo. Si prefieres, contacta directamente a tu policlínico.</p>
-<dl class="contacto"><div><dt>WhatsApp</dt><dd><a href="https://wa.me/${WHATSAPP.replace(/\D/g, '')}">${WHATSAPP}</a></dd></div><div><dt>Correo</dt><dd><a href="mailto:${CORREO}">${CORREO}</a></dd></div><div><dt>Horario</dt><dd>Por confirmar</dd></div></dl>
+<dl class="contacto"><div><dt>WhatsApp</dt><dd><a href="https://wa.me/${WHATSAPP.replace(/\D/g, '')}">${WHATSAPP}</a></dd></div><div><dt>Correo</dt><dd><a href="mailto:${CORREO}">${CORREO}</a></dd></div></dl>
 <h2 style="margin-top:28px">Nuestros policlínicos</h2>
 <div class="grilla">${sedes.map((s) => { const i = infoSede(s.id); return `<div class="opcion">${foto(s, s.telemedicina ? 'foto ilus' : 'foto')}<h3>${esc(s.nombre)}</h3>
 <p>${esc(i?.direccion || 'Atención a distancia')}</p>

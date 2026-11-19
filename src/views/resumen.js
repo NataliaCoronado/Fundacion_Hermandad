@@ -1,83 +1,150 @@
 "use strict";
-// Dashboard de inicio para Administración y TENS/TONS: lo más importante del día
-// y las alertas críticas que requieren acción.
 const { pagina } = require("./layout");
-const { esc } = require("./util");
+const { esc, opciones } = require("./util");
 const { ico } = require("./iconos");
-
-const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const fechaCorta = (f) => {
-  const [, m, d] = String(f || "").split("-");
-  return d ? `${Number(d)} ${MES[Number(m) - 1]}` : "";
-};
-const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
+const G = require("./graficos");
+const estilos = require("./resumen.css");
+const script = require("./resumen.script");
 
 const kpi = ({ href, clase = "", icono, valor, texto, nota = "" }) =>
-  `<a class="kpi ${clase}" href="${esc(href)}"><span class="ico-c">${ico(icono)}</span><span><b>${valor}</b><span>${esc(texto)}</span>${nota ? `<small>${esc(nota)}</small>` : ""}</span></a>`;
+  `<a class="res-kpi ${clase}" href="${esc(href)}"${href.includes("#detalle-alerta") ? " data-res-alerta-url" : ""}><span class="res-kpi-etiqueta">${ico(icono)}${esc(texto)}</span><strong>${esc(valor)}</strong>${nota ? `<small>${esc(nota)}</small>` : ""}</a>`;
 
-// Una alerta: nivel "crit" (rojo) o "aviso" (ámbar). Las que tienen n = 0 se muestran como "al día".
-const alerta = ({ nivel, titulo, detalle, n, href }) =>
-  n
-    ? `<li class="al ${nivel}"><a href="${esc(href)}"><span class="al-n">${n}</span><span><b>${esc(titulo)}</b><small>${esc(detalle)}</small></span>${ico("chevDer")}</a></li>`
-    : `<li class="al ok"><span class="al-n">${ico("check")}</span><span><b>${esc(titulo)}</b><small>Al día</small></span></li>`;
+const alerta = ({ id, nivel, titulo, detalle, n, href }, seleccion) =>
+  `<li><a class="res-alerta" data-prioridad="${nivel}" href="${esc(href)}"${id ? " data-res-alerta-url" : ""}${id && seleccion === id ? ' aria-current="true"' : ""}><span class="res-alerta-cantidad" aria-label="${n} casos">${n}</span><span><b>${esc(titulo)}</b><small>${esc(detalle)}</small></span><span class="res-alerta-nivel">${nivel === "crit" ? "Crítica" : "Aviso"}</span></a></li>`;
 
-const listaCitas = (filas, vacio) =>
-  filas.length
-    ? `<ul class="proximas">${filas
-        .map(
-          (f) =>
-            `<li><span class="hora"><small>${esc(fechaCorta(f.fecha))}</small><b>${esc(f.hora)}</b></span><span class="q"><a href="${esc(f.href)}"><b>${esc(f.paciente)}</b></a><small>${esc(f.detalle)}</small></span>${f.badge}</li>`,
-        )
-        .join("")}</ul>`
-    : `<p class="vacio">${esc(vacio)}</p>`;
+function listaCitas(filas, { vacio, incluirFecha = false }) {
+  if (!filas.length) return `<p class="res-vacio">${esc(vacio)}</p>`;
+  return `<ul class="res-citas">${filas.map((f) =>
+    `<li><time datetime="${esc(f.fecha)}T${esc(f.hora)}">${incluirFecha ? `<small>${esc(G.fechaCorta(f.fecha))}</small>` : ""}${esc(f.hora)}</time><span class="res-cita-datos"><a href="${esc(f.href)}">${esc(f.paciente)}</a><small>${esc(f.detalle)}</small></span>${f.badge}</li>`,
+  ).join("")}</ul>`;
+}
 
-const ESTILOS = `<style>
-.res-cab{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
-.res-cab h2{font-size:1.5rem;margin:0 0 4px}.res-cab p{margin:0;color:var(--muted)}
-.kpi small{display:block;font-size:.72rem;color:var(--suave);margin-top:4px}.kpi.dest small{color:#d5f0f2}
-.kpi.rojo .ico-c{background:var(--err-bg);color:var(--err)}
-.res-g{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
-.res-col{display:grid;gap:20px;min-width:0}
-.alertas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.al a,.al.ok{display:grid;grid-template-columns:44px 1fr 18px;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;border:1px solid var(--borde);text-decoration:none;color:var(--navy)}
-.al.ok{grid-template-columns:44px 1fr;opacity:.75;padding:6px 12px}.al.ok .al-n{height:28px}
-.al a:hover{border-color:var(--borde-2);background:#fafcfc}
-.al a>svg{width:16px;height:16px;color:var(--suave)}
-.al-n{display:grid;place-items:center;width:44px;height:36px;border-radius:10px;font-weight:800;font-size:1.05rem}
-.al-n svg{width:18px;height:18px}
-.al.crit a{border-color:#f3c9c4;background:#fff8f7}.al.crit .al-n{background:var(--err-bg);color:var(--err)}
-.al.aviso .al-n{background:var(--pend-bg);color:var(--pend)}
-.al.ok .al-n{background:var(--ok-bg);color:var(--ok)}
-.al b{display:block;font-size:.9rem}.al small{color:var(--muted);font-size:.78rem}
-.proximas .q a{text-decoration:none;color:inherit}.proximas .q a:hover b{color:var(--teal-t)}
-.sedes-t th{white-space:normal;line-height:1.25}.sedes-t td{white-space:nowrap}.sedes-t td:first-child{white-space:normal}.sedes-t td.num,.sedes-t th.num{text-align:right;font-variant-numeric:tabular-nums}
-.ocup{display:flex;align-items:center;gap:8px;justify-content:flex-end}.ocup i{display:block;width:44px;height:6px;border-radius:3px;background:#e7eef0;overflow:hidden}
-.ocup i b{display:block;height:100%;background:var(--teal)}
-@media(max-width:1100px){.res-g{grid-template-columns:1fr}}
-</style>`;
+function avisos(lista, detalle, regresar) {
+  const pendientes = lista.filter((a) => a.n);
+  const alDia = lista.filter((a) => !a.n);
+  return `<section class="res-panel" aria-labelledby="res-alertas-titulo">
+<div class="res-titulo"><h3 id="res-alertas-titulo">Alertas críticas y pendientes</h3>${pendientes.length ? `<span class="res-contador">${pendientes.length} ${pendientes.length === 1 ? "alerta activa" : "alertas activas"}</span>` : ""}</div>
+${pendientes.length ? `<ul class="res-alertas">${pendientes.map((a) => alerta(a, detalle?.id)).join("")}</ul>` : `<p class="res-vacio res-al-dia">${ico("check")}No hay alertas pendientes.</p>`}
+${alDia.length ? `<details class="res-detalles"><summary>Controles al día (${alDia.length})</summary><ul class="res-controles">${alDia.map((a) => `<li>${esc(a.titulo)}</li>`).join("")}</ul></details>` : ""}
+</section>
+${detalle ? `<section class="res-panel res-alerta-seleccionada" id="detalle-alerta" tabindex="-1" aria-labelledby="res-detalle-titulo">
+<div class="res-titulo"><h3 id="res-detalle-titulo">${esc(detalle.titulo)}</h3><a data-res-alerta-url href="${esc(regresar)}">Cerrar detalle</a></div>
+${listaCitas(detalle.filas, { vacio: "No quedan citas pendientes para esta alerta.", incluirFecha: true })}
+<div class="res-detalle-acciones"><a class="btn sec" href="${esc(detalle.origen)}">${esc(detalle.accion)}</a></div>
+</section>` : ""}`;
+}
 
-function resumen({ usuario, admin, sede, kpis, alertas, citasHoy, porSede, hora }) {
-  const nombre = String(usuario.nombre || "").split(" ")[0];
-  const criticas = alertas.filter((a) => a.n && a.nivel === "crit").length;
-  const tablaSedes = porSede
-    ? `<section class="panel"><div class="panel-t"><h2>Situación por policlínico</h2><a href="/admin/reportes">Ver reportes →</a></div>
-<div class="tabla-w"><table class="sedes-t"><thead><tr><th>Lugar</th><th class="num">Citas hoy</th><th class="num">Por confirmar</th><th class="num">En espera</th><th class="num">Ocupación (7 días)</th></tr></thead><tbody>${porSede
-        .map(
-          (s) =>
-            `<tr><td>${esc(s.nombre)}</td><td class="num">${s.hoy}</td><td class="num">${s.porConfirmar}</td><td class="num">${s.espera}</td><td class="num"><span class="ocup">${s.ocupacion == null ? "—" : `${s.ocupacion}%<i><b style="width:${s.ocupacion}%"></b></i>`}</span></td></tr>`,
-        )
-        .join("")}</tbody></table></div></section>`
-    : "";
-  const contenido = `${ESTILOS}<div class="workspace">
-<div class="res-cab"><div><p class="eyebrow">HERMANDAD DE DOLORES / ${admin ? "RED INSTITUCIONAL" : esc(String(sede?.nombre || "").toUpperCase())}</p><h2>Hola, ${esc(nombre)}</h2>
-<p>${criticas ? `Hay <b>${criticas} ${criticas === 1 ? "alerta crítica" : "alertas críticas"}</b> que requieren atención.` : "No hay alertas críticas pendientes."} Actualizado a las ${esc(hora)}.</p></div>
-<div class="actions">${admin ? `<a class="btn" href="/admin/bloque/nuevo">${ico("mas")}Publicar cupos</a><a class="btn sec" href="/admin/agendas">${ico("calendario")}Ver agendas</a>` : `<a class="btn" href="/tens/agenda?vista=lista">${ico("calendario")}Agenda de hoy</a><a class="btn sec" href="/tens/espera">${ico("lista")}Lista de espera</a>`}</div></div>
-<div class="kpis">${kpis.map(kpi).join("")}</div>
-<div class="res-g"><div class="res-col">
-<section class="panel"><div class="panel-t"><h2>Alertas críticas y pendientes</h2></div><ul class="alertas">${alertas.map(alerta).join("")}</ul></section>
-${tablaSedes}</div>
-<div class="res-col"><section class="panel"><div class="panel-t"><h2>${admin ? "Citas de hoy en la red" : "Citas de hoy"}</h2><a href="${admin ? "/admin/agendas?vista=lista" : "/tens/agenda?vista=lista"}">Ver agenda →</a></div>${listaCitas(citasHoy, "No hay citas agendadas para hoy.")}</section></div></div></div>`;
+const porcentaje = (v) => v == null ? "—" : `${v}%`;
+const etiquetaPeriodo = (p) => p.desde === p.hasta
+  ? G.fechaLarga(p.desde)
+  : `${G.fechaCorta(p.desde)} – ${G.fechaLarga(p.hasta)}`;
+
+// Compara con el período anterior de igual duración (mismos filtros). No inventa datos: si no hay base, lo dice.
+function comparacion(actual, previo, { unidad = "pts", menorEsMejor = false } = {}) {
+  if (actual == null || previo == null) return `<span class="res-delta neutro">Sin datos del período anterior</span>`;
+  const dif = unidad === "pts" ? actual - previo : (previo ? Math.round(((actual - previo) / previo) * 100) : null);
+  if (dif === null) return `<span class="res-delta neutro">Sin reservas en el período anterior</span>`;
+  const texto = unidad === "pts" ? `${Math.abs(dif)} pts` : `${Math.abs(dif)} %`;
+  const antes = unidad === "pts" ? `${previo}%` : G.num(previo);
+  if (!dif) return `<span class="res-delta neutro">${unidad === "pts" ? "Igual que" : "Prácticamente igual que"} el período anterior (${antes})</span>`;
+  const mejora = menorEsMejor ? dif < 0 : dif > 0;
+  return `<span class="res-delta ${unidad === "%" && !menorEsMejor ? "neutro" : mejora ? "bueno" : "malo"}"><span aria-hidden="true">${dif > 0 ? "▲" : "▼"}</span>${dif > 0 ? "+" : "−"}${texto} vs. período anterior (${antes})</span>`;
+}
+
+function indicadores(datos, base, alertaActiva) {
+  const { desde, hasta, sede, sedes, profesional, profesionales, periodos, ocupacion, inasistencia, reservas, confirmadas, vigentes, anterior } = datos;
+  const sedeOptions = [{ id: "", nombre: "Todos los policlínicos" }, ...sedes];
+  const colores = { principal: "#0b3b4c", teal: "#16808b", canceladas: "#b8742a", pendientes: "#657a86", previo: "#9aabb3" };
+  const serie = (nombre, campo, color = colores.principal, trazo) => ({ nombre, color, trazo, valores: periodos.map((p) => p[campo]) });
+  const previa = (nombre, campo) => ({ nombre, color: colores.previo, previo: true, valores: anterior.periodos.map((p) => p[campo]) });
+  const grafico = ({ titulo, valor, descripcion, series, porcentaje: unidad, sinDatos, comparar }) =>
+    `<section class="res-grafico"><h4>${esc(titulo)}</h4><div class="res-valor"><strong>${esc(valor)}</strong>${comparar}</div><p class="res-grafico-contexto">${esc(descripcion)}</p>
+${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.</p>' : G.lineas({
+    etiquetas: periodos,
+    series,
+    titulo,
+    etiquetaX: etiquetaPeriodo,
+    ejeFecha: (p) => G.fechaCorta(p.desde),
+    interactivo: true,
+    ...(unidad ? { maximo: 100, sufijo: "%" } : {}),
+  })}</section>`;
+  const metrica = ({ titulo, valor, descripcion, comparar }) =>
+    `<div class="res-metrica"><h4>${esc(titulo)}</h4><div class="res-valor"><strong>${esc(valor)}</strong>${comparar}</div><p class="res-grafico-contexto">${esc(descripcion)}</p></div>`;
+  const lista = [
+    {
+      titulo: "Ocupación de cupos",
+      valor: porcentaje(ocupacion.total),
+      descripcion: `${G.num(ocupacion.ocupados)} de ${G.num(ocupacion.publicados)} cupos publicados ocupados`,
+      series: [serie("Ocupación", "ocupacion", colores.teal), previa("Período anterior", "ocupacion")],
+      porcentaje: true,
+      sinDatos: ocupacion.total == null,
+      comparar: comparacion(ocupacion.total, anterior.ocupacion.total),
+    },
+    {
+      titulo: "Evolución de reservas",
+      valor: G.num(reservas),
+      descripcion: "Reservas por fecha de atención",
+      series: [serie("Vigentes", "vigentes"), serie("Canceladas", "canceladas", colores.canceladas, "4 3"), previa("Vigentes, período anterior", "vigentes")],
+      sinDatos: !reservas,
+      comparar: comparacion(reservas, anterior.reservas, { unidad: "%" }),
+    },
+    {
+      titulo: "Inasistencias",
+      valor: porcentaje(inasistencia.total),
+      descripcion: `${G.num(inasistencia.ausencias)} inasistencias de ${G.num(inasistencia.asistencias)} resultados registrados`,
+      series: [serie("Inasistencia", "inasistencia", colores.canceladas), previa("Período anterior", "inasistencia")],
+      porcentaje: true,
+      sinDatos: inasistencia.total == null,
+      comparar: comparacion(inasistencia.total, anterior.inasistencia.total, { menorEsMejor: true }),
+    },
+    {
+      titulo: "Confirmación de citas",
+      valor: porcentaje(datos.confirmacion),
+      descripcion: `${G.num(confirmadas)} de ${G.num(vigentes)} citas vigentes confirmadas`,
+      series: [serie("Confirmación", "confirmacion", colores.principal), previa("Período anterior", "confirmacion")],
+      porcentaje: true,
+      sinDatos: !vigentes,
+      comparar: comparacion(datos.confirmacion, anterior.confirmacion),
+    },
+  ];
+  const ruta = `${base}/resumen`;
+  const limpiar = alertaActiva ? `${ruta}?${new URLSearchParams({ alerta: alertaActiva })}` : ruta;
+  const profOptions = [{ id: "", nombre: "Todos los profesionales" }, ...profesionales];
+  return `<div data-res-indicadores-contenido>
+<form class="res-filtros" method="get" action="${ruta}#res-indicadores" data-res-filtros>
+${alertaActiva ? `<input type="hidden" name="alerta" value="${esc(alertaActiva)}">` : ""}
+${base === "/admin" ? `<label>Policlínico<select name="sede">${opciones(sedeOptions, (s) => s.id, (s) => s.nombre, sede || "")}</select></label>` : ""}
+<label>Profesional<select name="prof">${opciones(profOptions, (p) => p.id, (p) => p.nombre, profesional || "")}</select></label>
+<label>Desde<input type="date" name="desde" value="${esc(desde)}" required></label>
+<label>Hasta<input type="date" name="hasta" value="${esc(hasta)}" required></label>
+<div class="actions"><button type="submit" class="btn">Aplicar filtros</button><a class="btn sec" data-res-limpiar href="${esc(limpiar)}#res-indicadores">Limpiar</a></div>
+</form>
+<div class="res-graficos">${lista.slice(0, 2).map(grafico).join("")}</div>
+<div class="res-metricas">${lista.slice(2).map(metrica).join("")}</div></div></div>`;
+}
+
+function resumen({ usuario, admin, sede, kpis, alertas, detalleAlerta, citasHoy, porSede, capacidad, indicadores: datos, hora, consulta }) {
+  const base = admin ? "/admin" : "/tens";
+  const agenda = admin ? "/admin/agendas" : "/tens/agenda";
+  const otros = citasHoy.length - 4;
+  const params = new URLSearchParams(consulta);
+  params.delete("alerta");
+  const regresar = `${base}/resumen${params.size ? "?" + params : ""}#res-alertas-titulo`;
+  const contenido = `<style>${estilos}</style><div class="workspace res-workspace">
+<header class="res-cab"><div><h2>${admin ? "Actividad de la red" : esc(sede?.nombre || "Actividad del policlínico")}</h2><p>Actualizado a las ${esc(hora)}</p></div>
+<div class="actions">${admin ? `<a class="btn" href="/admin/bloque/nuevo">${ico("mas")}Crear bloque horario</a><a class="btn sec" href="${agenda}">${ico("calendario")}Ver agendas</a>` : `<a class="btn" href="${agenda}?vista=lista">${ico("calendario")}Agenda de hoy</a><a class="btn sec" href="/tens/espera">${ico("lista")}Lista de espera</a>`}</div></header>
+<div class="res-kpis" aria-label="Indicadores operativos">${kpis.map(kpi).join("")}</div>
+<div class="res-operacion"><div class="res-alertas-col">${avisos(alertas, detalleAlerta, regresar)}</div>
+<section class="res-panel" aria-labelledby="res-citas-titulo"><div class="res-titulo"><h3 id="res-citas-titulo">Citas de hoy</h3><a href="${agenda}?vista=lista">Ver agenda</a></div>
+${listaCitas(citasHoy.slice(0, 4), { vacio: "No hay citas agendadas para hoy." })}
+${otros > 0 ? `<details class="res-detalles"><summary>Ver ${otros} ${otros === 1 ? "cita más" : "citas más"}</summary>${listaCitas(citasHoy.slice(4), {})}</details>` : ""}
+</section></div>
+${admin ? `<section class="res-panel res-analitica" id="res-indicadores" aria-labelledby="res-indicadores-titulo">
+<div class="res-titulo"><h3 id="res-indicadores-titulo">Indicadores del período</h3><p class="res-estado" role="status" data-res-estado></p></div>
+${indicadores(datos, base, detalleAlerta?.id)}
+</section>` : ""}
+</div>${script}`;
   return pagina({ titulo: "Resumen", usuario, lienzo: true, contenido });
 }
 
-module.exports = { resumen, pct };
+module.exports = { resumen, indicadores };

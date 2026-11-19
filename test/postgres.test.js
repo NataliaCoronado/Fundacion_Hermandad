@@ -53,8 +53,8 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   const rut = await c.pacientes.crear({ rut: '12345678-5', nombres: 'Ana', apellidos: 'Prueba', fechaNacimiento: '1990-01-01', genero: 'FEMENINO', telefono: '+56911112222', direccion: 'Calle 1', idComuna: 1, consentimiento: true, tieneWhatsapp: true, idUsuario: tens.id });
   assert.strictEqual((await c.catalogo.paciente(rut)).nombre, 'Ana Prueba');
 
-  assert.deepStrictEqual((await c.catalogo.paciente(C)).responsable, { nombre: 'Responsable de prueba', relacion: 'Madre', rut: '44444444-4', telefono: '+56944444444' });
-  const fichaC = { nombres: 'Paciente de prueba', apellidos: 'C', fechaNacimiento: '2015-09-09', genero: 'FEMENINO', nacionalidad: 'Venezolana', telefono: '+56933333333', direccion: 'Dirección nueva 9', idComuna: 1 };
+  assert.deepStrictEqual((await c.catalogo.paciente(C)).responsable, { nombre: 'Responsable', relacion: 'Madre', rut: '44444444-4', telefono: '+56944444444' });
+  const fichaC = { nombres: 'Paciente', apellidos: 'C', fechaNacimiento: '2015-09-09', genero: 'FEMENINO', nacionalidad: 'Venezolana', telefono: '+56933333333', direccion: 'Dirección nueva 9', idComuna: 1 };
   await c.pacientes.actualizar(C, { ...fichaC, respNombre: 'Tía Prueba', respRelacion: 'Tía', respRut: '44444444-4', respTelefono: '+56944444555' });
   assert.deepStrictEqual((await c.catalogo.paciente(C)).responsable, { nombre: 'Tía Prueba', relacion: 'Tía', rut: '44444444-4', telefono: '+56944444555' });
   await c.pacientes.actualizar(rut, { nombres: 'Ana María', apellidos: 'Prueba', fechaNacimiento: '1990-01-01', genero: 'FEMENINO', telefono: '+56911112222', direccion: 'Calle 2', idComuna: 1 });

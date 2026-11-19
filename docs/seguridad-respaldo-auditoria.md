@@ -79,7 +79,7 @@ Recomendación operativa: guardar una copia **fuera del equipo** (el respaldo lo
 - Las sesiones viven en memoria: un reinicio cierra la sesión de todos y solo se puede usar una instancia.
 - La conexión a PostgreSQL no fija cifrado (`sslmode`); en un servicio administrado hay que indicarlo y probarlo.
 - La base no tiene seguridad por filas (RLS): el control de acceso por lugar está en la aplicación.
-- En modo PostgreSQL, documentos, encuestas y la bandeja de mensajes siguen en `datos/extras.json`, no en tablas; el respaldo de PostgreSQL con `pg_dump` y la restauración contra una base real están pendientes de ensayar (CP-42 cubre el modo de archivos).
+- En modo PostgreSQL, la auditoría (con su resultado), los documentos (con estado de revisión, revisor y fecha) y el historial de citas se guardan en las tablas `auditoria`, `documento` y `cita_historial`, por lo que el respaldo con `pg_dump` los incluye. Las encuestas y la bandeja de mensajes siguen en `datos/extras.json`. El respaldo de PostgreSQL con `pg_dump` y la restauración contra una base real están pendientes de ensayar (CP-42 cubre el modo de archivos).
 - La auditoría vive también en ese archivo; no hay todavía bloqueo contra edición manual del archivo (por ejemplo, encadenado de huellas entre registros).
 - No hay doble factor de autenticación para Administración.
 

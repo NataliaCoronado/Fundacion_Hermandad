@@ -48,7 +48,7 @@ async function quitarDemo(cli) {
   await cli.query("DELETE FROM agenda WHERE vigente_desde = $1 AND vigente_hasta = $2", [DESDE, HASTA]);
   await cli.query("DELETE FROM paciente WHERE correo LIKE 'demo%@ejemplo.cl'");
   await cli.query("DELETE FROM usuario WHERE correo LIKE 'tens.demo.%@ejemplo.cl'");
-  await cli.query("UPDATE profesional SET nombres = 'Profesional de prueba', apellidos = id_profesional::text WHERE correo_institucional LIKE 'profesional%@ejemplo.cl'");
+  await cli.query("UPDATE profesional SET nombres = 'Profesional', apellidos = id_profesional::text WHERE correo_institucional LIKE 'profesional%@ejemplo.cl'");
   await cli.query("UPDATE usuario SET nombres = 'Usuario de prueba', apellidos = CASE correo WHEN 'admin@ejemplo.cl' THEN 'Administración' WHEN 'tens@ejemplo.cl' THEN 'TENS/TONS San Isidro' ELSE 'Telemedicina' END WHERE correo IN ('admin@ejemplo.cl','tens@ejemplo.cl','telemedicina.usuario@ejemplo.cl')");
 }
 

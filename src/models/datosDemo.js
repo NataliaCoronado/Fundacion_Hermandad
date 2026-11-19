@@ -36,11 +36,11 @@ function agregarDemo(datos) {
     const nac = azar.pesos(grupo === 'mayor' ? [['Chilena', 94], ['Venezolana', 3], ['Peruana', 3]] : NAC);
     const nacimiento = `${Number(hoyTxt.slice(0, 4)) - anios}-${pad(1 + azar.entre(12))}-${pad(1 + azar.entre(28))}`;
     const p = {
-      rut: rutDe(6000000 + i * 4817), nombre: `Paciente demo ${i}`, nombres: 'Paciente demo', apellidos: String(i),
+      rut: rutDe(6000000 + i * 4817), nombre: `Paciente ${i}`, nombres: 'Paciente', apellidos: String(i),
       telefono: `+5695${String(1000000 + i * 3719).slice(0, 7)}`, tieneWhatsapp: azar() < 0.85, correo: '', fechaNacimiento: nacimiento,
       genero, nacionalidad: nac, direccion: `Calle de ejemplo ${100 + i}`, idComuna: 1 + azar.entre(datos.policlinicos.filter((p) => !p.telemedicina).length), responsable: null, _grupo: grupo,
     };
-    if (grupo === 'nino') p.responsable = { nombre: `Responsable demo ${i}`, relacion: azar.elige(['Madre', 'Padre', 'Abuela']), rut: rutDe(9000000 + i * 3571), telefono: `+5698${String(2000000 + i * 1237).slice(0, 7)}` };
+    if (grupo === 'nino') p.responsable = { nombre: `Responsable ${i}`, relacion: azar.elige(['Madre', 'Padre', 'Abuela']), rut: rutDe(9000000 + i * 3571), telefono: `+5698${String(2000000 + i * 1237).slice(0, 7)}` };
     datos.pacientes.push(p);
   }
   const demo = datos.pacientes.slice(nPrueba);
@@ -110,7 +110,7 @@ function agregarDemo(datos) {
     datos.espera.push({ id: datos.secuencias.espera++, rut: pac.rut, idPoliclinico: sede.id, especialidad: esp, registradaEn: sumarDias(hoyTxt, -1 - azar.entre(40)), estado: 'EN_ESPERA' });
   }
 
-  SEDES.filter((s) => !s.telemedicina && s.id !== 1).forEach((s, i) => datos.usuarios.push({ id: `u${10 + i}`, nombre: `Usuario de prueba TENS/TONS ${s.nombre}`, correo: `tens.${s.nombre.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')}@ejemplo.cl`, rol: 'TENS_TONS', idPoliclinico: s.id, activo: i !== 3 }));
+  SEDES.filter((s) => !s.telemedicina && s.id !== 1).forEach((s, i) => datos.usuarios.push({ id: `u${10 + i}`, nombre: `TENS/TONS ${s.nombre}`, correo: `tens.${s.nombre.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')}@ejemplo.cl`, rol: 'TENS_TONS', idPoliclinico: s.id, activo: i !== 3 }));
 
   const prof = (id) => datos.profesionales.find((p) => p.id === id);
   [[-9, 12, 'AUSENCIA', 'Licencia médica', 3, 4], [-5, 7, 'REEMPLAZO', 'Capacitación institucional', 4, 0], [-2, 2, 'AUSENCIA', 'Trámite personal', 2, 3]].forEach(([dReg, id, tipo, motivo, afectadas, cerrados], i) => {

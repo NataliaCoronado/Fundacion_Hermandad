@@ -49,7 +49,8 @@ async function guardarResponsable(q, idPaciente, r) {
   );
 }
 const BLOQUE = `SELECT b.id_bloque::int AS id, a.id_profesional::int AS "idProfesional", to_char(b.fecha, 'YYYY-MM-DD') AS fecha,
-  to_char(b.hora_inicio, 'HH24:MI') AS hora, a.id_policlinico::int AS "idPoliclinico", a.duracion_min::int AS duracion, e.nombre AS especialidad, (b.estado IN ('DISPONIBLE', 'RESERVADO')) AS publicado
+  to_char(b.hora_inicio, 'HH24:MI') AS hora, a.id_policlinico::int AS "idPoliclinico", a.duracion_min::int AS duracion, e.nombre AS especialidad,
+  (b.estado IN ('DISPONIBLE', 'RESERVADO')) AS publicado, (b.estado = 'BLOQUEADO') AS bloqueado
   FROM bloque_horario b JOIN agenda a ON a.id_agenda = b.id_agenda JOIN especialidad e ON e.id_especialidad=a.id_especialidad`;
 const PROFESIONAL = `SELECT pr.id_profesional::int AS id, pr.nombres || ' ' || pr.apellidos AS nombre, min(e.nombre) AS especialidad,
   min(a.id_policlinico)::int AS "idPoliclinico", pr.activo AS activo

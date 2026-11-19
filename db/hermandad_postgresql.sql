@@ -308,10 +308,17 @@ CREATE TABLE documento (
 	id_documento 	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_paciente  	BIGINT NOT NULL,
 	tipo         	VARCHAR(14) NOT NULL,
-	ruta_archivo 	TEXT NOT NULL,
-	formato      	VARCHAR(4) NOT NULL,
-	tamano_kb    	INTEGER NOT NULL,
+	etiqueta_tipo	VARCHAR(40),
+	ruta_archivo 	TEXT,
+	nombre_original  VARCHAR(120),
+	formato      	VARCHAR(4),
+	tamano_kb    	INTEGER,
 	origen       	VARCHAR(8) NOT NULL,
+	id_policlinico   SMALLINT,
+	especialidad 	VARCHAR(80),
+	vigente_hasta	DATE,
+	reemplaza    	BIGINT,
+	archivado    	BOOLEAN NOT NULL DEFAULT FALSE,
 	cargado_por  	UUID,
 	cargado_en   	TIMESTAMPTZ NOT NULL DEFAULT now(),
 	estado_revision  VARCHAR(10) NOT NULL DEFAULT 'PENDIENTE',
@@ -322,13 +329,18 @@ CREATE TABLE documento (
 	CONSTRAINT uq_documento_ruta_archivo UNIQUE (ruta_archivo),
 	CONSTRAINT fk_documento_id_paciente FOREIGN KEY (id_paciente)
     	REFERENCES paciente (id_paciente) ON DELETE CASCADE,
+	CONSTRAINT fk_documento_id_policlinico FOREIGN KEY (id_policlinico)
+    	REFERENCES policlinico (id_policlinico) ON DELETE SET NULL,
+	CONSTRAINT fk_documento_reemplaza FOREIGN KEY (reemplaza)
+    	REFERENCES documento (id_documento) ON DELETE SET NULL,
 	CONSTRAINT fk_documento_cargado_por FOREIGN KEY (cargado_por)
     	REFERENCES usuario (id_usuario) ON DELETE SET NULL,
 	CONSTRAINT fk_documento_revisado_por FOREIGN KEY (revisado_por)
     	REFERENCES usuario (id_usuario) ON DELETE SET NULL,
 	CONSTRAINT ck_documento_tipo CHECK (tipo IN ('FONASA', 'CESFAM', 'ORDEN_MEDICA', 'DERIVACION', 'OTRO')),
-	CONSTRAINT ck_documento_formato CHECK (formato IN ('PDF', 'JPG', 'PNG')),
-	CONSTRAINT ck_documento_tamano CHECK (tamano_kb BETWEEN 1 AND 10240),
+	CONSTRAINT ck_documento_formato CHECK (formato IS NULL OR formato IN ('PDF', 'JPG', 'PNG')),
+	CONSTRAINT ck_documento_tamano CHECK (tamano_kb IS NULL OR tamano_kb BETWEEN 1 AND 10240),
+	CONSTRAINT ck_documento_archivo CHECK ((ruta_archivo IS NULL) = (formato IS NULL) AND (formato IS NULL) = (tamano_kb IS NULL)),
 	CONSTRAINT ck_documento_origen CHECK (origen IN ('PORTAL', 'PERSONAL')),
 	CONSTRAINT ck_documento_estado CHECK (estado_revision IN ('PENDIENTE', 'VALIDADO', 'OBSERVADO')),
 	CONSTRAINT ck_documento_revision CHECK (estado_revision = 'PENDIENTE' OR (revisado_por IS NOT NULL AND revisado_en IS NOT NULL))
@@ -658,12 +670,14 @@ CREATE TABLE auditoria (
 	id_auditoria	BIGINT GENERATED ALWAYS AS IDENTITY,
 	id_usuario  	UUID,
 	id_policlinico  SMALLINT,
-	operacion   	VARCHAR(40) NOT NULL,
+	operacion   	VARCHAR(80) NOT NULL,
 	entidad     	VARCHAR(40) NOT NULL,
-	id_entidad  	VARCHAR(40) NOT NULL,
+	id_entidad  	VARCHAR(120) NOT NULL,
 	realizado_en	TIMESTAMPTZ NOT NULL DEFAULT now(),
+	resultado   	VARCHAR(10) NOT NULL DEFAULT 'EXITOSO',
 	detalle     	JSONB,
 	CONSTRAINT pk_auditoria PRIMARY KEY (id_auditoria),
+	CONSTRAINT ck_auditoria_resultado CHECK (resultado IN ('EXITOSO', 'RECHAZADO', 'ERROR')),
 	CONSTRAINT fk_auditoria_id_usuario FOREIGN KEY (id_usuario)
     	REFERENCES usuario (id_usuario) ON DELETE SET NULL,
 	CONSTRAINT fk_auditoria_id_policlinico FOREIGN KEY (id_policlinico)

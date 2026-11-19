@@ -386,7 +386,7 @@ class OperacionService {
     const estados = {
       Pendiente: "Pendiente de envío",
       Enviado: "Enlace enviado",
-      Simulado: "Enlace simulado",
+      Simulado: "Enlace no enviado (envío aún no activo)",
       Entregado: "Enlace enviado",
       Error: "Error de envío",
     };

@@ -1,6 +1,7 @@
 "use strict";
 const crypto = require("node:crypto");
 const vistas = require("../views/reserva");
+const { fechaLarga } = require("../views/paciente");
 const { normalizarRut, rutValido } = require("../util/rut");
 const { hoy, textoLocal } = require("../util/tiempo");
 const { error, ok } = require("./mensajes");
@@ -83,7 +84,7 @@ function crearReservaController(c) {
   async function vistaDatos({ t, f, usuario, mensaje, v }) {
     const ficha = await catalogo.paciente(f.rut);
     const x = await ctxBloque(f.idBloque);
-    const cita = `${x.esp} · ${x.prof.nombre} · ${x.b.fecha} ${x.b.hora} · ${x.sede.nombre}`;
+    const cita = `${x.esp} · ${x.prof.nombre} · ${fechaLarga(x.b.fecha)}, ${x.b.hora} · ${x.sede.nombre}`;
     const modo = !ficha ? "nuevo" : f.verificado ? "existente" : "existente-sin-sesion";
     const docs = ficha && f.verificado ? await docsDe(f.rut) : [];
     return {
@@ -98,9 +99,9 @@ function crearReservaController(c) {
     const ficha = await catalogo.paciente(f.rut);
     const x = await ctxBloque(f.idBloque);
     const identificado = !ficha || f.verificado;
-    const nombre = ficha ? (identificado ? ficha.nombre : vistas.mascaraNombre(ficha.nombre)) : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
+    const nombre = ficha ? ficha.nombre : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
     const contacto = ficha && !f.actualizar ? ficha : { ...(f.nuevo || {}), ...(f.actualizar || {}) };
-    const canal = !f.comunicaciones ? null : contacto.tieneWhatsapp && contacto.telefono ? "WhatsApp" : contacto.correo ? "Correo" : null;
+    const canal = !f.comunicaciones || !identificado ? null : contacto.tieneWhatsapp && contacto.telefono ? "WhatsApp" : contacto.correo ? "Correo" : null;
     return {
       nombre, identificado, rut: f.rut, nuevo: !ficha, actualiza: !!f.actualizar, lugar: x.sede.nombre, tele: !!x.sede.telemedicina, idSede: x.sede.id,
       esp: x.esp, prof: x.prof.nombre, fecha: x.b.fecha, hora: x.b.hora, docs: f.docs.map((d) => ({ tipo: d.tipo, nombre: d.archivo.nombre })), cambio: f.cambioDatos || "", canal,
@@ -173,7 +174,7 @@ function crearReservaController(c) {
         if (!g) grupos.push((g = { prof: x.prof, sede: x.sede, esp: x.esp, bloques: [] }));
         g.bloques.push(b);
       }
-      return { html: vistas.calendario({ t, resumen: await resumenBusqueda(f), mes, antes, despues, dias: delMes, dia, grupos, usuario }) };
+      return { html: vistas.calendario({ t, resumen: await resumenBusqueda(f), rut: f.rut, mes, antes, despues, dias: delMes, dia, grupos, usuario }) };
     }),
 
     datos: guard(async ({ t, f, consulta, usuario }) => {
@@ -209,7 +210,16 @@ function crearReservaController(c) {
           pacientes.validar(datos);
           f.actualizar = datos;
         } else f.actualizar = null;
-        f.cambioDatos = ficha && !f.verificado ? String(d.cambioDatos || "").trim().slice(0, 300) : "";
+        f.cambioDatos = "";
+        if (ficha && !f.verificado) {
+          const val = (k, n) => String(entrada[k] || "").trim().slice(0, n);
+          const tel = val("nTelefono", 20), correo = val("nCorreo", 120), dir = val("nDireccion", 150);
+          const comuna = entrada.nIdComuna ? (await catalogo.comunas()).find((x) => String(x.id) === String(entrada.nIdComuna)) : null;
+          if (tel && !/^\+?[\d\s-]{8,}$/.test(tel)) throw new Error("Revisa el celular: escribe solo números, por ejemplo +56912345678.");
+          if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error("Revisa el correo electrónico.");
+          if (entrada.nIdComuna && !comuna) throw new Error("Elige una comuna de la lista.");
+          f.cambioDatos = [tel && `Celular: ${tel}`, correo && `Correo: ${correo}`, dir && `Dirección: ${dir}`, comuna && `Comuna: ${comuna.nombre}`].filter(Boolean).join(" · ");
+        }
         if (docs.length) {
           const enEspera = [...flujos.values()].filter((x) => x !== f).reduce((n, x) => n + x.docs.reduce((m, y) => m + y.archivo.datos.length, 0), 0);
           const propios = [...f.docs, ...docs].slice(-3).reduce((m, y) => m + y.archivo.datos.length, 0);
@@ -265,10 +275,11 @@ function crearReservaController(c) {
           try { m = await c.despachador.enviar(m); } catch (e) { console.error(e); }
           envio = {
             Enviado: `Te enviamos el comprobante por ${r.canal}.`,
-            Simulado: `Modo demostración: el envío del comprobante por ${r.canal} quedó registrado como simulado y no salió ningún mensaje real. Descarga el comprobante.`,
+            Simulado: `El envío automático por ${r.canal} aún no está activo, por lo que no se envió ningún mensaje. Descarga el comprobante.`,
             Pendiente: `El envío del comprobante por ${r.canal} quedó registrado y se reintentará automáticamente. Mientras tanto, descarga el comprobante.`,
           }[m.estado] || `No fue posible enviar el comprobante por ${r.canal}. Descarga el comprobante.`;
         } else if (!f.comunicaciones) envio = "No autorizaste el envío por WhatsApp o correo: descarga o imprime el comprobante.";
+        else if (!r.identificado) envio = "Por seguridad, el comprobante no se envía a los datos de contacto guardados si no has iniciado sesión. Descárgalo o imprímelo.";
         f.confirmada = { idCita: cita.id, r, envio };
         f.docs = [];
         return { html: vistas.confirmada({ t, r, envio, cuenta: !!paciente, usuario }) };
@@ -295,7 +306,7 @@ function crearReservaController(c) {
     comprobante: guard(async ({ f }) => {
       if (!f.confirmada) return { redirigir: "/agendar" };
       try {
-        return { binario: await pdfDeCita(f.confirmada.idCita, f.confirmada.r.identificado !== false), mime: "application/pdf", nombreArchivo: "comprobante-reserva.pdf" };
+        return { binario: await pdfDeCita(f.confirmada.idCita), mime: "application/pdf", nombreArchivo: "comprobante-reserva.pdf" };
       } catch (e) {
         if (e.message !== "CITA_NO_ENCONTRADA") throw e;
         return { redirigir: "/paciente/consulta" };
@@ -304,13 +315,13 @@ function crearReservaController(c) {
     pdfDeCita,
   };
 
-  async function pdfDeCita(idCita, mostrarNombre = true) {
+  async function pdfDeCita(idCita) {
     const cita = await c.citaRepo.buscarPorId(idCita);
     const x = cita && (await ctxBloque(cita.idBloque));
     const p = cita && (await catalogo.paciente(cita.rut));
     if (!cita || cita.estadoReserva === "CANCELADA" || !x || !p) throw new Error("CITA_NO_ENCONTRADA");
     return comprobantePdf({
-      paciente: { rut: p.rut, nombre: mostrarNombre ? p.nombre : vistas.mascaraNombre(p.nombre) },
+      paciente: { rut: p.rut, nombre: p.nombre },
       bloque: { ...x.b, especialidad: x.esp },
       profesional: cita.idProfesionalReemplazo ? await catalogo.profesional(cita.idProfesionalReemplazo) : x.prof,
       sede: x.sede,

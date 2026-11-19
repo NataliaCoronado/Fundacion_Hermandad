@@ -11,8 +11,13 @@ class AuditoriaService {
       accion,
       detalle,
       idUsuario: usuario?.id || null,
+      resultado: "EXITOSO",
       ...contexto,
     });
+  }
+  // Intento que el sistema no permitió (acceso fuera de rol o sede, regla de negocio, límite de intentos, login fallido).
+  rechazo(usuario, accion, detalle = "", contexto = {}) {
+    return this.registrar(usuario, accion, detalle, { modulo: "Seguridad", ...contexto, resultado: "RECHAZADO" });
   }
   listar() {
     return [...this.extras.listar("auditoria")].reverse();

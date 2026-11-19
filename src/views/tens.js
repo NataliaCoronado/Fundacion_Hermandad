@@ -388,27 +388,42 @@ ${tabla(
 )}`,
   });
 
-const recepcion = ({ citas, ctx, mensaje, usuario }) =>
+const accionesDocumento = (d) => {
+  const estado = d.estadoRevision || (d.verificado ? "VALIDADO" : "PENDIENTE");
+  const cuando = d.revisadoEn ? ` el ${esc(d.revisadoEn)}` : "";
+  if (estado === "VALIDADO") return `Verificado por ${esc(d.verificadoPor || "—")}${cuando}`;
+  const observar = `<form class="micro" method="post" action="/tens/documentos/observar"><input type="hidden" name="id" value="${esc(d.id)}"><input name="motivo" required maxlength="300" placeholder="Motivo" aria-label="Motivo de la observación"><button type="submit" class="sec">Observar</button></form>`;
+  const verificar = forma("/tens/documentos/verificar", { id: d.id }, "Marcar verificado");
+  if (estado === "OBSERVADO") return `<b>Observado</b> por ${esc(d.verificadoPor || "—")}${cuando}: ${esc(d.observacion)}<br>${verificar}`;
+  return `${verificar} ${observar}`;
+};
+const DOC_ESTADO = {
+  faltante: (f) => `<span class="rec-doc rec-doc-falta">${f.doc.observacion ? "Documento observado" : "Documento faltante"}</span>${f.doc.observacion ? `<small class="rec-doc-nota">${esc(f.doc.observacion)}</small>` : ""}<a class="rec-btn-doc" href="/tens/documentos?rut=${encodeURIComponent(f.rut)}">Subir documento</a>`,
+  pendiente: (f) => `<span class="rec-doc rec-doc-pend"><b>Pendiente de validación</b><small>${esc(f.doc.tipo)} subido.</small></span><form method="post" action="/tens/documentos/verificar"><input type="hidden" name="id" value="${esc(f.doc.id)}"><input type="hidden" name="volver" value="recepcion"><button class="rec-btn-doc rec-btn-validar" type="submit">Verificar y validar</button></form>`,
+  validado: () => `<span class="rec-doc rec-doc-ok">Documento validado ✔</span>`,
+};
+const accionesRecepcion = (f) => {
+  if (f.asistencia === "ASISTIO") return `<span class="rec-estado rec-estado-ok">Asistió</span>`;
+  if (f.asistencia === "NO_ASISTIO") return `<span class="rec-estado rec-estado-mal">No asistió</span>`;
+  const noAsiste = `<form method="post" action="/tens/recepcion"><input type="hidden" name="idCita" value="${esc(f.id)}"><button class="rec-btn rec-btn-no" name="asistio" value="0" type="submit">No asiste</button></form>`;
+  const llego = f.llego
+    ? `<span class="rec-estado rec-estado-ok">Llegó ✔</span>`
+    : `<form method="post" action="/tens/recepcion/llegada"><input type="hidden" name="idCita" value="${esc(f.id)}"><button class="rec-btn rec-btn-llegada" type="submit">Registrar llegada</button></form>`;
+  return `${llego}${f.llego ? "" : noAsiste}`;
+};
+const GRUPOS_RECEPCION = [["por-llegar", "Por llegar"], ["en-sala", "En sala"], ["atendidos", "Atendidos"], ["no-asistieron", "No asistieron"]];
+const grupoRecepcion = (f) => f.asistencia === "ASISTIO" ? "atendidos" : f.asistencia === "NO_ASISTIO" ? "no-asistieron" : f.llego ? "en-sala" : "por-llegar";
+const recepcion = ({ filas, q = "", mensaje, usuario }) =>
   pagina({
-    titulo: "Recepción: asistencia",
+    titulo: "Recepción",
     usuario,
     mensaje,
-    contenido: tabla(
-      ["Fecha", "Hora", "Paciente", "Asistencia", "Registrar"],
-      citas.map((c) => {
-        const d = detalleCita(c, ctx);
-        return [
-          d.b?.fecha,
-          d.b?.hora,
-          d.pac?.nombre,
-          c.asistencia ?? "—",
-          raw(
-            `<form method="post" action="/tens/recepcion"><input type="hidden" name="idCita" value="${esc(c.id)}"><button name="asistio" value="1">Asistió</button> <button name="asistio" value="0">No asistió</button></form> ${forma("/tens/recepcion/cancelar", { idCita: c.id }, "Cancelar (asistida)")}`,
-          ),
-        ];
-      }),
-      "No hay citas activas.",
-    ),
+    contenido: `<style>${require("./recepcion.css")}</style><div class="workspace rec">
+<form class="rec-buscar" method="get" action="/tens/recepcion" role="search"><label for="rec-q">Buscar paciente por RUT o nombre</label><div><input id="rec-q" name="q" type="search" value="${esc(q)}" placeholder="RUT o nombre" autocomplete="off" autofocus><button type="submit">Buscar</button>${q ? `<a class="btn sec" href="/tens/recepcion">Limpiar</a>` : ""}</div></form>
+${filas.length
+    ? GRUPOS_RECEPCION.map(([clave, titulo]) => [clave, titulo, filas.filter((f) => grupoRecepcion(f) === clave)]).filter(([, , l]) => l.length).map(([clave, titulo, l]) => `<section class="rec-grupo" data-grupo="${clave}" aria-label="${titulo}"><h2>${titulo} <span class="rec-n">${l.length}</span></h2><ul class="rec-lista">${l.map((f) => `<li class="rec-fila" data-doc="${f.asistencia === "ASISTIO" ? "cerrado" : f.doc.estado}"><time datetime="${esc(f.hora)}">${esc(f.hora)}</time><div class="rec-paciente"><strong>${esc(f.nombre)}</strong><small>${esc(f.rut)}</small></div><div class="rec-cita"><span>${esc(f.esp)}</span><small>${esc(f.prof)}</small></div><div class="rec-documento">${f.asistencia === "ASISTIO" ? "" : DOC_ESTADO[f.doc.estado](f)}</div><div class="rec-acciones">${accionesRecepcion(f)}</div></li>`).join("")}</ul></section>`).join("")
+    : `<p class="vacio">${q ? "Ninguna cita de hoy coincide con la búsqueda." : "No hay citas para hoy."}</p>`}
+</div>`,
   });
 
 const documentos = ({ lista, tipos, mensaje, usuario, valores = {} }) =>
@@ -417,7 +432,7 @@ const documentos = ({ lista, tipos, mensaje, usuario, valores = {} }) =>
     usuario,
     mensaje,
     contenido: `<p>Documentos que presenta el paciente: afiliación a FONASA, inscripción en su CESFAM, orden de derivación u otros. Puedes adjuntar el archivo (PDF, JPG o PNG, hasta ${Math.round(require("../services/DocumentoService").MAX_BYTES/1024/1024)} MB). No se guardan datos clínicos.</p>
-<form method="post" action="/tens/documentos" enctype="multipart/form-data">
+${valores.pendiente ? "" : `<form method="post" action="/tens/documentos" enctype="multipart/form-data">
 <input type="hidden" name="reemplazar" value="${esc(valores.reemplazar || "")}"><label>RUT del paciente <input name="rut" value="${esc(valores.rut || "")}" required></label>
 <label>Tipo <select name="tipo">${opciones(
       tipos,
@@ -426,7 +441,9 @@ const documentos = ({ lista, tipos, mensaje, usuario, valores = {} }) =>
     )}</select></label>
 <label>Especialidad relacionada <input name="especialidad"></label><label>Vigencia <input type="date" name="vigencia"></label><label>Observación <input name="observacion" maxlength="200"></label>
 <label>Archivo (opcional) <input type="file" name="archivo" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"></label>
-<button type="submit">Registrar documento</button></form>
+<button type="submit">Registrar documento</button></form>`}
+<h2 id="documentos-registrados">${valores.pendiente ? "Documentos pendientes de verificar" : "Documentos registrados"}</h2>
+${valores.pendiente ? '<p><a href="/tens/documentos#documentos-registrados">Ver todos los documentos</a></p>' : ""}
 ${tabla(
   [
     "Fecha",
@@ -448,28 +465,30 @@ ${tabla(
         )
       : "—",
     d.registradoPor,
-    d.verificado
-      ? `Verificado por ${d.verificadoPor}`
-      : raw(
-          forma(
-            "/tens/documentos/verificar",
-            { id: d.id },
-            "Marcar verificado",
-          ),
-        ),
+    raw(accionesDocumento(d)),
   ]),
-  "Sin documentos registrados.",
-)}`,
+  valores.pendiente ? "No hay documentos pendientes de verificar." : "Sin documentos registrados.",
+)}${valores.pendiente ? `<details class="doc-nuevo"${valores.rut || valores.reemplazar ? " open" : ""}><summary class="btn sec">Registrar un documento</summary><form method="post" action="/tens/documentos" enctype="multipart/form-data">
+<input type="hidden" name="reemplazar" value="${esc(valores.reemplazar || "")}"><label>RUT del paciente <input name="rut" value="${esc(valores.rut || "")}" required></label>
+<label>Tipo <select name="tipo">${opciones(
+      tipos,
+      (t) => t,
+      (t) => t,
+    )}</select></label>
+<label>Especialidad relacionada <input name="especialidad"></label><label>Vigencia <input type="date" name="vigencia"></label><label>Observación <input name="observacion" maxlength="200"></label>
+<label>Archivo (opcional) <input type="file" name="archivo" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"></label>
+<button type="submit">Registrar documento</button></form></details>` : ""}`,
   });
 
 const bot = ({ ahora, mensajes, bandeja, citas, ctx, mensaje, usuario }) =>
   pagina({
-    titulo: "Bot de WhatsApp (modo simulado, sin IA)",
+    titulo: "Mensajes automáticos por WhatsApp",
     usuario,
     mensaje,
-    contenido: `<p>Reglas fijas: recordatorio 1 semana antes y la víspera a las 10:00; reintento la víspera a las 14:00; luego llama TENS/TONS. El paciente solo puede usar los botones. No se envía nada real.</p>
-<form method="post" action="/tens/bot/ejecutar"><label>Fecha y hora a simular <input name="ahora" value="${esc(ahora)}" placeholder="2026-11-22 10:00"></label><button type="submit">Ejecutar bot</button></form>
-<h2>Simular respuesta del paciente</h2>
+    contenido: `<div class="aviso"><b>Envío en modo de prueba.</b> Los mensajes quedan registrados, pero no se envían a los pacientes.</div>
+<p>Se envía un recordatorio una semana antes y otro la víspera a las 10:00. Si no hay respuesta, se reintenta la víspera a las 14:00 y después corresponde llamar al paciente. El paciente responde con los botones del mensaje.</p>
+<form method="post" action="/tens/bot/ejecutar"><label>Fecha y hora de referencia <input name="ahora" value="${esc(ahora)}" placeholder="2026-11-22 10:00"></label><button type="submit">Ejecutar envío</button></form>
+<h2>Registrar respuesta de un paciente</h2>
 <form method="post" action="/tens/bot/responder">
 <label>Cita <select name="idCita">${opciones(
       citas,
@@ -480,7 +499,7 @@ const bot = ({ ahora, mensajes, bandeja, citas, ctx, mensaje, usuario }) =>
       },
     )}</select></label>
 <label>Botón <select name="boton"><option>Confirmar</option><option>Cancelar mi hora</option><option>Hola (texto libre)</option></select></label>
-<button type="submit">Enviar como paciente</button></form>
+<button type="submit">Registrar respuesta</button></form>
 <h2>Mensajes programados</h2>
 ${tabla(
   ["Cita", "Tipo", "Programado", "Estado", "Respuesta"],
@@ -491,9 +510,9 @@ ${tabla(
     m.estado,
     m.respuesta ?? "—",
   ]),
-  "Aún no hay mensajes programados. Ejecuta el bot.",
+  "Aún no hay mensajes programados.",
 )}
-<h2>Bandeja simulada</h2>
+<h2>Mensajes registrados</h2>
 ${tabla(
   ["Fecha", "Canal", "Dirección", "Destino", "Texto", "Botones"],
   [...bandeja]

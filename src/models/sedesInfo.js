@@ -29,12 +29,12 @@ const SEDES = [
 
 function profesionalesDeMuestra() {
   const fijos = [[1, 'Medicina General'], [1, 'Psicología'], [2, 'Kinesiología'], [3, 'Medicina General'], [7, 'Medicina General'], [7, 'Psicología adultos']];
-  const lista = fijos.map(([idPoliclinico, especialidad], i) => ({ id: i + 1, nombre: `Profesional de prueba ${i + 1}`, especialidad, idPoliclinico, activo: true }));
+  const lista = fijos.map(([idPoliclinico, especialidad], i) => ({ id: i + 1, nombre: `Profesional ${i + 1}`, especialidad, idPoliclinico, activo: true }));
   for (const s of SEDES) {
     for (const esp of s.especialidades) {
       if (lista.some((p) => p.idPoliclinico === s.id && p.especialidad === esp)) continue;
       const id = lista.length + 1;
-      lista.push({ id, nombre: `Profesional de prueba ${id}`, especialidad: esp, idPoliclinico: s.id, activo: true });
+      lista.push({ id, nombre: `Profesional ${id}`, especialidad: esp, idPoliclinico: s.id, activo: true });
     }
   }
   return lista;

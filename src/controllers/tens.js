@@ -172,6 +172,10 @@ function crearTensController(c) {
       }),
     };
   };
+  const volverEspera = (token, mensaje) => {
+    c.sesiones.guardarAviso(token, "/tens/espera", mensaje);
+    return { redirigir: "/tens/espera" };
+  };
   const verEspera = async (usuario, mensaje) => {
     const ctx = await cargarContexto(catalogo);
     const sede = sedeDe(usuario);
@@ -193,21 +197,46 @@ function crearTensController(c) {
       }),
     };
   };
-  const verRecepcion = async (usuario, mensaje) => {
+  const DOCS_CESFAM_FONASA = ["Cartola FONASA", "Credencial CESFAM"];
+  const verRecepcion = async (usuario, mensaje, q = "") => {
     const ctx = await cargarContexto(catalogo);
-    return {
-      html: vistas.recepcion({
-        citas: await citasVisibles(usuario, ctx, true),
-        ctx,
-        mensaje,
-        usuario,
-      }),
-    };
+    const docs = documentos.listar().filter((d) => !d.archivado && DOCS_CESFAM_FONASA.includes(d.tipo));
+    const clave = String(q).toLowerCase().replace(/[.\s-]/g, "");
+    const texto = String(q).toLowerCase().trim();
+    const filas = (await citasVisibles(usuario, ctx, true))
+      .map((x) => {
+        const d = detalleCita(x, ctx);
+        const suyos = docs.filter((doc) => doc.rut === x.rut);
+        const estadoDe = (doc) => doc.estadoRevision || (doc.verificado ? "VALIDADO" : "PENDIENTE");
+        const sinValidar = suyos.find((doc) => estadoDe(doc) === "PENDIENTE");
+        const observado = suyos.filter((doc) => estadoDe(doc) === "OBSERVADO").at(-1);
+        return {
+          id: x.id,
+          fecha: d.b?.fecha,
+          hora: d.b?.hora || "",
+          nombre: d.pac?.nombre ?? x.rut,
+          rut: x.rut,
+          esp: d.b?.especialidad || d.prof?.especialidad || "",
+          prof: d.prof?.nombre || "",
+          asistencia: x.asistencia,
+          llego: ["Llegó", "En sala"].includes(c.operacion.meta.citas[x.id]?.flujo),
+          doc: suyos.some((doc) => estadoDe(doc) === "VALIDADO")
+            ? { estado: "validado" }
+            : sinValidar
+              ? { estado: "pendiente", id: sinValidar.id, tipo: sinValidar.tipo }
+              : { estado: "faltante", observacion: observado ? observado.observacion : "" },
+        };
+      })
+      .filter((f) => f.fecha === hoy())
+      .filter((f) => !texto || f.nombre.toLowerCase().includes(texto) || f.rut.toLowerCase().replace(/[.\s-]/g, "").includes(clave))
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+    return { html: vistas.recepcion({ filas, q, mensaje, usuario }) };
   };
   const verDocumentos = async (usuario, mensaje, valores = {}) => {
     const lista = [];
     for (const d of documentos.listar())
       if (
+        (!valores.pendiente || ((d.estadoRevision || (d.verificado ? "VALIDADO" : "PENDIENTE")) === "PENDIENTE" && !d.archivado)) &&
         (!d.idPoliclinico || d.idPoliclinico === sedeDe(usuario)) &&
         (await c.operacion.acceso(usuario, d.rut))
       )
@@ -354,7 +383,7 @@ function crearTensController(c) {
       }
     },
     espera: ({ usuario }) => verEspera(usuario),
-    registrarEspera: async ({ cuerpo, usuario }) => {
+    registrarEspera: async ({ cuerpo, usuario, token }) => {
       try {
         const sede = sedeDe(usuario);
         if (sede && Number(cuerpo.idPoliclinico) !== sede)
@@ -376,15 +405,12 @@ function crearTensController(c) {
           "Solicitud de espera registrada",
           normalizarRut(cuerpo.rut),
         );
-        return verEspera(
-          usuario,
-          ok("Solicitud registrada en la lista de espera."),
-        );
+        return volverEspera(token, ok("Solicitud registrada en la lista de espera."));
       } catch (e) {
-        return verEspera(usuario, error(e));
+        return volverEspera(token, error(e));
       }
     },
-    asignarEspera: async ({ cuerpo, usuario }) => {
+    asignarEspera: async ({ cuerpo, usuario, token }) => {
       try {
         const cita = await espera.asignar({
           idSolicitud: cuerpo.idSolicitud,
@@ -398,15 +424,17 @@ function crearTensController(c) {
           "Cupo asignado desde lista de espera",
           `cita ${cita.id}`,
         );
-        return verEspera(
-          usuario,
-          ok("Cupo asignado. La cita queda con confirmación pendiente."),
-        );
+        const solicitud = (await catalogo.espera()).find((x) => x.id === Number(cuerpo.idSolicitud));
+        const sede = sedeDe(usuario);
+        const liberadas = extras.listar("notificaciones").filter((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idPoliclinico === sede);
+        const usada = liberadas.find((n) => n.idBloque === Number(cuerpo.idBloque)) || liberadas.find((n) => solicitud && n.especialidad === solicitud.especialidad);
+        if (usada) extras.actualizar("notificaciones", usada.id, { leida: true });
+        return volverEspera(token, ok("Cupo asignado. La cita queda con confirmación pendiente."));
       } catch (e) {
-        return verEspera(usuario, error(e));
+        return volverEspera(token, error(e));
       }
     },
-    retirarEspera: async ({ cuerpo, usuario }) => {
+    retirarEspera: async ({ cuerpo, usuario, token }) => {
       try {
         if (
           !cuerpo.motivo?.trim() ||
@@ -415,12 +443,23 @@ function crearTensController(c) {
           throw new Error("MOTIVO_REQUERIDO");
         await espera.retirar(cuerpo.idSolicitud);
         await aud(usuario, "Solicitud de espera retirada", cuerpo.idSolicitud);
-        return verEspera(usuario, ok("Solicitud retirada."));
+        return volverEspera(token, ok("Solicitud retirada."));
       } catch (e) {
-        return verEspera(usuario, error(e));
+        return volverEspera(token, error(e));
       }
     },
-    recepcion: ({ usuario }) => verRecepcion(usuario),
+    recepcion: ({ usuario, consulta }) => verRecepcion(usuario, null, consulta.get("q") || ""),
+    registrarLlegada: async ({ cuerpo, usuario }) => {
+      try {
+        const cita = await citaDeMiSede(usuario, cuerpo.idCita);
+        if (cita.estadoReserva !== "ACTIVA") throw new Error("La reserva está cancelada.");
+        (c.operacion.meta.citas[cita.id] ||= {}).flujo = "Llegó";
+        await aud(usuario, "Llegada registrada", `cita ${cita.id}`);
+        return verRecepcion(usuario, ok("Llegada registrada."));
+      } catch (e) {
+        return verRecepcion(usuario, error(e));
+      }
+    },
     registrarAsistencia: async ({ cuerpo, usuario }) => {
       try {
         await citaDeMiSede(usuario, cuerpo.idCita);
@@ -459,6 +498,7 @@ function crearTensController(c) {
       verDocumentos(usuario, null, {
         rut: consulta.get("rut") || "",
         reemplazar: consulta.get("reemplazar") || "",
+        pendiente: consulta.get("pendiente") === "1",
       }),
     registrarDocumento: async ({ cuerpo, usuario }) => {
       try {
@@ -483,7 +523,18 @@ function crearTensController(c) {
       try {
         await documentos.verificar(cuerpo.id, usuario);
         await aud(usuario, "Documento verificado", cuerpo.id);
+        if (cuerpo.volver === "recepcion") return verRecepcion(usuario, ok("Documento verificado."));
         return verDocumentos(usuario, ok("Documento verificado."));
+      } catch (e) {
+        if (cuerpo.volver === "recepcion") return verRecepcion(usuario, error(e));
+        return verDocumentos(usuario, error(e));
+      }
+    },
+    observarDocumento: async ({ cuerpo, usuario }) => {
+      try {
+        await documentos.observar(cuerpo.id, usuario, cuerpo.motivo);
+        await aud(usuario, "Documento observado", cuerpo.id);
+        return verDocumentos(usuario, ok("Documento observado: el paciente verá el motivo y deberá subir uno nuevo."));
       } catch (e) {
         return verDocumentos(usuario, error(e));
       }
@@ -517,7 +568,7 @@ function crearTensController(c) {
         });
         await aud(
           usuario,
-          "Respuesta simulada del paciente",
+          "Respuesta de paciente registrada",
           `cita ${cuerpo.idCita}: ${cuerpo.boton}`,
         );
         return verBot(usuario, ok(`Respuesta del bot: ${r}`));
