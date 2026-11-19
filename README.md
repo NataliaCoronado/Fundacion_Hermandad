@@ -4,7 +4,7 @@ Aplicación administrativa para seis policlínicos y Telemedicina. Incluye porta
 
 ## Iniciar
 
-Necesita **Node.js 20 o superior**. Desde esta carpeta:
+Necesita **Node.js 20 o superior** (macOS, Linux o Windows). Desde esta carpeta:
 
 ```bash
 npm ci
@@ -30,7 +30,7 @@ Contraseña de las tres cuentas: `demo1234`. Las cuentas creadas desde Administr
 
 Para la entrega del 23 de noviembre el sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desplegará en la nube en la etapa siguiente).
 
-- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
+- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No usa flags de Node recientes ni rutas propias de un sistema operativo: `.env` se lee en código, así que `npm start` funciona igual en los tres. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
 - **Instalación:** `npm ci`
 - **Configuración:** ninguna para la demostración. Si quieres cambiar opciones, copia `.env.example` como `.env` (el `.env` nunca se sube al repositorio).
 - **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001). Cuentas de prueba en la tabla de más abajo.

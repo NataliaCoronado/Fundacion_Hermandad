@@ -1,4 +1,5 @@
 "use strict";
+require("./util/entorno").cargarEnv();   // lee .env sin depender de un flag de Node
 process.env.TZ ||= "America/Santiago";
 const http = require("node:http");
 const fs = require("node:fs");

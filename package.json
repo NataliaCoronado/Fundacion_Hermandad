@@ -4,8 +4,8 @@
   "description": "Sistema de gestión de citas – Instituto de Caridad Hermandad de Dolores (Ingeniería de Software, UDD)",
   "private": true,
   "scripts": {
-    "dev": "node --env-file-if-exists=.env src/server.js",
-    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
     "test": "node --test",
     "test:postgres-embebido": "node scripts/verificar-postgres-embebido.js",
     "start:json": "node src/server.js",

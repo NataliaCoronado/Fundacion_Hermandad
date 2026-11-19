@@ -1,0 +1,7 @@
+# Normaliza los fines de línea: en el repositorio se guardan como LF y cada sistema usa los suyos
+# al descargar. Evita que un clon en Windows marque todos los archivos como modificados.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.xlsx binary
