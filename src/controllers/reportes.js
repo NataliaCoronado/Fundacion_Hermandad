@@ -157,7 +157,7 @@ function crearReportesController(c) {
       },
       {
         id: "evolucion",
-        titulo: "Evolución semanal · consultas",
+        titulo: "Evolución semanal · citas activas",
         seccion: 3,
         filas: a.semanal.map((x) => ({ nombre: x.semana, n: x.activas })),
       },
