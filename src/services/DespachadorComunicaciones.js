@@ -1,7 +1,11 @@
 'use strict';
 const { textoLocal, sumarMinutos } = require('../util/tiempo');
+const { huellaEnlace } = require('../util/huella');
 
 const MAX_INTENTOS = 3;
+// Tipos que dan por supuesta una hora vigente: no deben salir si la reserva se canceló tras encolarse.
+// Los avisos de cancelación y de cambio quedan fuera a propósito: su razón de ser es informar ese cambio.
+const REQUIERE_RESERVA_ACTIVA = new Set(['Recordatorio', 'Comprobante de reserva', 'Enlace de atención']);
 const ESPERA_MIN = 5; // espera entre reintentos: 5, 10 min…
 
 // Correo SIMULADO: no hay proveedor de correo conectado. Deja el mensaje en la bandeja de demostración.
@@ -60,6 +64,12 @@ class DespachadorComunicaciones {
     const destino = m.canal === 'WhatsApp' ? (p?.tieneWhatsapp ? p.telefono : '') : p?.correo;
     if (!cita || !consiente || !destino)
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: !consiente ? 'Falta el consentimiento del paciente.' : 'Faltan datos del destinatario.' });
+    // La reserva pudo cancelarse entre la solicitud y el envío: no se cita a un paciente a una hora que ya no existe.
+    if (REQUIERE_RESERVA_ACTIVA.has(m.tipo) && cita.estadoReserva !== 'ACTIVA')
+      return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'La reserva ya no está activa: no se envió este mensaje.' });
+    // El enlace de Telemedicina pudo reemplazarse: no se envía un enlace distinto del que se solicitó enviar.
+    if (m.tipo === 'Enlace de atención' && m.huellaEnlace && huellaEnlace(cita.enlace) !== m.huellaEnlace)
+      return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'El enlace de atención fue reemplazado: solicita el envío del enlace vigente.' });
     const intentos = (m.intentos || 0) + 1;
     try {
       const r = await transporte.enviar({ telefono: destino, destino, idCita: m.idCita, texto: await this.texto(m, cita), botones: [], iniciado: true });

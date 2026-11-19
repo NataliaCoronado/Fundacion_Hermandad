@@ -4,8 +4,7 @@ const { hoy, sumarDias, diaSemana, textoLocal } = require("../util/tiempo");
 const { normalizarRut } = require("../util/rut");
 const { hashClave } = require("../auth/clave");
 const { infoSede } = require("../models/sedesInfo");
-const huellaEnlace = (enlace) =>
-  crypto.createHash("sha256").update(enlace).digest("hex");
+const { huellaEnlace } = require("../util/huella");
 const fechaValida = (v) =>
   /^\d{4}-\d{2}-\d{2}$/.test(v || "") &&
   !Number.isNaN(Date.parse(v)) &&

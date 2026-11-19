@@ -168,3 +168,71 @@ test("mensajes automáticos: un ciclo despacha la bandeja y pide guardar solo si
   assert.strictEqual(guardados, 1);
   assert.strictEqual(c.extras.buscar("comunicaciones", m.id).estado, "Simulado");
 });
+
+test("despachador: una reserva cancelada tras encolar no recibe recordatorio ni comprobante", async () => {
+  for (const tipo of ["Recordatorio", "Comprobante de reserva"]) {
+    const c = crearContenedor();
+    const m = await pendiente(c, tipo);
+    await c.agendamiento.cancelar(1, "ASISTIDA");
+    const r = await c.despachador.procesar();
+    assert.deepStrictEqual(r, { enviados: 0, simulados: 0, errores: 1, reintentos: 0 }, tipo);
+    const f = c.extras.buscar("comunicaciones", m.id);
+    assert.strictEqual(f.estado, "Error", tipo);
+    assert.match(f.detalle, /ya no está activa/);
+    assert.strictEqual(bandejaSaliente(c).length, 0, `no sale ningún mensaje de una cita cancelada (${tipo})`);
+  }
+});
+
+test("despachador: el aviso de cancelación sí se envía, porque su razón de ser es esa cancelación", async () => {
+  const c = crearContenedor();
+  const m = await pendiente(c, "Cancelación institucional");
+  await c.agendamiento.cancelar(1, "INSTITUCIONAL");
+  await c.despachador.procesar();
+  assert.strictEqual(c.extras.buscar("comunicaciones", m.id).estado, "Simulado");
+  assert.match(bandejaSaliente(c)[0].texto, /fue cancelada por la institución/);
+});
+
+// Telemedicina: el enlace que se solicitó enviar es el único que puede salir.
+async function citaTelemedicina(c, enlace) {
+  const profs = await c.catalogo.profesionales();
+  const bloque = (await c.catalogo.bloques()).find((b) => {
+    const p = profs.find((x) => x.id === b.idProfesional);
+    return p && c.operacion.lugares(p).includes(7);
+  });
+  const cita = await c.agendamiento.agendar({ rut: "11111111-1", idBloque: bloque.id });
+  consentir(c, "11111111-1");
+  (c.operacion.meta.citas[cita.id] ||= {}).enlace = enlace;
+  return c.citaRepo.buscarPorId(cita.id);
+}
+
+test("despachador: un enlace de Telemedicina reemplazado no se envía con la solicitud anterior", async () => {
+  const c = crearContenedor();
+  const tele = { id: "u3", nombre: "Telemedicina", rol: "TELEMEDICINA", idPoliclinico: 7 };
+  const cita = await citaTelemedicina(c, "https://videollamada.ejemplo.cl/SALA-A");
+  const m = await c.operacion.comunicar(tele, cita, "WhatsApp", "Enlace de atención");
+  assert.strictEqual(m.estado, "Pendiente");
+  // El operador corrige el enlace antes de que la cola procese la solicitud.
+  c.operacion.meta.citas[cita.id].enlace = "https://videollamada.ejemplo.cl/SALA-B";
+  await c.despachador.procesar();
+  const f = c.extras.buscar("comunicaciones", m.id);
+  assert.strictEqual(f.estado, "Error");
+  assert.match(f.detalle, /reemplazado/);
+  assert.strictEqual(bandejaSaliente(c).length, 0, "no sale ni el enlace viejo ni el nuevo");
+  // La pantalla muestra que el enlace vigente aún no se ha enviado, y la nueva solicitud sí sale.
+  const vigente = await c.citaRepo.buscarPorId(cita.id);
+  assert.strictEqual(c.operacion.estadoEnvioEnlace(vigente).estado, "Enlace guardado");
+  await c.operacion.comunicar(tele, vigente, "WhatsApp", "Enlace de atención");
+  await c.despachador.procesar();
+  assert.match(bandejaSaliente(c)[0].texto, /SALA-B$/);
+  assert.strictEqual(c.operacion.estadoEnvioEnlace(vigente).estado, "Enlace simulado");
+});
+
+test("despachador: el enlace que no cambió se envía igual que antes", async () => {
+  const c = crearContenedor();
+  const tele = { id: "u3", nombre: "Telemedicina", rol: "TELEMEDICINA", idPoliclinico: 7 };
+  const cita = await citaTelemedicina(c, "https://videollamada.ejemplo.cl/SALA-A");
+  const m = await c.operacion.comunicar(tele, cita, "WhatsApp", "Enlace de atención");
+  await c.despachador.procesar();
+  assert.strictEqual(c.extras.buscar("comunicaciones", m.id).estado, "Simulado");
+  assert.match(bandejaSaliente(c)[0].texto, /SALA-A$/);
+});
