@@ -179,6 +179,17 @@ function crearReportesController(c) {
           n: x.tasaInasistencia || 0,
         })),
       },
+      // RF22: dos encuestas distintas, nunca sumadas. El título lleva respuestas y promedio para que viajen
+      // también en las descargas.
+      ...[
+        ["encuesta-agendamiento", "Encuesta de agendamiento · cómo fue reservar", a.encuestasPorTipo.agendamiento, ["muy fácil", "muy difícil"]],
+        ["encuesta-atencion", "Encuesta de atención · después de la consulta", a.encuestasPorTipo.atencion, ["muy buena", "mala"]],
+      ].map(([id, nombre, e, [alta, baja]]) => ({
+        id,
+        titulo: `${nombre} · ${e.respuestas ? `${e.respuestas} respuesta(s), promedio ${String(e.promedio).replace(".", ",")} de 5` : "sin respuestas en el período"}`,
+        seccion: 4,
+        filas: e.notas.map((x) => ({ nombre: `Nota ${x.nota}${x.nota === 5 ? ` (${alta})` : x.nota === 1 ? ` (${baja})` : ""}`, n: x.n })),
+      })),
     ];
     const contexto = `${desde} a ${hasta} · Lugar: ${ctx.sedes.get(+filtro.idPoliclinico)?.nombre || "Toda la red"} · Especialidad: ${filtro.especialidad || "Todas"} · Profesional: ${ctx.profs.get(+filtro.idProfesional)?.nombre || "Todos"}`;
     return { filtro, periodo, a, ctx, g, contexto };
@@ -256,6 +267,7 @@ function crearReportesController(c) {
               [1, "Caracterización de pacientes"],
               [2, "Demanda por profesional"],
               [3, "Estadísticas de atención"],
+              [4, "Encuestas"],
             ]
               .map(
                 ([n, t]) =>

@@ -46,7 +46,7 @@ Los cuatro módulos principales son Agendas y cupos, Equipo de salud, Policlíni
 - **Cambios de agenda:** ausencia, reemplazo, lugar, fecha/horario o cancelación institucional. Presenta situación actual, propuesta y reservas afectadas. Revalida el impacto al guardar. Permite seleccionar las citas que se cancelarán y elegir si el horario vuelve a estar disponible o queda bloqueado. La reprogramación se realiza desde el detalle de reserva; los cambios generan instrucciones para la sede y una bitácora.
 - **Equipo de salud:** tarjetas o tabla, búsqueda, filtros, alta, edición, fotografía JPG/PNG, tipo de integrante, profesión, varias especialidades y varios lugares. Las asignaciones tienen fecha de vigencia. No se retiran lugares con reservas futuras afectadas; primero se reprograman. Los integrantes se desactivan y conservan su historial.
 - **Policlínicos y especialidades:** pestañas, alta y edición, estado y colores. Incluye las siete ubicaciones originales.
-- **Reportes:** filtros por lugar, especialidad, profesional y período; tres secciones, siluetas de sexo registrado, pacientes únicos atendidos, consultas, ausencias y registros pendientes separados. Cada gráfico tiene datos consultables y descargas PDF, Excel real (`.xlsx`) y PNG. PDF y Excel admiten reporte completo. Las descargas incluyen período y filtros.
+- **Reportes:** filtros por lugar, especialidad, profesional y período; cuatro secciones (la cuarta, las dos encuestas por separado), siluetas de sexo registrado, pacientes únicos atendidos, consultas, ausencias y registros pendientes separados. Cada gráfico tiene datos consultables y descargas PDF, Excel real (`.xlsx`) y PNG. PDF y Excel admiten reporte completo. Las descargas incluyen período y filtros.
 - **Usuarios:** crear/editar, vincular integrante, lugares asignados, lugar principal de ingreso, permiso para finalizar atención administrativa, estado y último acceso. El cambio de permisos revoca las sesiones existentes. Los enlaces para establecer contraseña caducan a los 30 minutos y solo sirven una vez.
 - **Auditoría:** usuario, fecha, acción y valores de las operaciones nuevas; filtros por fecha, usuario, acción y lugar. También se conserva la auditoría histórica original.
 
@@ -70,7 +70,7 @@ Son **dos encuestas distintas**, guardadas por separado para que sus promedios n
 - **Del agendamiento (RF36):** al confirmar una reserva en el portal se ofrece responder cómo fue reservar. Es voluntaria, se responde con el token de esa reserva (no pide el RUT, así conocer un RUT no permite responder por otra persona), una sola vez por reserva, y no afecta la hora ya reservada.
 - **De la atención (RF30):** en `/paciente/encuesta`, solo si hay una asistencia registrada.
 
-Las respuestas del agendamiento quedan en `encuestasAgendamiento` y se consultan con `encuestas.resumenAgendamiento()`. Todavía **no aparecen en los reportes de Administración**: mostrarlas ahí cambia la estructura de las descargas que respalda la evidencia de CP-23, así que es una decisión aparte.
+En **Reportes** (Administración), la sección *Encuestas* muestra las dos por separado, nunca sumadas: respuestas, promedio y distribución de notas de 1 a 5, según el mismo período, lugar, especialidad y profesional del resto del reporte. Se descargan en PDF, Excel y PNG, solas o en el reporte completo (RF22).
 
 ## Mensajes automáticos
 

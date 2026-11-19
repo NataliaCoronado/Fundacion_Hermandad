@@ -354,7 +354,24 @@ class ReporteService {
       porPoliclinico: await this.porPoliclinico(filtro),
       caracterizacion: await this.caracterizacion(filtro),
       porProfesional: await this.porProfesional(filtro),
+      encuestasPorTipo: this.encuestasPorTipo(b.citas),
     };
+  }
+
+  // RF22: las dos encuestas por separado (agendamiento, RF36; atención, RF30), contando solo las respuestas de
+  // las citas que entran en el filtro del reporte (período, lugar, especialidad y profesional).
+  encuestasPorTipo(citas) {
+    const ids = new Set(citas.map((c) => c.id));
+    const resumir = (lista) => {
+      const l = (lista || []).filter((e) => ids.has(e.idCita));
+      const suma = l.reduce((s, e) => s + e.nota, 0);
+      return {
+        respuestas: l.length,
+        promedio: l.length ? Math.round((suma / l.length) * 10) / 10 : null,
+        notas: [5, 4, 3, 2, 1].map((nota) => ({ nota, n: l.filter((e) => e.nota === nota).length })),
+      };
+    };
+    return { agendamiento: resumir(this.extras.listar("encuestasAgendamiento")), atencion: resumir(this.extras.listar("encuestas")) };
   }
 
   // Lo que requiere atención hoy y la capacidad de los próximos 14 días (cupos libres, reservados y sin publicar por día).
