@@ -1,8 +1,8 @@
 "use strict";
 const { pagina } = require("./layout");
-const { esc, opciones } = require("./util");
+const { esc, opciones } = require("./componentesComunes");
 const { ico } = require("./iconos");
-const G = require("./graficos");
+const graficos = require("./graficos");
 const estilos = require("./resumen.css");
 const script = require("./resumen.script");
 
@@ -15,7 +15,7 @@ const alerta = ({ id, nivel, titulo, detalle, n, href }, seleccion) =>
 function listaCitas(filas, { vacio, incluirFecha = false }) {
   if (!filas.length) return `<p class="res-vacio">${esc(vacio)}</p>`;
   return `<ul class="res-citas">${filas.map((f) =>
-    `<li><time datetime="${esc(f.fecha)}T${esc(f.hora)}">${incluirFecha ? `<small>${esc(G.fechaCorta(f.fecha))}</small>` : ""}${esc(f.hora)}</time><span class="res-cita-datos"><a href="${esc(f.href)}">${esc(f.paciente)}</a><small>${esc(f.detalle)}</small></span>${f.badge}</li>`,
+    `<li><time datetime="${esc(f.fecha)}T${esc(f.hora)}">${incluirFecha ? `<small>${esc(graficos.fechaCorta(f.fecha))}</small>` : ""}${esc(f.hora)}</time><span class="res-cita-datos"><a href="${esc(f.href)}">${esc(f.paciente)}</a><small>${esc(f.detalle)}</small></span>${f.badge}</li>`,
   ).join("")}</ul>`;
 }
 
@@ -36,16 +36,15 @@ ${listaCitas(detalle.filas, { vacio: "No quedan citas pendientes para esta alert
 
 const porcentaje = (v) => v == null ? "—" : `${v}%`;
 const etiquetaPeriodo = (p) => p.desde === p.hasta
-  ? G.fechaLarga(p.desde)
-  : `${G.fechaCorta(p.desde)} – ${G.fechaLarga(p.hasta)}`;
+  ? graficos.fechaLarga(p.desde)
+  : `${graficos.fechaCorta(p.desde)} – ${graficos.fechaLarga(p.hasta)}`;
 
-// Compara con el período anterior de igual duración (mismos filtros). No inventa datos: si no hay base, lo dice.
 function comparacion(actual, previo, { unidad = "pts", menorEsMejor = false } = {}) {
   if (actual == null || previo == null) return `<span class="res-delta neutro">Sin datos del período anterior</span>`;
   const dif = unidad === "pts" ? actual - previo : (previo ? Math.round(((actual - previo) / previo) * 100) : null);
   if (dif === null) return `<span class="res-delta neutro">Sin reservas en el período anterior</span>`;
   const texto = unidad === "pts" ? `${Math.abs(dif)} pts` : `${Math.abs(dif)} %`;
-  const antes = unidad === "pts" ? `${previo}%` : G.num(previo);
+  const antes = unidad === "pts" ? `${previo}%` : graficos.num(previo);
   if (!dif) return `<span class="res-delta neutro">${unidad === "pts" ? "Igual que" : "Prácticamente igual que"} el período anterior (${antes})</span>`;
   const mejora = menorEsMejor ? dif < 0 : dif > 0;
   return `<span class="res-delta ${unidad === "%" && !menorEsMejor ? "neutro" : mejora ? "bueno" : "malo"}"><span aria-hidden="true">${dif > 0 ? "▲" : "▼"}</span>${dif > 0 ? "+" : "−"}${texto} vs. período anterior (${antes})</span>`;
@@ -59,12 +58,12 @@ function indicadores(datos, base, alertaActiva) {
   const previa = (nombre, campo) => ({ nombre, color: colores.previo, previo: true, valores: anterior.periodos.map((p) => p[campo]) });
   const grafico = ({ titulo, valor, descripcion, series, porcentaje: unidad, sinDatos, comparar }) =>
     `<section class="res-grafico"><h4>${esc(titulo)}</h4><div class="res-valor"><strong>${esc(valor)}</strong>${comparar}</div><p class="res-grafico-contexto">${esc(descripcion)}</p>
-${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.</p>' : G.lineas({
+${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.</p>' : graficos.lineas({
     etiquetas: periodos,
     series,
     titulo,
     etiquetaX: etiquetaPeriodo,
-    ejeFecha: (p) => G.fechaCorta(p.desde),
+    ejeFecha: (p) => graficos.fechaCorta(p.desde),
     interactivo: true,
     ...(unidad ? { maximo: 100, sufijo: "%" } : {}),
   })}</section>`;
@@ -74,7 +73,7 @@ ${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.
     {
       titulo: "Ocupación de cupos",
       valor: porcentaje(ocupacion.total),
-      descripcion: `${G.num(ocupacion.ocupados)} de ${G.num(ocupacion.publicados)} cupos publicados ocupados`,
+      descripcion: `${graficos.num(ocupacion.ocupados)} de ${graficos.num(ocupacion.publicados)} cupos publicados ocupados`,
       series: [serie("Ocupación", "ocupacion", colores.teal), previa("Período anterior", "ocupacion")],
       porcentaje: true,
       sinDatos: ocupacion.total == null,
@@ -82,7 +81,7 @@ ${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.
     },
     {
       titulo: "Evolución de reservas",
-      valor: G.num(reservas),
+      valor: graficos.num(reservas),
       descripcion: "Reservas por fecha de atención",
       series: [serie("Vigentes", "vigentes"), serie("Canceladas", "canceladas", colores.canceladas, "4 3"), previa("Vigentes, período anterior", "vigentes")],
       sinDatos: !reservas,
@@ -91,7 +90,7 @@ ${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.
     {
       titulo: "Inasistencias",
       valor: porcentaje(inasistencia.total),
-      descripcion: `${G.num(inasistencia.ausencias)} inasistencias de ${G.num(inasistencia.asistencias)} resultados registrados`,
+      descripcion: `${graficos.num(inasistencia.ausencias)} inasistencias de ${graficos.num(inasistencia.asistencias)} resultados registrados`,
       series: [serie("Inasistencia", "inasistencia", colores.canceladas), previa("Período anterior", "inasistencia")],
       porcentaje: true,
       sinDatos: inasistencia.total == null,
@@ -100,7 +99,7 @@ ${sinDatos ? '<p class="res-vacio res-vacio-grafico">Sin datos en este período.
     {
       titulo: "Confirmación de citas",
       valor: porcentaje(datos.confirmacion),
-      descripcion: `${G.num(confirmadas)} de ${G.num(vigentes)} citas vigentes confirmadas`,
+      descripcion: `${graficos.num(confirmadas)} de ${graficos.num(vigentes)} citas vigentes confirmadas`,
       series: [serie("Confirmación", "confirmacion", colores.principal), previa("Período anterior", "confirmacion")],
       porcentaje: true,
       sinDatos: !vigentes,

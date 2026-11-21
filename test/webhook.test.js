@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const crypto = require("node:crypto");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 
 const SECRETO = "secreto-de-prueba-de-la-app";
@@ -179,7 +179,7 @@ test("webhook: si un recordatorio no se pudo entregar, el personal recibe el avi
 test("webhook: con dos horas consultadas y sin referencia no se adivina: no cancela ninguna y avisa al personal", async () => {
   const s = await levantar();
   try {
-    const { sumarDias } = require("../src/util/tiempo");
+    const { sumarDias } = require("../src/herramientas/tiempo");
     const c1 = await s.c.citaRepo.buscarPorId(1);
     const b1 = await s.c.catalogo.bloque(c1.idBloque);
     const libre = (await s.c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).sort((x, y) => `${x.fecha}${x.hora}`.localeCompare(`${y.fecha}${y.hora}`))[0];

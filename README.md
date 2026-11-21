@@ -36,7 +36,7 @@ El sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desp
 - **Instalación:** `npm ci`
 - **Configuración:** ninguna para la demostración.
 - **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001).
-- **Datos:** todos los datos son **ficticios**. La mensajería funciona en modo simulado y no envía nada real; el guion está en `DEMO_MENSAJES.md`.
+- **Datos:** todos los datos son **ficticios**. La mensajería funciona en modo simulado y no envía nada real. Para ver los mensajes como los vería el paciente (WhatsApp y correo), abre http://localhost:3000/demo/mensajes.
 - **Verificación:** `npm test`.
 
 ## Administración
@@ -103,7 +103,7 @@ Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: 
 
 **Sin DATABASE_URL:** el estado se guarda en `datos/estado.json`, con escritura mediante reemplazo de archivo y permisos privados. No se pierde al reiniciar. `DATOS_DEMO=0` inicia con el conjunto mínimo de ejemplo si aún no existe el archivo; no borra un estado guardado.
 
-**Con PostgreSQL:** los catálogos, pacientes, bloques, citas, usuarios y contactos usan los repositorios SQL. La auditoría (con resultado: exitoso o rechazado), los documentos (estado de revisión, revisor y fecha) y el historial de cada cita se guardan en las tablas `auditoria`, `documento` y `cita_historial`; al iniciar, lo que hubiera en `datos/extras.json` se migra una sola vez. Los metadatos adicionales, instrucciones y comunicaciones se conservan en `datos/extras.json`; las bases creadas antes de este cambio se actualizan con `db/04_migracion_auditoria_documentos.sql`; los adjuntos están en `datos/documentos/` y las fotos privadas del equipo en `datos/fotos/`.
+**Con PostgreSQL:** los catálogos, pacientes, bloques, citas, usuarios y contactos usan los repositorios SQL. La auditoría (con resultado: exitoso o rechazado), los documentos (estado de revisión, revisor y fecha) y el historial de cada cita se guardan en las tablas `auditoria`, `documento` y `cita_historial`; al iniciar, lo que hubiera en `datos/extras.json` se migra una sola vez. Los metadatos adicionales, instrucciones y comunicaciones se conservan en `datos/extras.json`; las bases creadas antes de este cambio se actualizan con `base-de-datos/04_migracion_auditoria_documentos.sql`; los adjuntos están en `datos/documentos/` y las fotos privadas del equipo en `datos/fotos/`.
 
 Esta arquitectura requiere **una instancia de la aplicación** y conservar esos directorios junto con la base de datos. Los metadatos adicionales no están migrados a tablas normalizadas. Las sesiones son temporales: reiniciar solicita un nuevo inicio de sesión. La sesión caduca tras 30 minutos de inactividad y como máximo a las 8 horas.
 
@@ -129,7 +129,7 @@ Al restaurar, el sistema primero comprueba el respaldo, luego respalda automáti
 docker compose up --build
 ```
 
-Conserva el volumen de datos y adjuntos. Para PostgreSQL propio, ejecuta `db/hermandad_postgresql.sql`, `db/datos_ejemplo.sql` y `db/03_credencial.sql`, en ese orden. Luego:
+Conserva el volumen de datos y adjuntos. Para PostgreSQL propio, ejecuta `base-de-datos/01_estructura.sql`, `base-de-datos/02_datos_ejemplo.sql` y `base-de-datos/03_credenciales.sql`, en ese orden. Luego:
 
 ```bash
 DATABASE_URL=postgres://usuario:clave@localhost:5432/hermandad CLAVE_DEMO=demo1234 npm start
@@ -169,8 +169,34 @@ También se revisaron en navegador el ingreso por rol, calendario y panel flotan
 
 ## Despliegue en la nube
 
-Pendiente para la etapa siguiente. El diseño propuesto, con las restricciones que impone el código y las decisiones que faltan, está en [`docs/diseno-despliegue-nube.md`](docs/diseno-despliegue-nube.md).
+Pendiente para la etapa siguiente.
+
+## Mapa de carpetas
+
+Cada carpeta y archivo tiene un nombre que dice qué hace.
+
+| Carpeta | Qué contiene |
+|---|---|
+| `src/server.js`, `src/rutas.js` | Servidor web y tabla de rutas (qué dirección atiende qué función) |
+| `src/armarAplicacion.js`, `src/tareasProgramadas.js` | Conexión de todas las piezas y tareas que se repiten solas (recordatorios) |
+| `src/controllers/` | Controladores: reciben cada petición y deciden qué responder |
+| `src/services/` | Servicios: las reglas del negocio (reservas, cancelaciones, reportes, mensajes) |
+| `src/repositories/` | Repositorios: guardan y leen datos, en memoria, en archivo JSON o en PostgreSQL |
+| `src/views/` | Vistas: las páginas HTML, sus estilos (`.css.js`) y su código de navegador (`.script.js`) |
+| `src/models/` | Datos iniciales, información de sedes y comunas |
+| `src/auth/` | Sesiones, contraseñas y permisos por rol |
+| `src/mensajeria/` | Envío de mensajes por WhatsApp (real o simulado) |
+| `src/herramientas/` | Funciones de apoyo: RUT, fechas, respaldos, límite de intentos |
+| `src/db/` | Conexión a PostgreSQL |
+| `base-de-datos/` | Scripts SQL, numerados en el orden en que se ejecutan |
+| `datos/` | Datos que guarda el sistema al funcionar sin PostgreSQL (no se sube al repositorio) |
+| `scripts/` | Programas de apoyo: respaldos, datos de demostración y revisión de páginas |
+| `test/` | Pruebas automáticas (`npm test`) |
+| `pruebas-de-extremo-a-extremo/` | Pruebas que recorren el sistema con un navegador real |
+| `public/` | Imágenes del sitio |
+
+Convenciones de nombres: `Servicio` = reglas del negocio; `Repositorio…EnMemoria` y `Repositorio…PostgreSQL` = dónde se guardan los datos; TENS/TONS (técnicos de enfermería y de nivel superior) corresponde a la pantalla **Atención del día**.
 
 ## Estructura y compatibilidad
 
-Se conserva la arquitectura MVC y Repository del proyecto original, sus pruebas y el portal de pacientes. Las extensiones están en `src/controllers/operacion.js`, `src/controllers/reportes.js`, `src/services/OperacionService.js`, `src/services/ExportacionService.js` y las vistas `operacion*`. No se eliminaron rutas ni servicios anteriores; las rutas principales usan las vistas nuevas y las rutas operativas tienen control central de alcance por sede.
+Se conserva la arquitectura MVC y Repositorio del proyecto original, sus pruebas y el portal de pacientes. Las extensiones están en `src/controllers/operacion.js`, `src/controllers/reportes.js`, `src/services/OperacionServicio.js`, `src/services/ExportacionServicio.js` y las vistas `operacion*`. No se eliminaron rutas ni servicios anteriores; las rutas principales usan las vistas nuevas y las rutas operativas tienen control central de alcance por sede.

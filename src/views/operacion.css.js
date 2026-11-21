@@ -21,7 +21,7 @@ module.exports = `
 .chips-filtro a{padding:5px 12px;border:1px solid var(--borde-2);border-radius:999px;background:#fff;color:var(--navy);font-size:.875rem;text-decoration:none}
 .chips-filtro a:hover{background:#eef3f5}
 .chips-filtro a[aria-current=true]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
-.chips-filtro a:focus-visible{outline:3px solid #f2b705;outline-offset:1px}
+.chips-filtro a:focus-visible{outline:3px solid var(--navy);box-shadow:0 0 0 2px var(--foco);outline-offset:1px}
 .espera-dias{font-variant-numeric:tabular-nums;color:var(--navy)}
 .espera-dias[data-largo]{display:inline-block;padding:2px 9px;border-radius:999px;background:#fff1d6;color:#7a4a00}
 .espera-nueva{margin:0 0 12px}
@@ -32,6 +32,20 @@ module.exports = `
 .espera-contacto>summary::-webkit-details-marker{display:none}
 .espera-contacto[open]>.espera-form{margin-top:8px}
 .espera-asignar{font-weight:700}
+.micro:has(.check-mini){display:flex!important;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.micro .check-mini{display:inline-flex!important;align-items:center;gap:6px;width:auto!important;margin:0!important;font-size:.8125rem;font-weight:600;white-space:nowrap;flex:1 0 100%}
+.micro .check-mini input{width:auto!important;margin:0}
+.espera-cupos{margin:0 0 18px;padding:14px 16px 16px;border:1px solid #f0cf8f;border-left:5px solid #e0a400;border-radius:8px;background:#fff8e6;color:#5a3d00}
+.espera-cupos h2{margin:0 0 2px;font-size:1.05rem}
+.espera-cupos>p{margin:0 0 12px;font-size:.9rem}
+.espera-cupos ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.espera-cupo{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,2fr) auto;gap:10px 16px;align-items:center;background:#fff;border:1px solid #ecd9a8;border-radius:8px;padding:10px 12px}
+.espera-cupo-hora b{display:block;font-size:1.05rem;color:#2d2100}.espera-cupo-hora b::first-letter{text-transform:uppercase}
+.espera-cupo-hora span{font-size:.85rem;color:#6b5320}
+.espera-cupo form{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center;margin:0!important;max-width:none!important}
+.espera-cupo select{flex:1 1 200px;min-width:0}
+.espera-cupo-nadie{font-size:.875rem;color:#6b5320}
+@media(max-width:900px){.espera-cupo{grid-template-columns:1fr}}
 .espera-liberadas{margin:0 0 12px;padding:10px 14px;border:1px solid #f0cf8f;border-left:5px solid #e0a400;border-radius:8px;background:#fff8e6;color:#5a3d00}
 .espera-liberadas b{display:block;font-size:1rem}
 .espera-liberadas ul{margin:4px 0 2px;padding-left:18px}

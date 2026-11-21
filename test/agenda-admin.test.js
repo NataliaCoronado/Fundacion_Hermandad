@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 const css = require("../src/views/agenda.css");
 
@@ -36,15 +36,13 @@ test("admin: las acciones importantes son enlaces visibles, no un menú escondid
   } finally { await s.cerrar(); }
 });
 
-test("admin: «Configurar colores» queda bajo la agenda como ajuste general", async () => {
+test("admin: la agenda no repite «Configurar colores» (los colores se cambian en Policlínicos y especialidades)", async () => {
   const s = await sitio();
   try {
     const html = await s.ver("/admin/agendas", s.a);
-    const finAgenda = html.indexOf("</section>", html.indexOf('aria-label="Calendario y filtros"'));
-    const ajustes = html.indexOf('class="agenda-ajustes"');
-    assert.ok(finAgenda > 0 && ajustes > finAgenda, "los ajustes van después del panel de la agenda");
-    assert.match(html.slice(ajustes, ajustes + 400), /href="\/admin\/colores"[^>]*>Configurar colores/);
-    assert.equal((html.match(/\/admin\/colores/g) || []).length, 1);
+    assert.doesNotMatch(html, /Ajustes de la agenda/);
+    assert.doesNotMatch(html, /Configurar colores/);
+    assert.doesNotMatch(html, /href="\/admin\/colores"/);
   } finally { await s.cerrar(); }
 });
 
@@ -87,8 +85,13 @@ test("TENS/TONS: su agenda semanal no cambia", async () => {
   } finally { await s.cerrar(); }
 });
 
+test("estilos: «‹ Hoy ›» alinea los tres botones con la misma altura", () => {
+  assert.match(css, /\.agenda-paging[^{]*\{[^}]*display:\s*flex[^}]*align-items:\s*center/, "los botones de fecha van en una fila centrada");
+  assert.match(css, /\.agenda-paging\s+\.btn\s*\{[^}]*height:\s*var\(--control\)/, "los tres botones miden lo mismo");
+});
+
 test("estilos: la barra de la agenda tiene reglas propias (antes no tenía ninguna)", () => {
-  for (const sel of [".agenda-tools", ".agenda-resumen", ".agenda-acciones", ".agenda-ajustes", ".matriz-semana"]) {
+  for (const sel of [".agenda-tools", ".agenda-resumen", ".agenda-acciones", ".matriz-semana"]) {
     assert.ok(css.includes(sel), `falta ${sel}`);
   }
 });

@@ -1,5 +1,5 @@
 'use strict';
-const { esc } = require('./util');
+const { esc } = require('./componentesComunes');
 
 const CSS = `<style>
 .ag{margin:0 0 32px}

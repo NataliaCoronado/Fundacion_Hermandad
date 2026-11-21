@@ -1,9 +1,9 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
-const { hoy } = require("../src/util/tiempo");
+const { hoy } = require("../src/herramientas/tiempo");
 
 const USUARIO = { nombre: "TENS Prueba", idPoliclinico: 1 };
 
@@ -11,7 +11,6 @@ async function sitio() {
   const c = crearContenedor();
   await c.inicializar();
   const bloques = await c.catalogo.bloques();
-  // Tres citas de hoy en el policlínico 1: sin documento, con documento sin validar y con documento validado.
   const rutB = "22222222-2", rutC = "33333333-3";
   const bC = bloques.find((b) => b.id !== 1 && b.id !== 2 && b.publicado && b.idProfesional === 1);
   const citaC = await c.agendamiento.agendar({ rut: rutC, idBloque: bC.id, idUsuario: "u2" });

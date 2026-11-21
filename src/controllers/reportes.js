@@ -1,70 +1,70 @@
 "use strict";
-const V = require("../views/operacion"),
-  { esc, tabla } = require("../views/util");
-const { hoy, sumarDias, lunesDe } = require("../util/tiempo");
-const { fechaValida } = require("../services/OperacionService");
-const Exportar = require("../services/ExportacionService");
-const G = require("../views/graficos");
-function crearReportesController(c) {
+const vistas = require("../views/operacion"),
+  { esc, tabla } = require("../views/componentesComunes");
+const { hoy, sumarDias, lunesDe } = require("../herramientas/tiempo");
+const { fechaValida } = require("../services/OperacionServicio");
+const Exportar = require("../services/ExportacionServicio");
+const graficos = require("../views/graficos");
+function crearControladorReportes(aplicacion) {
   const ESTADO = (x) =>
     x.estadoReserva !== "ACTIVA" ? "CAN" : x.asistencia === "ASISTIO" ? "ATE" : x.asistencia === "NO_ASISTIO" ? "NOA" : x.estadoConfirmacion === "CONFIRMADA" ? "CON" : "PEN";
   async function agenda(filtro) {
-    const b = await c.reportes.base(filtro);
-    const sedeDe = (bl) => bl.idPoliclinico || b.profs.get(bl.idProfesional)?.idPoliclinico;
-    const espDe = (bl) => bl.especialidad || b.profs.get(bl.idProfesional)?.especialidad || "Sin especialidad";
-    const reservas = b.citas.map((x) => {
-      const bl = b.porId.get(x.idBloque);
-      return [bl.fecha, bl.hora, sedeDe(bl), espDe(bl), x.idProfesionalReemplazo || bl.idProfesional, ESTADO(x)];
+    const datosBase = await aplicacion.reportes.base(filtro);
+    const sedeDe = (bl) => bl.idPoliclinico || datosBase.profs.get(bl.idProfesional)?.idPoliclinico;
+    const espDe = (bl) => bl.especialidad || datosBase.profs.get(bl.idProfesional)?.especialidad || "Sin especialidad";
+    const reservas = datosBase.citas.map((x) => {
+      const bloque = datosBase.porId.get(x.idBloque);
+      return [bloque.fecha, bloque.hora, sedeDe(bloque), espDe(bloque), x.idProfesionalReemplazo || bloque.idProfesional, ESTADO(x)];
     });
-    const ocupados = new Set(b.citas.filter((x) => x.estadoReserva === "ACTIVA").map((x) => x.idBloque));
+    const ocupados = new Set(datosBase.citas.filter((x) => x.estadoReserva === "ACTIVA").map((x) => x.idBloque));
     const cupos = new Map();
-    for (const bl of b.bloques.filter((x) => x.publicado)) {
-      const k = `${sedeDe(bl)}|${espDe(bl)}`, v = cupos.get(k) || [sedeDe(bl), espDe(bl), 0, 0];
-      v[2]++; if (ocupados.has(bl.id)) v[3]++; cupos.set(k, v);
+    for (const bl of datosBase.bloques.filter((x) => x.publicado)) {
+      const claveSedeEspecialidad = `${sedeDe(bl)}|${espDe(bl)}`, v = cupos.get(claveSedeEspecialidad) || [sedeDe(bl), espDe(bl), 0, 0];
+      v[2]++; if (ocupados.has(bl.id)) v[3]++; cupos.set(claveSedeEspecialidad, v);
     }
     const dias = Math.round((Date.parse(filtro.hasta) - Date.parse(filtro.desde)) / 864e5) + 1;
     const prevHasta = sumarDias(filtro.desde, -1), prevDesde = sumarDias(filtro.desde, -dias);
-    const p = await c.reportes.base({ ...filtro, desde: prevDesde, hasta: prevHasta });
+    const p = await aplicacion.reportes.base({ ...filtro, desde: prevDesde, hasta: prevHasta });
     const previo = {};
     for (const x of p.citas) { const f = p.porId.get(x.idBloque).fecha; previo[f] = (previo[f] || 0) + 1; }
     return {
       desde: filtro.desde, hasta: filtro.hasta, prevDesde, prevHasta, sede: filtro.idPoliclinico ? +filtro.idPoliclinico : null,
-      sedes: Object.fromEntries(b.sedesL.map((x) => [x.id, x.nombre])),
-      profs: Object.fromEntries(b.profsL.map((x) => [x.id, x.nombre])),
+      sedes: Object.fromEntries(datosBase.sedesL.map((x) => [x.id, x.nombre])),
+      profs: Object.fromEntries(datosBase.profsL.map((x) => [x.id, x.nombre])),
       reservas, cupos: [...cupos.values()], previo, generado: new Date().toISOString(),
     };
   }
-  async function datos(q, soloFiltro = false) {
-    const h = hoy(),
-      periodo = q.get("periodo") || "mes";
-    let desde = q.get("desde"),
-      hasta = q.get("hasta");
+  async function datos(consulta, soloFiltro = false) {
+    const hoyTexto = hoy(),
+      periodo = consulta.get("periodo") || "mes";
+    let desde = consulta.get("desde"),
+      hasta = consulta.get("hasta");
     if (!fechaValida(desde) || !fechaValida(hasta)) {
-      hasta = h;
+      hasta = hoyTexto;
       desde =
         periodo === "dia"
-          ? h
+          ? hoyTexto
           : periodo === "semana"
-            ? lunesDe(h)
+            ? lunesDe(hoyTexto)
             : periodo === "semestre"
-              ? h.slice(0, 4) +
-                (Number(h.slice(5, 7)) <= 6 ? "-01-01" : "-07-01")
+              ? hoyTexto.slice(0, 4) +
+                (Number(hoyTexto.slice(5, 7)) <= 6 ? "-01-01" : "-07-01")
               : periodo === "anio"
-                ? h.slice(0, 4) + "-01-01"
-                : h.slice(0, 7) + "-01";
+                ? hoyTexto.slice(0, 4) + "-01-01"
+                : hoyTexto.slice(0, 7) + "-01";
     }
     if (desde > hasta) [desde, hasta] = [hasta, desde];
     const filtro = {
         desde,
         hasta,
-        idPoliclinico: q.get("sede") || undefined,
-        especialidad: q.get("esp") || undefined,
-        idProfesional: q.get("prof") || undefined,
+        idPoliclinico: consulta.get("sede") || undefined,
+        especialidad: consulta.get("esp") || undefined,
+        idProfesional: consulta.get("prof") || undefined,
       };
     if (soloFiltro) return { filtro, periodo };
-    const a = await c.reportes.analitica(filtro),
-      ctx = await require("./contexto").cargarContexto(c.catalogo),
-      espera = (await c.espera.vigentes()).filter(
+    const analitica = await aplicacion.reportes.analitica(filtro),
+      ctx = await require("./cargarListasBase").cargarContexto(aplicacion.catalogo),
+      espera = (await aplicacion.espera.vigentes()).filter(
         (e) =>
           (!filtro.idPoliclinico ||
             e.idPoliclinico === +filtro.idPoliclinico) &&
@@ -78,30 +78,30 @@ function crearReportesController(c) {
         titulo: "Sexo registrado · pacientes únicos atendidos",
         seccion: 1,
         siluetas: true,
-        filas: a.caracterizacion.generos,
+        filas: analitica.caracterizacion.generos,
       },
       {
         id: "edad",
         titulo: "Edad · pacientes únicos atendidos",
         seccion: 1,
-        filas: a.caracterizacion.edades,
+        filas: analitica.caracterizacion.edades,
       },
       {
         id: "nacionalidad",
         titulo: "Nacionalidad · pacientes únicos atendidos",
         seccion: 1,
-        filas: a.caracterizacion.nacionalidades,
+        filas: analitica.caracterizacion.nacionalidades,
       },
       {
         id: "adultos",
         titulo: "Adultos, niños y datos sin registrar",
         seccion: 1,
         filas: [
-          { nombre: "Adultos", n: a.caracterizacion.adultos },
-          { nombre: "Niños y adolescentes", n: a.caracterizacion.ninos },
+          { nombre: "Adultos", n: analitica.caracterizacion.adultos },
+          { nombre: "Niños y adolescentes", n: analitica.caracterizacion.ninos },
           {
             nombre: "Edad sin registrar",
-            n: a.caracterizacion.edadSinDato || 0,
+            n: analitica.caracterizacion.edadSinDato || 0,
           },
         ],
       },
@@ -109,7 +109,7 @@ function crearReportesController(c) {
         id: "demanda",
         titulo: "Demanda por profesional · reservas",
         seccion: 2,
-        filas: a.porProfesional.map((x) => ({
+        filas: analitica.porProfesional.map((x) => ({
           nombre: x.profesional,
           n: x.citas,
         })),
@@ -118,7 +118,7 @@ function crearReportesController(c) {
         id: "ocupacion",
         titulo: "Ocupación por profesional (%)",
         seccion: 2,
-        filas: a.porProfesional.map((x) => ({
+        filas: analitica.porProfesional.map((x) => ({
           nombre: x.profesional,
           n: x.ocupacion || 0,
         })),
@@ -138,33 +138,33 @@ function crearReportesController(c) {
         id: "especialidad",
         titulo: "Demanda por especialidad · reservas",
         seccion: 2,
-        filas: a.porEspecialidad.map((x) => ({ nombre: x.nombre, n: x.citas })),
+        filas: analitica.porEspecialidad.map((x) => ({ nombre: x.nombre, n: x.citas })),
       },
       {
         id: "atencion",
         titulo: "Estadísticas de atención",
         seccion: 3,
         filas: [
-          { nombre: "Atenciones realizadas", n: a.resumen.asistio },
-          { nombre: "Ausencias registradas", n: a.resumen.noAsistio },
+          { nombre: "Atenciones realizadas", n: analitica.resumen.asistio },
+          { nombre: "Ausencias registradas", n: analitica.resumen.noAsistio },
           {
             nombre: "Sin registro / atención pendiente",
-            n: a.resumen.activas - a.resumen.asistio - a.resumen.noAsistio,
+            n: analitica.resumen.activas - analitica.resumen.asistio - analitica.resumen.noAsistio,
           },
-          { nombre: "Canceladas", n: a.resumen.canceladas },
+          { nombre: "Canceladas", n: analitica.resumen.canceladas },
         ],
       },
       {
         id: "evolucion",
         titulo: "Evolución semanal · citas activas",
         seccion: 3,
-        filas: a.semanal.map((x) => ({ nombre: x.semana, n: x.activas })),
+        filas: analitica.semanal.map((x) => ({ nombre: x.semana, n: x.activas })),
       },
       {
         id: "lugares",
         titulo: "Atenciones por policlínico y Telemedicina",
         seccion: 3,
-        filas: a.porPoliclinico.map((x) => ({
+        filas: analitica.porPoliclinico.map((x) => ({
           nombre: x.policlinico,
           n: x.asistio,
         })),
@@ -173,14 +173,14 @@ function crearReportesController(c) {
         id: "perdida",
         titulo: "Pérdida por lugar (%) · ausencias / asistencia registrada",
         seccion: 3,
-        filas: a.porPoliclinico.map((x) => ({
+        filas: analitica.porPoliclinico.map((x) => ({
           nombre: x.policlinico,
           n: x.tasaInasistencia || 0,
         })),
       },
       ...[
-        ["encuesta-agendamiento", "Encuesta de agendamiento · cómo fue reservar", a.encuestasPorTipo.agendamiento, ["muy fácil", "muy difícil"]],
-        ["encuesta-atencion", "Encuesta de atención · después de la consulta", a.encuestasPorTipo.atencion, ["muy buena", "mala"]],
+        ["encuesta-agendamiento", "Encuesta de agendamiento · cómo fue reservar", analitica.encuestasPorTipo.agendamiento, ["muy fácil", "muy difícil"]],
+        ["encuesta-atencion", "Encuesta de atención · después de la consulta", analitica.encuestasPorTipo.atencion, ["muy buena", "mala"]],
       ].map(([id, nombre, e, [alta, baja]]) => ({
         id,
         titulo: `${nombre} · ${e.respuestas ? `${e.respuestas} respuesta(s), promedio ${String(e.promedio).replace(".", ",")} de 5` : "sin respuestas en el período"}`,
@@ -193,16 +193,16 @@ function crearReportesController(c) {
       edad: { titulo: "Pacientes atendidos por tramo de edad", desc: "Cada barra es un tramo de edad. Mientras más larga, más pacientes distintos de esa edad se atendieron." },
       nacionalidad: { titulo: "Pacientes atendidos por nacionalidad", desc: "Cada barra es una nacionalidad. Mientras más larga, más pacientes distintos atendidos." },
       adultos: { titulo: "Adultos y niños", desc: "Compara adultos con niños y adolescentes. «Edad sin registrar» son fichas de pacientes a las que les falta la fecha de nacimiento." },
-      demanda: { titulo: "Profesionales con más reservas", desc: "Cada barra es un profesional y su largo, las reservas que tuvo en el período. Se muestran todos los profesionales, de mayor a menor número de reservas.", ordenar: true },
-      ocupacion: { titulo: "Ocupación de los profesionales (%)", desc: "De los cupos publicados, qué porcentaje se reservó. 100 % es agenda llena; un valor bajo significa horas sin usar. Se muestran todos los profesionales, de mayor a menor ocupación.", ordenar: true, sufijo: " %", max: 100 },
+      demanda: { titulo: "Profesionales con más reservas", desc: "Cada barra es un profesional y su largo, las reservas que tuvo en el período. Aquí se ven los 10 con más reservas; «Ver datos» y las descargas incluyen a todos los profesionales.", ordenar: true, topPantalla: 10 },
+      ocupacion: { titulo: "Ocupación de los profesionales (%)", desc: "De los cupos publicados, qué porcentaje se reservó. 100 % es agenda llena; un valor bajo significa horas sin usar. Aquí se ven los 10 con mayor ocupación; «Ver datos» y las descargas incluyen a todos los profesionales.", ordenar: true, topPantalla: 10, sufijo: " %", max: 100 },
       espera: { titulo: "Pacientes en lista de espera", desc: "Cantidad de pacientes esperando una hora hoy, por especialidad. No depende del período elegido arriba.", ordenar: true },
       especialidad: { titulo: "Reservas por especialidad", desc: "Cada barra es una especialidad y su largo, las reservas del período. Muestra dónde está la mayor demanda.", top: 8, ordenar: true },
       atencion: { titulo: "Qué pasó con las reservas", desc: "Reparte las reservas del período: atendidas, ausencias (el paciente no llegó), sin registro todavía y canceladas.", colores: ["#2e7a4f", "#c0843a", "#9fb3bb", "#c9d5d9"] },
       evolucion: { titulo: "Reservas por semana", desc: "Cada columna es una semana y su altura, las citas activas de esa semana. Sirve para ver si la demanda sube o baja.", tipo: "columnas" },
       lugares: { titulo: "Consultas realizadas por lugar", desc: "Cada barra es un policlínico (o Telemedicina) y su largo, las consultas efectivamente realizadas.", ordenar: true },
       perdida: { titulo: "Horas perdidas por ausencias (%)", desc: "De las horas agendadas con resultado, qué porcentaje se perdió porque el paciente no llegó. Mientras más bajo, mejor.", sufijo: " %", ordenar: true },
-      "encuesta-agendamiento": { titulo: "Encuesta de agendamiento: ¿qué tan fácil fue reservar?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy fácil, 1 = muy difícil). ${a.encuestasPorTipo.agendamiento.respuestas ? `Hubo ${a.encuestasPorTipo.agendamiento.respuestas} respuesta(s), con promedio ${String(a.encuestasPorTipo.agendamiento.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
-      "encuesta-atencion": { titulo: "Encuesta de atención: ¿cómo fue la consulta?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy buena, 1 = mala). ${a.encuestasPorTipo.atencion.respuestas ? `Hubo ${a.encuestasPorTipo.atencion.respuestas} respuesta(s), con promedio ${String(a.encuestasPorTipo.atencion.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
+      "encuesta-agendamiento": { titulo: "Encuesta de agendamiento: ¿qué tan fácil fue reservar?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy fácil, 1 = muy difícil). ${analitica.encuestasPorTipo.agendamiento.respuestas ? `Hubo ${analitica.encuestasPorTipo.agendamiento.respuestas} respuesta(s), con promedio ${String(analitica.encuestasPorTipo.agendamiento.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
+      "encuesta-atencion": { titulo: "Encuesta de atención: ¿cómo fue la consulta?", desc: `Cada barra cuenta cuántas personas dieron esa nota (5 = muy buena, 1 = mala). ${analitica.encuestasPorTipo.atencion.respuestas ? `Hubo ${analitica.encuestasPorTipo.atencion.respuestas} respuesta(s), con promedio ${String(analitica.encuestasPorTipo.atencion.promedio).replace(".", ",")} de 5.` : "Aún no hay respuestas en el período."}` },
     };
     g.forEach((x) => {
       const m = META[x.id] || {};
@@ -211,26 +211,25 @@ function crearReportesController(c) {
       if (ordenar) x.filas = [...x.filas].sort((p, q) => q.n - p.n);
     });
     const contexto = `${desde} a ${hasta} · Lugar: ${ctx.sedes.get(+filtro.idPoliclinico)?.nombre || "Toda la red"} · Especialidad: ${filtro.especialidad || "Todas"} · Profesional: ${ctx.profs.get(+filtro.idProfesional)?.nombre || "Todos"}`;
-    return { filtro, periodo, a, ctx, g, contexto };
+    return { filtro, periodo, a: analitica, ctx, g, contexto };
   }
   const filasGrafico = (g) => (g.top ? g.filas.slice(0, g.top) : g.filas);
   const corta = (t, n) => (String(t).length > n ? String(t).slice(0, n - 1) + "…" : String(t));
   const fSemana = (t) => {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(t));
-    return m ? `${Number(m[3])} ${["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(m[2]) - 1]}` : String(t);
+    const coincidencia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(t));
+    return coincidencia ? `${Number(coincidencia[3])} ${["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][Number(coincidencia[2]) - 1]}` : String(t);
   };
-  // En pantalla se dibuja con ECharts; svg() queda solo para las descargas (PNG/PDF).
   const PALETA = ["#0b3b4c", "#16808b", "#b8742a", "#9aabb3", "#c9d5d9"];
   const echart = (g) => {
-    const filas = filasGrafico(g);
+    const filas = g.topPantalla ? filasGrafico(g).slice(0, g.topPantalla) : filasGrafico(g);
     const t = { titulo: g.titulo, tabla: false };
     if (g.siluetas || ["adultos", "atencion"].includes(g.id)) {
       const colores = g.id === "atencion" ? ["#16808b", "#b8742a", "#9aabb3", "#c9d5d9"] : PALETA;
-      return G.segmentada(filas.map((x, i) => ({ nombre: x.nombre, n: x.n, color: colores[i % colores.length] })), g.titulo, { tabla: false, unidad: g.id === "atencion" ? "reservas" : "pacientes" });
+      return graficos.segmentada(filas.map((x, i) => ({ nombre: x.nombre, n: x.n, color: colores[i % colores.length] })), g.titulo, { tabla: false, unidad: g.id === "atencion" ? "reservas" : "pacientes" });
     }
     if (g.tipo === "columnas")
-      return G.lineas({ ...t, etiquetas: filas.map((x) => x.nombre), series: [{ nombre: "Citas activas", color: "#16808b", valores: filas.map((x) => x.n) }], etiquetaX: (e) => `Semana del ${fSemana(e)}`, ejeFecha: fSemana, alto: 280 });
-    return G.barras(filas, { ...t, sufijo: g.sufijo || "", max: g.max, color: g.id === "perdida" ? G.COLOR.ambar : G.COLOR.teal, vacio: "Sin datos para el período." });
+      return graficos.lineas({ ...t, etiquetas: filas.map((x) => x.nombre), series: [{ nombre: "Citas activas", color: "#16808b", valores: filas.map((x) => x.n) }], etiquetaX: (e) => `Semana del ${fSemana(e)}`, ejeFecha: fSemana, alto: 280 });
+    return graficos.barras(filas, { ...t, sufijo: g.sufijo || "", max: g.max, color: g.id === "perdida" ? graficos.COLOR.ambar : graficos.COLOR.teal, vacio: "Sin datos para el período." });
   };
   const svg = (g) => {
     const rows = filasGrafico(g),
@@ -285,7 +284,7 @@ function crearReportesController(c) {
       ];
       const seccion = SECCIONES.some((x) => x[0] === q.get("seccion")) ? q.get("seccion") : "resumen";
       const actual = SECCIONES.find((x) => x[0] === seccion);
-      const qs = new URLSearchParams({
+      const parametros = new URLSearchParams({
         desde: f.desde,
         hasta: f.hasta,
         sede: f.idPoliclinico || "",
@@ -295,16 +294,16 @@ function crearReportesController(c) {
       const enlace = (id, formato) =>
         "/admin/reportes/exportar?" +
         new URLSearchParams({
-          ...Object.fromEntries(qs),
+          ...Object.fromEntries(parametros),
           grafico: id,
           formato,
         });
       const chart = (x) =>
-        `<section class="work-panel graf-r" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div><p class="como-leer"><b>Cómo leerlo:</b> ${esc(x.desc || "")}</p>${echart(x)}<div class="chart-actions" role="group" aria-label="Descargar este gráfico">${V.btn("PDF", enlace(x.id, "pdf"), true)}${V.btn("Excel", enlace(x.id, "xlsx"), true)}${V.btn("PNG", enlace(x.id, "png"), true)}</div><details class="datos-r"><summary>Ver datos</summary>${tabla(
+        `<section class="work-panel graf-r" data-chart="${x.id}" data-context="${esc(contexto)}"><div class="chart-heading"><h3>${esc(x.titulo)}</h3></div><p class="como-leer"><b>Cómo leerlo:</b> ${esc(x.desc || "")}</p>${echart(x)}<div class="chart-actions" role="group" aria-label="Descargar este gráfico">${vistas.btn("PDF", enlace(x.id, "pdf"), true)}${vistas.btn("Excel", enlace(x.id, "xlsx"), true)}${vistas.btn("PNG", enlace(x.id, "png"), true)}</div><details class="datos-r"><summary>Ver datos</summary>${tabla(
           ["Categoría", "Valor"],
           x.filas.map((r) => [r.nombre, `${r.n}${x.sufijo || ""}`]),
         )}</details></section>`;
-      const formulario = `<form class="filters"><input type="hidden" name="seccion" value="${seccion}">${V.select("sede", "Lugar", [{ id: "", nombre: "Toda la red" }, ...ctx.listaSedes], f.idPoliclinico || "")}${V.select("esp", "Especialidad", [{ id: "", nombre: "Todas" }, ...V.opcionesTexto(await c.catalogo.especialidades())], f.especialidad || "")}${V.select("prof", "Profesional", [{ id: "", nombre: "Todos" }, ...ctx.listaProfs], f.idProfesional || "")}${V.select(
+      const formulario = `<form class="filters"><input type="hidden" name="seccion" value="${seccion}">${vistas.select("sede", "Lugar", [{ id: "", nombre: "Toda la red" }, ...ctx.listaSedes], f.idPoliclinico || "")}${vistas.select("esp", "Especialidad", [{ id: "", nombre: "Todas" }, ...vistas.opcionesTexto(await aplicacion.catalogo.especialidades())], f.especialidad || "")}${vistas.select("prof", "Profesional", [{ id: "", nombre: "Todos" }, ...ctx.listaProfs], f.idProfesional || "")}${vistas.select(
               "periodo",
               "Período",
               [
@@ -318,26 +317,26 @@ function crearReportesController(c) {
               periodo,
               (x) => x.id,
               (x) => x.nombre,
-            )}${V.input("desde", "Desde", f.desde, "date")}${V.input("hasta", "Hasta", f.hasta, "date")}<button type="submit">Aplicar filtros</button></form>`;
+            )}${vistas.input("desde", "Desde", f.desde, "date")}${vistas.input("hasta", "Hasta", f.hasta, "date")}<button type="submit">Aplicar filtros</button></form>`;
       const tabs = `<nav class="tabs-r" aria-label="Secciones del reporte">${SECCIONES.map(
         ([k, t]) =>
-          `<a href="/admin/reportes?${esc(new URLSearchParams({ ...Object.fromEntries(qs), periodo, seccion: k }).toString())}"${k === seccion ? ' class="act" aria-current="page"' : ""}>${t}</a>`,
+          `<a href="/admin/reportes?${esc(new URLSearchParams({ ...Object.fromEntries(parametros), periodo, seccion: k }).toString())}"${k === seccion ? ' class="act" aria-current="page"' : ""}>${t}</a>`,
       ).join("")}</nav>`;
       const resumenKpis = `<div class="metric-strip"><div><b>${a.caracterizacion.atendidos}</b>Pacientes únicos atendidos</div><div><b>${a.resumen.asistio}</b>Consultas realizadas</div><div><b>${a.resumen.ocupacion ?? "—"}%</b>Ocupación de cupos publicados</div><div><b>${a.resumen.tasaInasistencia ?? "—"}%</b>Pérdida de horas</div></div>`;
       const cuerpo =
         seccion === "agenda"
-          ? require("../views/panelAgenda").panel(await agenda(f), qs.toString())
-          : `${seccion === "resumen" ? resumenKpis : ""}<div class="chart-grid">${actual[3].map((id) => chart(g.find((x) => x.id === id))).join("")}</div>${seccion === "demanda" ? `<p class="report-note">${V.btn("Supervisar lista de espera", "/admin/espera", true)}</p>` : ""}`;
+          ? require("../views/panelAgenda").panel(await agenda(f), parametros.toString())
+          : `${seccion === "resumen" ? resumenKpis : ""}<div class="chart-grid">${actual[3].map((id) => chart(g.find((x) => x.id === id))).join("")}</div>${seccion === "demanda" ? `<p class="report-note">${vistas.btn("Supervisar lista de espera", "/admin/espera", true)}</p>` : ""}`;
       return {
-        html: V.page(
+        html: vistas.page(
           u,
           "Reportes institucionales",
-          `<style>.tabs-r{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--borde);margin:0 0 6px}.tabs-r a{padding:11px 16px;font-weight:600;font-size:.9rem;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px}.tabs-r a:hover{color:var(--navy)}.tabs-r a.act{color:var(--teal-t);border-bottom-color:var(--teal)}.tab-desc{color:var(--muted);margin:10px 0 18px;font-size:.92rem}.como-leer{background:#f4f9fa;border-left:3px solid var(--teal);border-radius:4px;padding:9px 12px;margin:0 0 14px;font-size:.84rem;color:#35525e;line-height:1.5}.graf-r svg{width:100%;height:auto;display:block}.graf-r .chart-heading h3{font-size:1.02rem;margin:0 0 10px}.datos-r{margin-top:10px;border-top:1px solid var(--borde);padding-top:8px}.datos-r summary{font-size:.84rem;color:var(--muted);cursor:pointer}.datos-r .chart-actions{justify-content:flex-start;margin-top:12px}.chart-grid{align-items:start}</style>` +
-          V.cab(
+          `<style>.datos-r>.tabla-w{max-height:300px;overflow:auto}.tabs-r{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--borde);margin:0 0 6px}.tabs-r a{padding:11px 16px;font-weight:600;font-size:.9rem;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px}.tabs-r a:hover{color:var(--navy)}.tabs-r a.act{color:var(--teal-t);border-bottom-color:var(--teal)}.tab-desc{color:var(--muted);margin:10px 0 18px;font-size:.92rem}.como-leer{background:#f4f9fa;border-left:3px solid var(--teal);border-radius:4px;padding:9px 12px;margin:0 0 14px;font-size:.84rem;color:#35525e;line-height:1.5}.graf-r svg{width:100%;height:auto;display:block}.graf-r .chart-heading h3{font-size:1.02rem;margin:0 0 10px}.datos-r{margin-top:10px;border-top:1px solid var(--borde);padding-top:8px}.datos-r summary{font-size:.84rem;color:var(--muted);cursor:pointer}.datos-r .chart-actions{justify-content:flex-start;margin-top:12px}.chart-grid{align-items:start}</style>` +
+          vistas.cab(
             "Indicadores agregados de la red y de sus lugares de atención.",
-            V.btn("Reporte completo PDF", enlace("todos", "pdf"), true) +
-              V.btn("Todos los gráficos PNG (ZIP)", enlace("todos", "png"), true) +
-              V.btn("Reporte completo Excel", enlace("todos", "xlsx")),
+            vistas.btn("Reporte completo PDF", enlace("todos", "pdf"), true) +
+              vistas.btn("Todos los gráficos PNG (ZIP)", enlace("todos", "png"), true) +
+              vistas.btn("Reporte completo Excel", enlace("todos", "xlsx")),
           ) +
             `${formulario}` +
             `<p class="report-note">${esc(contexto)}<br>Pérdida = ausencias registradas ÷ (atenciones realizadas + ausencias registradas) × 100. Los registros incompletos se muestran separados.</p>${tabs}<p class="tab-desc">${esc(actual[2])}</p>${cuerpo}`,
@@ -353,7 +352,7 @@ function crearReportesController(c) {
       if (!g.length)
         return {
           estado: 400,
-          html: V.errorPage(
+          html: vistas.errorPage(
             u,
             new Error("Gráfico no encontrado."),
             "/admin/reportes",
@@ -362,7 +361,7 @@ function crearReportesController(c) {
       const formato = q.get("formato");
       if (!["pdf", "xlsx", "png"].includes(formato))
         return { estado: 400, html: "Formato inválido" };
-      c.operacion.aud(
+      aplicacion.operacion.aud(
         u,
         "Reporte descargado",
         "Reportes",
@@ -391,4 +390,4 @@ function crearReportesController(c) {
     },
   };
 }
-module.exports = { crearReportesController };
+module.exports = { crearControladorReportes };

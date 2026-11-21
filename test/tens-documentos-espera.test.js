@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 
 const USUARIO = { nombre: "TENS Prueba", idPoliclinico: 1 };
@@ -13,6 +13,7 @@ async function sitio({ liberada = false } = {}) {
   const ps = (await c.catalogo.pacientes()).slice(0, 3);
   for (const p of ps) { c.operacion.meta.pacientes[p.rut] = c.operacion.meta.pacientes[p.rut] || {}; c.operacion.meta.pacientes[p.rut].sedes = [1]; }
   const esps = ["Kinesiología", "Fonoaudiología", "Medicina General"];
+  for (const e of ["Fonoaudiología", "Medicina General"]) (c.operacion.meta.especialidades[e] ||= {}).listaEspera = true;
   for (const [i, p] of ps.entries()) await c.espera.registrar({ rut: p.rut, idPoliclinico: 1, especialidad: esps[i], idUsuario: "u2" });
   if (liberada) await c.agendamiento.avisarCupoLiberado({ idBloque: 1 });
   const srv = crearServidor(c);

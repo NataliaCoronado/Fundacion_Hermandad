@@ -1,6 +1,8 @@
 'use strict';
-const { textoLocal, sumarMinutos } = require('../util/tiempo');
-const { huellaEnlace } = require('../util/huella');
+const { textoLocal, sumarMinutos } = require('../herramientas/tiempo');
+const { huellaEnlace } = require('../herramientas/codigoDelEnlace');
+const { lineasDeCita } = require('../herramientas/detalleDeCita');
+const { ENCUESTA_ATENCION, webAtendida } = require('./ComunicacionesPaciente');
 
 const MAX_INTENTOS = 3;
 const REQUIERE_RESERVA_ACTIVA = new Set(['Recordatorio', 'Comprobante de reserva', 'Enlace de atención']);
@@ -9,8 +11,8 @@ const ESPERA_MIN = 5;
 class CorreoSimulado {
   constructor(extras) { this.extras = extras; }
   get simulado() { return true; }
-  async enviar({ destino, idCita, texto }) {
-    return this.extras.agregar('bandeja', { direccion: 'SALIENTE', canal: 'Correo', correo: destino, telefono: '', idCita, texto, botones: [], fecha: textoLocal() });
+  async enviar({ destino, idCita, texto, idComunicacion, tipo, botones = [], encuestaReserva = false }) {
+    return this.extras.agregar('bandeja', { direccion: 'SALIENTE', canal: 'Correo', correo: destino, telefono: '', idCita, texto, botones, fecha: textoLocal(), idComunicacion, tipo, ...(encuestaReserva ? { encuestaReserva: true } : {}) });
   }
 }
 
@@ -20,15 +22,17 @@ class DespachadorComunicaciones {
   }
 
   async texto(m, cita) {
-    const b = await this.catalogo.bloque(cita.idBloque);
-    const prof = b && (await this.catalogo.profesional(b.idProfesional));
+    const bloque = await this.catalogo.bloque(cita.idBloque);
+    const prof = bloque && (await this.catalogo.profesional(bloque.idProfesional));
     const sede = await this.catalogo.policlinico(m.idPoliclinico);
-    const hora = b ? `${b.fecha} a las ${b.hora}` : 'la fecha indicada';
+    const hora = bloque ? `${bloque.fecha} a las ${bloque.hora}` : 'la fecha indicada';
     const lugar = `${sede ? sede.nombre : 'el policlínico'}${prof ? ` (${prof.especialidad})` : ''}`;
     const marca = 'Hermandad de Dolores:';
     switch (m.tipo) {
       case 'Comprobante de reserva':
-        return `${marca} su hora quedó reservada para el ${hora} en ${lugar}. Puede descargar su comprobante desde el portal de pacientes.`;
+        return `${marca} su hora quedó reservada.\n\n${lineasDeCita({ bloque, profesional: prof, sede })}\n\nPuede descargar su comprobante desde el portal de pacientes.`;
+      case ENCUESTA_ATENCION:
+        return `${marca} gracias por asistir a su atención. Le invitamos a responder una breve encuesta sobre su experiencia.`;
       case 'Cancelación institucional':
         return `${marca} su hora del ${hora} en ${lugar} fue cancelada por la institución. Nos comunicaremos con usted para reprogramarla.`;
       case 'Reprogramación institucional':
@@ -45,26 +49,42 @@ class DespachadorComunicaciones {
   async enviar(m) {
     if (!m || m.estado !== 'Pendiente') return m;
     const transporte = this.transportes[m.canal];
+    const cerrar = (cambios) => this.extras.actualizar('comunicaciones', m.id, cambios);
+    if (m.tipo === ENCUESTA_ATENCION && transporte?.simulado !== true)
+      return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'Encuesta disponible en la demostración de mensajería.' });
     if (!transporte) return m;
     const ahora = this.ahora();
-    const cerrar = (cambios) => this.extras.actualizar('comunicaciones', m.id, cambios);
-    const p = await this.catalogo.paciente(m.rut);
+    const paciente = await this.catalogo.paciente(m.rut);
     const cita = await this.citaRepo.buscarPorId(m.idCita);
     const consiente = this.extras.extras.operacion?.pacientes?.[m.rut]?.consentimientoComunicaciones === true;
-    const destino = m.canal === 'WhatsApp' ? (p?.tieneWhatsapp ? p.telefono : '') : p?.correo;
+    const destino = m.canal === 'WhatsApp' ? (paciente?.tieneWhatsapp ? paciente.telefono : '') : paciente?.correo;
     if (!cita || !consiente || !destino)
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: !consiente ? 'Falta el consentimiento del paciente.' : 'Faltan datos del destinatario.' });
+    if (m.tipo === ENCUESTA_ATENCION && !webAtendida(cita))
+      return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'La encuesta requiere una reserva web atendida.' });
     if (REQUIERE_RESERVA_ACTIVA.has(m.tipo) && cita.estadoReserva !== 'ACTIVA')
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'La reserva ya no está activa: no se envió este mensaje.' });
     if (m.tipo === 'Enlace de atención' && m.huellaEnlace && huellaEnlace(cita.enlace) !== m.huellaEnlace)
       return cerrar({ estado: 'Error', proximoIntento: null, detalle: 'El enlace de atención fue reemplazado: solicita el envío del enlace vigente.' });
     const intentos = (m.intentos || 0) + 1;
+    const conEncuestaDeReserva = transporte.simulado === true && m.tipo === 'Comprobante de reserva' && cita.canal === 'WEB';
     try {
-      const r = await transporte.enviar({ telefono: destino, destino, idCita: m.idCita, texto: await this.texto(m, cita), botones: [], iniciado: true });
+      const r = await transporte.enviar({
+        telefono: destino,
+        destino,
+        idCita: m.idCita,
+        texto: await this.texto(m, cita),
+        botones: [],
+        encuestaReserva: conEncuestaDeReserva,
+        iniciado: true,
+        idComunicacion: m.id,
+        tipo: m.tipo,
+      });
       return cerrar({
         estado: transporte.simulado ? 'Simulado' : 'Enviado',
         detalle: transporte.simulado ? 'Envío simulado: no salió ningún mensaje real.' : 'Aceptado por el proveedor; la entrega no está confirmada.',
         proveedorId: transporte.simulado ? null : r?.id ?? null,
+        destino,
         enviadoEn: ahora, intentos, proximoIntento: null,
       });
     } catch (e) {
@@ -77,16 +97,16 @@ class DespachadorComunicaciones {
 
   async procesar() {
     const ahora = this.ahora();
-    const r = { enviados: 0, simulados: 0, errores: 0, reintentos: 0 };
+    const conteo = { enviados: 0, simulados: 0, errores: 0, reintentos: 0 };
     const cola = this.extras.listar('comunicaciones').filter((x) => x.estado === 'Pendiente' && this.transportes[x.canal] && (!x.proximoIntento || x.proximoIntento <= ahora));
     for (const m of cola) {
       const f = await this.enviar(m);
-      if (f.estado === 'Enviado') r.enviados++;
-      else if (f.estado === 'Simulado') r.simulados++;
-      else if (f.estado === 'Error') r.errores++;
-      else r.reintentos++;
+      if (f.estado === 'Enviado') conteo.enviados++;
+      else if (f.estado === 'Simulado') conteo.simulados++;
+      else if (f.estado === 'Error') conteo.errores++;
+      else conteo.reintentos++;
     }
-    return r;
+    return conteo;
   }
 }
 module.exports = { DespachadorComunicaciones, CorreoSimulado, MAX_INTENTOS };

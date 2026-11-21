@@ -1,12 +1,12 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
-const { crearOperacionController } = require("../src/controllers/operacion");
+const { crearContenedor } = require("../src/armarAplicacion");
+const { crearControladorOperacion } = require("../src/controllers/operacion");
 
 test("Agenda conserva el contexto al guardar y confirma una vez en la vista de origen", async () => {
   const c = crearContenedor();
-  const controller = crearOperacionController(c);
+  const controller = crearControladorOperacion(c);
   const usuario = { id: "u2", nombre: "TENS", rol: "TENS_TONS", idPoliclinico: 1 };
   const token = c.sesiones.crear(usuario);
   const filtros = new URLSearchParams({
@@ -26,7 +26,7 @@ test("Agenda conserva el contexto al guardar y confirma una vez en la vista de o
   assert.equal(respuesta.redirigir, volver);
   assert.equal((await c.citaRepo.buscarPorId(1)).flujo, "Llegó");
 
-  const confirmacion = /El estado de la reserva se guardó\./;
+  const confirmacion = /Estado de la reserva actualizado\./;
   const agenda = (consulta) => controller.tensAgenda({ usuario, token, consulta });
   assert.equal(confirmacion.test((await agenda(new URLSearchParams("vista=dia"))).html), false);
   assert.equal(confirmacion.test((await agenda(filtros)).html), true);

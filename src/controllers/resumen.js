@@ -1,6 +1,6 @@
 "use strict";
-const { fechaValida } = require("../services/OperacionService");
-const { sumarDias } = require("../util/tiempo");
+const { fechaValida } = require("../services/OperacionServicio");
+const { sumarDias } = require("../herramientas/tiempo");
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
 
 const DIA = 86_400_000;
@@ -21,7 +21,6 @@ function indicadoresResumen({ consulta, fecha, bloques, citas, sedes, sedeDe, id
   const dias = (Date.parse(hasta) - Date.parse(desde)) / DIA + 1;
   const paso = dias <= 12 ? 1 : Math.ceil(dias / 84) * 7;
 
-  // Agrupa en periodos la ventana [inicioTxt, inicioTxt + dias) con los mismos filtros.
   const ventana = (inicioTxt, conCalor = false) => {
     const inicio = Date.parse(inicioTxt);
     const fin = fechaEn(inicio, dias - 1);
@@ -75,7 +74,6 @@ function indicadoresResumen({ consulta, fecha, bloques, citas, sedes, sedeDe, id
   };
 
   const { calor: celdas, ...actual } = ventana(desde, true);
-  // Período anterior de igual duración, para comparar sin inventar datos.
   const { calor: _, ...anterior } = ventana(sumarDias(desde, -dias));
   const horas = [...new Set([...celdas.keys()].map((k) => k.split("|")[1]))].sort();
   const diasUsados = DIAS_SEMANA.filter((_, i) => i < 5 || horas.some((h) => celdas.has(`${i}|${h}`)));

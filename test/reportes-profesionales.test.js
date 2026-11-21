@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 
 async function sitio() {
@@ -17,7 +17,7 @@ async function sitio() {
 const sinEscapes = (t) => t.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
 const graficos = (html) => [...html.matchAll(/<section class="work-panel graf-r" data-chart="([^"]+)"[\s\S]*?data-ec="([^"]*)"/g)].map((m) => ({ id: m[1], spec: JSON.parse(sinEscapes(m[2])) }));
 
-test("Reportes: la pantalla muestra a todos los profesionales, no solo a los 8 primeros", async () => {
+test("Reportes: el gráfico muestra los 10 con más valor y «Ver datos» conserva a los 47 profesionales", async () => {
   const s = await sitio();
   try {
     const total = (await s.c.catalogo.profesionales()).length;
@@ -27,10 +27,12 @@ test("Reportes: la pantalla muestra a todos los profesionales, no solo a los 8 p
     for (const id of ["demanda", "ocupacion"]) {
       const x = g.find((y) => y.id === id);
       assert.ok(x, id);
-      assert.equal(x.spec.filas.length, total, `${id}: una barra por profesional`);
+      assert.equal(x.spec.filas.length, 10, `${id}: el gráfico muestra solo los 10 primeros`);
+      const panel = h.match(new RegExp(`<section class="work-panel graf-r" data-chart="${id}"[\\s\\S]*?</section>`))[0];
+      const filasTabla = (panel.match(/<details class="datos-r">[\s\S]*<\/details>/)[0].match(/<tr>/g) || []).length;
+      assert.ok(filasTabla >= total, `${id}: «Ver datos» lista a los ${total} profesionales (trae ${filasTabla})`);
+      assert.match(panel, /los 10/, `${id}: el texto explica que se ven los 10 primeros`);
     }
-    assert.doesNotMatch(h, /Se muestran los 8/);
-    assert.match(h, /Se muestran todos los profesionales/);
   } finally { await s.cerrar(); }
 });
 

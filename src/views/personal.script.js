@@ -25,12 +25,12 @@ module.exports = `<script>(() => {
   }
 
   function menu(abierto, devolverFoco = false) {
-    const movil = pantallaChica.matches;
-    abierto = movil && abierto;
+    const telefono = pantallaChica.matches;
+    abierto = telefono && abierto;
     document.body.classList.toggle('menu-abierto', abierto);
     abrir.setAttribute('aria-expanded', String(abierto));
     abrir.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú');
-    sidebar.inert = movil && !abierto;
+    sidebar.inert = telefono && !abierto;
     app.inert = abierto;
     saltar.inert = abierto;
     if (abierto) {
@@ -40,7 +40,7 @@ module.exports = `<script>(() => {
     } else {
       sidebar.removeAttribute('role');
       sidebar.removeAttribute('aria-modal');
-      if (devolverFoco && movil) abrir.focus();
+      if (devolverFoco && telefono) abrir.focus();
     }
   }
 

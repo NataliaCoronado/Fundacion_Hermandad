@@ -1,11 +1,12 @@
 "use strict";
 const { pagina } = require("./layout");
-const { esc, tabla, raw, opciones } = require("./util");
-const { hoy, sumarDias, lunesDe } = require("../util/tiempo");
-const { edad } = require("../services/PacienteService");
-const { fechaValida, minutos } = require("../services/OperacionService");
+const { esc, tabla, raw, opciones } = require("./componentesComunes");
+const { hoy, sumarDias, lunesDe } = require("../herramientas/tiempo");
+const { edad } = require("../services/PacienteServicio");
+const { fechaValida, minutos } = require("../services/OperacionServicio");
 const { ico } = require("./iconos");
-const { infoSede } = require("../models/sedesInfo");
+const { infoSede } = require("../models/informacionDeSedes");
+const { especialidadTieneLista } = require("../services/EsperaServicio");
 const E = esc;
 const hidden = (d) =>
   Object.entries(d)
@@ -128,9 +129,9 @@ const minutosAhora = () => {
 };
 const ordenCronologico = (a, b) => a.b.hora.localeCompare(b.b.hora) || a.p.nombre.localeCompare(b.p.nombre, "es-CL");
 
-function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
-  const fechaPedida = q.get("fecha");
-  const tele = u.rol === "TELEMEDICINA";
+function calendario({ u: usuario, ctx, citas, op: servicioOperacion, q: consulta, admin, mensaje }) {
+  const fechaPedida = consulta.get("fecha");
+  const tele = usuario.rol === "TELEMEDICINA";
   const estadosTele = ["Enlace pendiente", "Enlace guardado", "Pendiente de envío", "Enlace enviado", "Error de envío"];
   const estados = [
     ...Object.keys(ESTADOS_AGENDA).filter((e) =>
@@ -139,25 +140,25 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
     "Reservado",
     ...(admin || tele ? estadosTele : []),
   ];
-  const sede = admin ? String(ctx.listaSedes.find((s) => String(s.id) === q.get("sede"))?.id ?? "") : String(u.idPoliclinico);
-  const vista = ["semana", "lista"].includes(q.get("vista")) ? q.get("vista") : "dia";
+  const sede = admin ? String(ctx.listaSedes.find((s) => String(s.id) === consulta.get("sede"))?.id ?? "") : String(usuario.idPoliclinico);
+  const vista = ["semana", "lista"].includes(consulta.get("vista")) ? consulta.get("vista") : "dia";
   const fecha = fechaValida(fechaPedida) ? fechaPedida : hoy();
   const inicio = vista === "semana" ? lunesDe(fecha) : fecha;
   const fin = vista === "semana" ? sumarDias(inicio, 6) : fecha;
   const fechas = Array.from({ length: vista === "semana" ? 7 : 1 }, (_, i) => sumarDias(inicio, i));
   const url = admin ? "/admin/agendas" : "/tens/agenda";
-  const estadoF = estados.includes(q.get("estado")) ? q.get("estado") : "";
-  const busqueda = (q.get("q") || "").trim().slice(0, 120);
+  const estadoF = estados.includes(consulta.get("estado")) ? consulta.get("estado") : "";
+  const busqueda = (consulta.get("q") || "").trim().slice(0, 120);
   const nombreBuscado = normalizarBusqueda(busqueda);
   const rutBuscado = !admin && /^\d[\d.\s-]*k?$/i.test(busqueda)
     ? busqueda.replace(/[.\s-]/g, "").toLowerCase()
     : "";
-  const enSede = (p) => !sede || fechas.some((f) => op.lugares(p, f).includes(+sede));
+  const enSede = (p) => !sede || fechas.some((f) => servicioOperacion.lugares(p, f).includes(+sede));
   const profesionales = ctx.listaProfs.filter((p) => p.activo && enSede(p));
   const especialidadesSede = new Set(profesionales.flatMap((p) => p.especialidades || [p.especialidad]));
-  const especialidadPedida = q.get("esp") || "";
-  const profesionalPedido = q.get("prof") || "";
-  const sedeCambiada = admin && q.has("sedeOrigen") && q.get("sedeOrigen") !== sede;
+  const especialidadPedida = consulta.get("esp") || "";
+  const profesionalPedido = consulta.get("prof") || "";
+  const sedeCambiada = admin && consulta.has("sedeOrigen") && consulta.get("sedeOrigen") !== sede;
   const esp = sedeCambiada && !especialidadesSede.has(especialidadPedida) ? "" : especialidadPedida;
   const especialidades = opcionesTexto([...especialidadesSede]);
   if (esp && !especialidadesSede.has(esp)) especialidades.push({ id: esp, nombre: `${esp} (sin disponibilidad)` });
@@ -173,7 +174,7 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
   const idsProfs = new Set(profs.map((p) => p.id));
   const visibles = [...ctx.bloques.values()].filter((b) =>
     b.fecha >= inicio && b.fecha <= fin && idsProfs.has(b.idProfesional) &&
-    (!sede || op.sedeBloque(b, ctx.profs.get(b.idProfesional)) === +sede) &&
+    (!sede || servicioOperacion.sedeBloque(b, ctx.profs.get(b.idProfesional)) === +sede) &&
     (!esp || (b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad) === esp),
   );
   const activas = new Map();
@@ -186,23 +187,23 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
     }
   }
   const entrada = (b, c, p, s) => {
-    const flujo = c ? estado(c, !!s?.telemedicina, op) : "";
+    const flujo = c ? estado(c, !!s?.telemedicina, servicioOperacion) : "";
     const reemplazo = c?.idProfesionalReemplazo ? ctx.profs.get(c.idProfesionalReemplazo) : null;
     const envio = s?.telemedicina && c?.estadoReserva === "ACTIVA" && !c.asistencia
-      ? estadosTele.includes(flujo) ? flujo : op.estadoEnvioEnlace(c).estado
+      ? estadosTele.includes(flujo) ? flujo : servicioOperacion.estadoEnvioEnlace(c).estado
       : "";
     return {
       b, c, p, s, flujo, envio, reemplazo,
       esp: b.especialidad || p.especialidad,
       nombre: c ? ctx.pacientes.get(c.rut)?.nombre || (admin ? "Reserva" : c.rut) : b.especialidad || p.especialidad,
-      status: estadoAgenda(b, c, flujo, op),
+      status: estadoAgenda(b, c, flujo, servicioOperacion),
     };
   };
   const todas = visibles.flatMap((b) => {
-    const p = ctx.profs.get(b.idProfesional);
-    const s = ctx.sedes.get(op.sedeBloque(b, p));
+    const profesional = ctx.profs.get(b.idProfesional);
+    const s = ctx.sedes.get(servicioOperacion.sedeBloque(b, profesional));
     const activa = activas.get(b.id);
-    return [entrada(b, activa, p, s), ...(canceladas.get(b.id) || []).map((c) => entrada(b, c, p, s))];
+    return [entrada(b, activa, profesional, s), ...(canceladas.get(b.id) || []).map((c) => entrada(b, c, profesional, s))];
   });
   const entradas = todas.filter(({ status, flujo, envio, c }) => {
     if (estadoF === "Reservado" && c?.estadoReserva !== "ACTIVA") return false;
@@ -241,7 +242,7 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
     const descripcion = [rangoHorario(b), nombre, estadoTexto, ...new Set(detalle)].join(" · ");
     const categoria = s && (!sede ? s.nombre : e.esp);
     const categoriaVisible = categoria && !compacto ? `<small class="schedule-location">
-      <i class="color-dot" style="--lugar:${E(color(op, s.id, e.esp, !sede))}"></i>${E([categoria, complemento].filter(Boolean).join(" · "))}
+      <i class="color-dot" style="--lugar:${E(color(servicioOperacion, s.id, e.esp, !sede))}"></i>${E([categoria, complemento].filter(Boolean).join(" · "))}
     </small>` : "";
     return `<a class="schedule-block" style="${posicion}" href="${E(detalleAgenda(e))}" data-drawer
       ${compacto ? 'data-corto="true" ' : ""}data-estado="${ESTADOS_AGENDA[status][0]}" aria-label="${E(descripcion)}" title="${E(descripcion)}">
@@ -294,7 +295,7 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
     const anchoMinimo = 62 + anchoCarril * columnas.reduce((total, col) => total + col.carriles, 0);
     const encabezados = columnas.map((col) => {
       if (esSemana) return `<div class="professional-head">${irADia(col)}</div>`;
-      const sedes = op.lugares(col, fecha).filter((id) => !sede || +id === +sede).map((id) => ctx.sedes.get(+id)?.nombre);
+      const sedes = servicioOperacion.lugares(col, fecha).filter((id) => !sede || +id === +sede).map((id) => ctx.sedes.get(+id)?.nombre);
       return `<div class="professional-head">
         ${col.foto ? `<img class="professional-photo" src="${E(col.foto)}" alt="" loading="lazy">` : ""}
         <div><b>${E(col.nombre)}</b><small>${E(esp || col.especialidad)}</small><small>${E(sedes.filter(Boolean).join(" · "))}</small></div>
@@ -338,14 +339,14 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
       const celdas = fechas.map((f) => {
         const cupos = dias.get(f);
         if (!cupos) return '<td class="mx-vacio" aria-label="Sin cupos">–</td>';
-        const n = { res: 0, dis: 0, blo: 0 };
-        for (const v of cupos.values()) n[v]++;
-        for (const k of Object.keys(n)) total[k] += n[k];
-        const t = n.res + n.dis + n.blo;
-        const texto = `${n.res} de ${t} reservados · ${n.dis} disponibles · ${n.blo} sin ofrecer`;
+        const conteo = { res: 0, dis: 0, blo: 0 };
+        for (const v of cupos.values()) conteo[v]++;
+        for (const k of Object.keys(conteo)) total[k] += conteo[k];
+        const t = conteo.res + conteo.dis + conteo.blo;
+        const texto = `${conteo.res} de ${t} reservados · ${conteo.dis} disponibles · ${conteo.blo} sin ofrecer`;
         return `<td><a class="mx-celda" href="${E(nav({ vista: "dia", fecha: f, prof: p.id }))}" title="${E(texto)}" aria-label="${E(fechaAgenda(f, { weekday: "long", day: "numeric", month: "long" }) + ": " + texto)}">
-          <span class="mx-n"><b>${n.res}</b> de ${t} reservados</span>
-          <span class="mx-barra" aria-hidden="true"><i class="r" style="flex:${n.res}"></i><i class="d" style="flex:${n.dis}"></i><i class="b" style="flex:${n.blo}"></i></span></a></td>`;
+          <span class="mx-n"><b>${conteo.res}</b> de ${t} reservados</span>
+          <span class="mx-barra" aria-hidden="true"><i class="r" style="flex:${conteo.res}"></i><i class="d" style="flex:${conteo.dis}"></i><i class="b" style="flex:${conteo.blo}"></i></span></a></td>`;
       }).join("");
       const suma = total.res + total.dis + total.blo;
       return `<tr data-profesional="${E(p.id)}"><th scope="row"><b>${E(p.nombre)}</b><small>${E(p.especialidad)}</small><small class="mx-total">${total.res} de ${suma} reservados</small></th>${celdas}</tr>`;
@@ -446,7 +447,7 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
   const controlesDesplazamiento = `<div class="agenda-desplazamiento" data-agenda-scroll-controls hidden>
     <button type="button" class="btn sec agenda-nav-icon" data-agenda-scroll-dir="-1" aria-controls="agenda-horario" aria-label="Desplazar calendario a la izquierda" title="Desplazar a la izquierda">${ico("chevIzq")}</button>
     <button type="button" class="btn sec agenda-nav-icon" data-agenda-scroll-dir="1" aria-controls="agenda-horario" aria-label="Desplazar calendario a la derecha" title="Desplazar a la derecha">${ico("chevDer")}</button></div>`;
-  return page(u, admin ? "Agendas y cupos" : "Agendas y reservas",
+  return page(usuario, admin ? "Agendas y cupos" : "Agendas y reservas",
     `<div class="agenda-page" data-agenda-context="${E(volverAgenda)}">
     <div class="agenda-heading"><p>${ico("ubicacion")}${E(ubicacion)}</p><div class="actions">${acciones}${accionesAdmin}</div></div>
     <section class="work-panel agenda-panel" aria-label="Calendario y filtros">
@@ -472,9 +473,8 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
       ${aplicados}
       ${entradas.length ? vista === "lista" ? listaDelDia() : admin && vista === "semana" ? matrizSemana() : cuadricula() : vacio}
     </section>
-    ${admin ? '<p class="agenda-ajustes"><span>Ajustes de la agenda</span><a href="/admin/colores">Configurar colores</a></p>' : ""}
     ${!admin ? panel("Próximos cupos libres", `<div class="available-slots">${[...ctx.bloques.values()]
-      .filter((b) => b.fecha >= hoy() && op.sedeBloque(b, ctx.profs.get(b.idProfesional)) === +sede && b.publicado && !activas.has(b.id))
+      .filter((b) => b.fecha >= hoy() && servicioOperacion.sedeBloque(b, ctx.profs.get(b.idProfesional)) === +sede && b.publicado && !activas.has(b.id))
       .slice(0, 8).map((b) => btn(`${E(b.fecha)} · ${E(b.hora)}`,
         "/tens/agendar?" + new URLSearchParams({ fecha: b.fecha, idBloque: b.id }), true)).join("") || "<p>Sin cupos libres.</p>"}</div>`) : ""}
     <dialog class="drawer" data-agenda-drawer aria-labelledby="agenda-drawer-title">
@@ -485,25 +485,25 @@ function calendario({ u, ctx, citas, op, q, admin, mensaje }) {
     mensaje,
   );
 }
-function bloqueNuevo({ u, ctx, plan, d = {} }) {
-  const ps = ctx.listaProfs.filter(
+function bloqueNuevo({ u, ctx, plan, d: datos = {} }) {
+  const profesionalesFiltrados = ctx.listaProfs.filter(
     (p) => p.activo && !["TENS", "TONS"].includes(p.tipo),
   );
-  const form = `<form class="form-grid" method="post" action="/admin/bloque/revisar">${select("idPoliclinico", "Lugar de atención", ctx.listaSedes, d.idPoliclinico)}${select("especialidad", "Especialidad", opcionesTexto([...new Set(ps.map((p) => p.especialidad))]), d.especialidad)}${select(
+  const form = `<form class="form-grid" method="post" action="/admin/bloque/revisar">${select("idPoliclinico", "Lugar de atención", ctx.listaSedes, datos.idPoliclinico)}${select("especialidad", "Especialidad", opcionesTexto([...new Set(profesionalesFiltrados.map((p) => p.especialidad))]), datos.especialidad)}${select(
     "idProfesional",
     "Profesional",
-    ps,
-    d.idProfesional,
+    profesionalesFiltrados,
+    datos.idProfesional,
     (p) => p.id,
     (p) => `${p.nombre} · ${p.especialidad}`,
   )}${select(
     "repeticion",
     "Repetición",
     opcionesTexto(["unica", "semanal"]),
-    d.repeticion || "semanal",
+    datos.repeticion || "semanal",
     (x) => x.id,
     (x) => (x.id === "unica" ? "Fecha única" : "Semanal"),
-  )}${input("desde", "Fecha inicial", d.desde || hoy(), "date", "required")}${input("hasta", "Fecha final", d.hasta || sumarDias(hoy(), 7), "date", "required")}${input("horaInicio", "Hora inicial", d.horaInicio || "09:00", "time", "required")}${input("horaFin", "Hora final", d.horaFin || "13:00", "time", "required")}${input("duracion", "Duración de atención (min)", d.duracion || 30, "number", 'min="10" max="120" required')}<fieldset class="full"><legend>Días de atención</legend><div class="actions">${["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((x, i) => `<label class="check"><input type="checkbox" name="dia${i}" value="1" ${d[`dia${i}`] === "1" || (!d.desde && i < 5) ? "checked" : ""}>${x}</label>`).join("")}</div></fieldset><button type="submit">Revisar resumen y conflictos</button></form>`;
+  )}${input("desde", "Fecha inicial", datos.desde || hoy(), "date", "required")}${input("hasta", "Fecha final", datos.hasta || sumarDias(hoy(), 7), "date", "required")}${input("horaInicio", "Hora inicial", datos.horaInicio || "09:00", "time", "required")}${input("horaFin", "Hora final", datos.horaFin || "13:00", "time", "required")}${input("duracion", "Duración de atención (min)", datos.duracion || 30, "number", 'min="10" max="120" required')}<fieldset class="full"><legend>Días de atención</legend><div class="actions">${["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((x, i) => `<label class="check"><input type="checkbox" name="dia${i}" value="1" ${datos[`dia${i}`] === "1" || (!datos.desde && i < 5) ? "checked" : ""}>${x}</label>`).join("")}</div></fieldset><button type="submit">Revisar resumen y conflictos</button></form>`;
   return page(
     u,
     "Crear bloque horario",
@@ -532,37 +532,37 @@ function bloqueNuevo({ u, ctx, plan, d = {} }) {
                         .join(", "),
                     ]),
                   )
-                : `<form class="actions" method="post" action="/admin/bloque/guardar">${hidden(d)}<button type="submit" name="publicado" value="0" class="sec">Guardar sin publicar</button><button type="submit" name="publicado" value="1">Publicar ahora</button></form>`
+                : `<form class="actions" method="post" action="/admin/bloque/guardar">${hidden(datos)}<button type="submit" name="publicado" value="0" class="sec">Guardar sin publicar</button><button type="submit" name="publicado" value="1">Publicar ahora</button></form>`
             }`,
           )
         : ""),
   );
 }
-function equipo({ u, ctx, op, q, d, revision }) {
-  const filtro = (q.get("q") || "").toLowerCase(),
-    sede = q.get("sede") || "",
-    tipo = q.get("tipo") || "",
-    esp = q.get("esp") || "",
-    estadoF = q.get("estado") || "",
-    vista = q.get("vista") || "tarjetas";
-  const ps = ctx.listaProfs.filter(
+function equipo({ u, ctx, op: servicioOperacion, q: consulta, d, revision }) {
+  const filtro = (consulta.get("q") || "").toLowerCase(),
+    sede = consulta.get("sede") || "",
+    tipo = consulta.get("tipo") || "",
+    esp = consulta.get("esp") || "",
+    estadoF = consulta.get("estado") || "",
+    vista = consulta.get("vista") || "tarjetas";
+  const profesionalesFiltrados = ctx.listaProfs.filter(
     (p) =>
       (!filtro ||
         `${p.nombre} ${p.especialidad}`.toLowerCase().includes(filtro)) &&
-      (!sede || op.lugares(p).includes(+sede)) &&
+      (!sede || servicioOperacion.lugares(p).includes(+sede)) &&
       (!tipo || (p.tipo || "Profesional") === tipo) &&
       (!esp || (p.especialidades || [p.especialidad]).includes(esp)) &&
       (!estadoF || String(p.activo ? 1 : 0) === estadoF),
   );
-  const editar = q.get("editar"),
-    p = d || (editar ? ctx.profs.get(+editar) : null),
-    nuevo = q.get("nuevo");
-  let c =
+  const editar = consulta.get("editar"),
+    profesional = d || (editar ? ctx.profs.get(+editar) : null),
+    nuevo = consulta.get("nuevo");
+  let cabecera =
     cab(
       "Personas, especialidades y lugares asignados.",
       btn("+ Agregar integrante", "/admin/profesionales?nuevo=1"),
     ) +
-    `<form class="filters">${input("q", "Buscar", q.get("q") || "", "search")}${select("sede", "Lugar", [{ id: "", nombre: "Seleccionar lugar…" }, ...ctx.listaSedes], sede)}${select("esp", "Especialidad", [{ id: "", nombre: "Seleccionar especialidad…" }, ...opcionesTexto([...new Set(ctx.listaProfs.map((p) => p.especialidad))])], esp)}${select("tipo", "Tipo", [{ id: "", nombre: "Seleccionar tipo…" }, ...opcionesTexto(["Médico", "Profesional", "TENS", "TONS"])], tipo)}${select(
+    `<form class="filters">${input("q", "Buscar", consulta.get("q") || "", "search")}${select("sede", "Lugar", [{ id: "", nombre: "Seleccionar lugar…" }, ...ctx.listaSedes], sede)}${select("esp", "Especialidad", [{ id: "", nombre: "Seleccionar especialidad…" }, ...opcionesTexto([...new Set(ctx.listaProfs.map((p) => p.especialidad))])], esp)}${select("tipo", "Tipo", [{ id: "", nombre: "Seleccionar tipo…" }, ...opcionesTexto(["Médico", "Profesional", "TENS", "TONS"])], tipo)}${select(
       "estado",
       "Estado",
       [
@@ -584,7 +584,7 @@ function equipo({ u, ctx, op, q, d, revision }) {
     (p.activo
       ? ""
       : `<form class="micro" method="post" action="/admin/equipo/eliminar" onsubmit="return confirm('Se eliminará el integrante y sus cupos libres. Solo es posible si no tiene reservas ni historial. ¿Continuar?')">${hidden({ idProfesional: p.id })}<button type="submit" class="sec">Eliminar</button></form>`);
-  c +=
+  cabecera +=
     vista === "tabla"
       ? tabla(
           [
@@ -595,11 +595,11 @@ function equipo({ u, ctx, op, q, d, revision }) {
             "Estado",
             "Acciones",
           ],
-          ps.map((p) => [
+          profesionalesFiltrados.map((p) => [
             p.nombre,
             p.tipo || "Profesional",
             (p.especialidades || [p.especialidad]).join(", "),
-            op
+            servicioOperacion
               .lugares(p)
               .map((id) => ctx.sedes.get(id)?.nombre)
               .join(", "),
@@ -607,21 +607,21 @@ function equipo({ u, ctx, op, q, d, revision }) {
             raw(acciones(p)),
           ]),
         )
-      : `<div class="team-grid">${ps
+      : `<div class="team-grid">${profesionalesFiltrados
           .map(
             (p) =>
               `<article class="team-card"><div class="actions">${thumb(p)}${badge(p.activo ? "Activo" : "Inactivo")}</div><h3>${E(p.nombre)}</h3><p>${E(p.profesion || p.tipo || "Profesional de salud")}</p><strong>${E((p.especialidades || [p.especialidad]).join(" · "))}</strong><p class="muted">⌖ ${E(
-                op
+                servicioOperacion
                   .lugares(p)
                   .map((id) => ctx.sedes.get(id)?.nombre)
                   .join(" · "),
               )}</p><div class="actions">${acciones(p)}</div></article>`,
           )
           .join("")}</div>`;
-  if (p || nuevo) {
-    const v = p || {};
-    c += panel(
-      p ? "Ficha del integrante" : "Nuevo integrante",
+  if (profesional || nuevo) {
+    const v = profesional || {};
+    cabecera += panel(
+      profesional ? "Ficha del integrante" : "Nuevo integrante",
       `<form class="form-grid" method="post" action="/admin/equipo/revisar" enctype="multipart/form-data">${hidden({ id: v.id || "" })}${input("nombre", "Nombre completo", v.nombre || "", "text", "required")}${input("rut", "RUT (obligatorio para alta en PostgreSQL)", v.rut || "")}${input("correo", "Correo institucional", v.correo || "", "email")}${select("tipo", "Tipo de integrante", opcionesTexto(["Médico", "Profesional", "TENS", "TONS"]), v.tipo || "Profesional")}${input("profesion", "Profesión", v.profesion || "")}${input("especialidades", "Especialidades (separadas por coma)", Array.isArray(v.especialidades) ? v.especialidades.join(", ") : v.especialidades || v.especialidad || "")}${hidden({ foto: v.foto || "" })}<label>Fotografía del integrante<input type="file" name="fotografia" accept="image/jpeg,image/png"></label><fieldset class="full"><legend>Lugares de trabajo</legend>${ctx.listaSedes
         .map(
           (s) =>
@@ -642,33 +642,33 @@ function equipo({ u, ctx, op, q, d, revision }) {
     );
   }
   if (revision)
-    c += panel(
+    cabecera += panel(
       "Reservas futuras afectadas",
       `<p><b>${revision.afectados.length}</b> reservas afectadas. Las reservas existentes conservan su lugar original.</p>${tabla(
         ["Reserva", "Paciente (RUT)", "Cupo"],
         revision.afectados.map((c) => [c.id, c.rut, c.idBloque]),
       )}${revision.afectados.length ? '<p class="aviso err">Reprograma estas reservas antes de retirar sus lugares asignados.</p>' : `<form method="post" action="/admin/equipo/guardar">${hidden(revision.datos)}<button type="submit">Confirmar asignación</button></form>`}`,
     );
-  return page(u, "Equipo de salud", c);
+  return page(u, "Equipo de salud", cabecera);
 }
-function lugares({ u, ctx, op, q, d }) {
+function lugares({ u, ctx, op: servicioOperacion, q, d }) {
   const tab = q.get("tab") || "lugares";
-  let c =
+  let cabecera =
     cab(
       "Configuración de los seis policlínicos y Telemedicina.",
     ) +
     `<div class="tabs">${btn("Lugares de atención", "/admin/policlinicos?tab=lugares", tab !== "lugares")}${btn("Especialidades", "/admin/policlinicos?tab=especialidades", tab !== "especialidades")}</div>`;
   if (tab === "lugares") {
-    c += `<div class="locations-grid">${ctx.listaSedes
+    cabecera += `<div class="locations-grid">${ctx.listaSedes
       .map((s) => {
-        const m = op.meta.sedes[s.id] || {},
+        const metaSede = servicioOperacion.meta.sedes[s.id] || {},
           i = infoSede(s.id) || {},
-          ps = ctx.listaProfs.filter((p) => op.lugares(p).includes(s.id));
-        return `<article class="work-panel location" id="lugar-${E(s.id)}" tabindex="-1"><div class="panel-heading"><h3><i class="color-dot" style="background:${m.color || "#238a94"}"></i>${E(s.nombre)}</h3>${badge(s.activo === false ? "Inactivo" : "Activo")}</div><p>${E(m.direccion || i.direccion || "Atención remota")}</p><p class="muted">${ps.length} integrantes asignados</p>${chipsEsp(m.especialidades || i.especialidades || [])}<div class="actions">${btn("Ver agenda", "/admin/agendas?sede=" + s.id, true)}${btn("Equipo", "/admin/profesionales?sede=" + s.id, true)}${btn("Editar", "/admin/policlinicos?editar=" + s.id, true)}</div></article>`;
+          ps = ctx.listaProfs.filter((p) => servicioOperacion.lugares(p).includes(s.id));
+        return `<article class="work-panel location" id="lugar-${E(s.id)}" tabindex="-1"><div class="panel-heading"><h3><i class="color-dot" style="background:${metaSede.color || "#238a94"}"></i>${E(s.nombre)}</h3>${badge(s.activo === false ? "Inactivo" : "Activo")}</div><p>${E(metaSede.direccion || i.direccion || "Atención remota")}</p><p class="muted">${ps.length} integrantes asignados</p>${chipsEsp(metaSede.especialidades || i.especialidades || [])}<div class="actions">${btn("Ver agenda", "/admin/agendas?sede=" + s.id, true)}${btn("Equipo", "/admin/profesionales?sede=" + s.id, true)}${btn("Editar", "/admin/policlinicos?editar=" + s.id, true)}</div></article>`;
       })
       .join("")}</div>`;
     const v = d || ctx.sedes.get(+q.get("editar")) || {};
-    c += panel(
+    cabecera += panel(
       v.id ? "Editar lugar de atención" : "Crear lugar de atención",
       `<form class="form-grid" method="post" action="/admin/lugar">${hidden({ id: v.id || "" })}${input("nombre", "Nombre", v.nombre || "", "text", "required")}${input("direccion", "Dirección", v.direccion || infoSede(v.id)?.direccion || "")}${input("correo", "Correo", v.correo || infoSede(v.id)?.correo || "", "email", "required")}${input("whatsapp", "WhatsApp", v.whatsapp || infoSede(v.id)?.whatsapp || "", "text", "required")}${select("idComuna", "Comuna", ctx.comunas || [], v.idComuna)}${input("especialidades", "Especialidades (separadas por coma)", (v.especialidades || infoSede(v.id)?.especialidades || []).join(", "))}${input("color", "Color", v.color || "#238a94", "color")}${select(
         "activo",
@@ -692,19 +692,19 @@ function lugares({ u, ctx, op, q, d }) {
     const es = [
       ...new Set([
         ...ctx.listaProfs.map((p) => p.especialidad),
-        ...Object.keys(op.meta.especialidades),
+        ...Object.keys(servicioOperacion.meta.especialidades),
       ]),
     ];
-    c += tabla(
-      ["Especialidad", "Lugares", "Equipo", "Estado", "Color"],
+    cabecera += tabla(
+      ["Especialidad", "Lugares", "Equipo", "Estado", "Lista de espera", "Color"],
       es.map((e) => {
-        const m = op.meta.especialidades[e] || {};
+        const metaEspecialidad = servicioOperacion.meta.especialidades[e] || {};
         return [
           e,
           ctx.listaSedes
             .filter((s) =>
               (
-                op.meta.sedes[s.id]?.especialidades ||
+                servicioOperacion.meta.sedes[s.id]?.especialidades ||
                 infoSede(s.id)?.especialidades ||
                 []
               ).includes(e),
@@ -715,14 +715,15 @@ function lugares({ u, ctx, op, q, d }) {
             .filter((p) => (p.especialidades || [p.especialidad]).includes(e))
             .map((p) => p.nombre)
             .join(", "),
-          m.activo === false ? "Inactiva" : "Activa",
+          metaEspecialidad.activo === false ? "Inactiva" : "Activa",
+          especialidadTieneLista(servicioOperacion.meta, e) ? "Sí" : "No",
           raw(
-            `<form class="micro" method="post" action="/admin/especialidad">${hidden({ nombre: e, activo: m.activo === false ? "0" : "1" })}<input aria-label="Color de ${E(e)}" type="color" name="color" value="${m.color || "#238a94"}"><button type="submit">Guardar</button></form>`,
+            `<form class="micro" method="post" action="/admin/especialidad">${hidden({ nombre: e, activo: metaEspecialidad.activo === false ? "0" : "1" })}<input aria-label="Color de ${E(e)}" type="color" name="color" value="${metaEspecialidad.color || "#238a94"}"><label class="check-mini"><input type="checkbox" name="listaEspera" value="1"${especialidadTieneLista(servicioOperacion.meta, e) ? " checked" : ""}> Tiene lista de espera</label><button type="submit">Guardar</button></form>`,
           ),
         ];
       }),
     );
-    c += panel(
+    cabecera += panel(
       "Crear o actualizar especialidad",
       `<form class="form-grid" method="post" action="/admin/especialidad">${input("nombre", "Nombre", "", "text", "required")}${input("color", "Color", "#238a94", "color")}${select(
         "activo",
@@ -732,22 +733,30 @@ function lugares({ u, ctx, op, q, d }) {
           { id: 0, nombre: "Inactiva" },
         ],
         1,
+      )}${select(
+        "listaEspera",
+        "Tiene lista de espera",
+        [
+          { id: 0, nombre: "No" },
+          { id: 1, nombre: "Sí" },
+        ],
+        0,
       )}<button type="submit">Guardar especialidad</button></form>`,
     );
   }
-  return page(u, "Policlínicos y especialidades", c);
+  return page(u, "Policlínicos y especialidades", cabecera);
 }
-function pacientes({ u, lista, ctx, citas = [], q }) {
-  const buscar = (q.get("q") || "").toLowerCase();
+function pacientes({ u, lista, ctx, citas = [], q: consulta }) {
+  const buscar = (consulta.get("q") || "").toLowerCase();
   const proxima = (p) => citas.filter((c) => c.rut === p.rut && c.estadoReserva === "ACTIVA").map((c) => ctx.bloques.get(c.idBloque)).filter((b) => b && b.fecha >= hoy()).sort((x, y) => (x.fecha + x.hora).localeCompare(y.fecha + y.hora))[0];
   const FILTROS = [["proxima", "Con reserva próxima", (p) => !!proxima(p)], ["menor", "Menores de edad", (p) => p.fechaNacimiento && edad(p.fechaNacimiento) < 18], ["sin-telefono", "Sin teléfono", (p) => !p.telefono]];
-  const rapido = FILTROS.find(([k]) => k === q.get("f"));
+  const rapido = FILTROS.find(([k]) => k === consulta.get("f"));
   const filas = lista.filter((p) =>
     `${p.nombre} ${p.rut} ${p.telefono}`.toLowerCase().includes(buscar) && (!rapido || rapido[2](p)),
   );
   const chips = `<nav class="chips-filtro" aria-label="Filtros rápidos">${FILTROS.map(([k, rotulo]) => {
     const activo = rapido?.[0] === k;
-    const params = new URLSearchParams({ ...(q.get("q") ? { q: q.get("q") } : {}), ...(activo ? {} : { f: k }) });
+    const params = new URLSearchParams({ ...(consulta.get("q") ? { q: consulta.get("q") } : {}), ...(activo ? {} : { f: k }) });
     return `<a href="/tens/pacientes${params.toString() ? "?" + params : ""}"${activo ? ' aria-current="true"' : ""}>${rotulo}</a>`;
   }).join("")}</nav>`;
   return page(
@@ -757,7 +766,7 @@ function pacientes({ u, lista, ctx, citas = [], q }) {
       "Datos administrativos de las personas asociadas a este lugar de atención.",
       btn("+ Registrar paciente", "/tens/pacientes?nuevo=1"),
     ) +
-      `<form class="filters filters-busqueda">${input("q", "Buscar por nombre, RUT completo o teléfono", q.get("q") || "", "search")}<button type="submit">Buscar</button>${rapido ? hidden({ f: rapido[0] }) : ""}</form>` +
+      `<form class="filters filters-busqueda">${input("q", "Buscar por nombre, RUT completo o teléfono", consulta.get("q") || "", "search")}<button type="submit">Buscar</button>${rapido ? hidden({ f: rapido[0] }) : ""}</form>` +
       chips +
       `<p class="cuenta">${filas.length} ${filas.length === 1 ? "paciente" : "pacientes"}</p>` +
       tabla(
@@ -791,17 +800,17 @@ function pacientes({ u, lista, ctx, citas = [], q }) {
             `<span class="acciones-icono"><a class="btn-icono" href="/tens/ficha?tab=reservas&amp;rut=${encodeURIComponent(p.rut)}" aria-label="Ver reservas de ${E(p.nombre)}" title="Ver reservas">${ico("calendario")}<span>Reservas</span></a><a class="btn-icono" href="/tens/pacientes/editar?rut=${encodeURIComponent(p.rut)}" aria-label="Editar a ${E(p.nombre)}" title="Editar">${ico("editar")}<span>Editar</span></a></span>`,
           ),
         ]),
-        q.get("q") ? "No se encontraron pacientes con esa búsqueda. Revisa el nombre, el RUT completo o el teléfono." : "Aún no hay pacientes registrados en este lugar de atención.",
+        consulta.get("q") ? "No se encontraron pacientes con esa búsqueda. Revisa el nombre, el RUT completo o el teléfono." : "Aún no hay pacientes registrados en este lugar de atención.",
       ),
   );
 }
-function ficha({ u, p, ctx, citas, documentos, mensajes, op, q }) {
+function ficha({ u: usuario, p, ctx, citas, documentos, mensajes, op, q }) {
   const tab = q.get("tab") || "resumen",
     rut = p.rut,
     link = (t) => "/tens/ficha?" + new URLSearchParams({ rut, tab: t });
-  let c =
+  let cabecera =
     cab(
-      `RUT ${E(p.rut)} · ${edad(p.fechaNacimiento)} años · ${E(ctx.sedes.get(p.lugarHabitual || u.idPoliclinico)?.nombre)}`,
+      `RUT ${E(p.rut)} · ${edad(p.fechaNacimiento)} años · ${E(ctx.sedes.get(p.lugarHabitual || usuario.idPoliclinico)?.nombre)}`,
       btn(
         "Editar datos",
         "/tens/pacientes/editar?rut=" + encodeURIComponent(rut),
@@ -819,7 +828,7 @@ function ficha({ u, p, ctx, citas, documentos, mensajes, op, q }) {
       .map(([k, t]) => btn(t, link(k), tab !== k))
       .join("")}</div>`;
   if (tab === "resumen")
-    c += panel(
+    cabecera += panel(
       "Datos personales",
       `<dl class="details-grid">${[
         ["Estado", p.activo === false ? "Inactivo" : "Activo"],
@@ -837,24 +846,24 @@ function ficha({ u, p, ctx, citas, documentos, mensajes, op, q }) {
         )}</dl><div class="metric-strip"><div><b>${citas.length}</b>Reservas</div><div><b>${citas.filter((c) => c.asistencia === "ASISTIO").length}</b>Asistencias</div><div><b>${citas.filter((c) => c.asistencia === "NO_ASISTIO").length}</b>Ausencias</div></div><form method="post" action="/tens/paciente/preferencias" class="form-grid">${hidden({ rut })}${select("contactoPreferido", "Contacto preferido", opcionesTexto(["Teléfono", "WhatsApp", "Correo"]), p.contactoPreferido || "Teléfono")}<label class="check"><input type="checkbox" name="consentimientoComunicaciones" value="1" ${p.consentimientoComunicaciones ? "checked" : ""}>Consentimiento para comunicaciones administrativas</label><button type="submit">Guardar preferencias</button></form><div class="actions">${post("/tens/paciente/desactivar", { rut }, p.activo === false ? "Activar" : "Desactivar", true)}</div>`,
     );
   if (tab === "reservas")
-    c += panel(
+    cabecera += panel(
       "Historial administrativo de reservas",
       tabla(
         ["Fecha", "Hora", "Profesional", "Estado", "Acceso"],
         citas.map((c) => {
-          const b = ctx.bloques.get(c.idBloque);
+          const bloque = ctx.bloques.get(c.idBloque);
           return [
-            b?.fecha,
-            b?.hora,
-            ctx.profs.get(b?.idProfesional)?.nombre,
-            estado(c, u.rol === "TELEMEDICINA", op),
+            bloque?.fecha,
+            bloque?.hora,
+            ctx.profs.get(bloque?.idProfesional)?.nombre,
+            estado(c, usuario.rol === "TELEMEDICINA", op),
             raw(btn("Ver reserva", "/tens/reserva?idCita=" + c.id, true)),
           ];
         }),
       ),
     );
   if (tab === "responsable")
-    c += panel(
+    cabecera += panel(
       "Responsable o tutor",
       p.responsable
         ? `<dl class="details-grid">${Object.entries(p.responsable)
@@ -863,7 +872,7 @@ function ficha({ u, p, ctx, citas, documentos, mensajes, op, q }) {
         : "<p>No hay responsable registrado.</p>",
     );
   if (tab === "documentos")
-    c += panel(
+    cabecera += panel(
       "Documentos administrativos",
       `<p>${documentos.length} documentos · ${documentos.filter((d) => (d.estadoRevision || (d.verificado ? "VALIDADO" : "PENDIENTE")) === "PENDIENTE" && !d.archivado).length} pendientes de revisión</p>${btn("Adjuntar documento", "/tens/documentos?rut=" + encodeURIComponent(rut))}${tabla(
         ["Fecha", "Tipo", "Vigencia", "Estado", "Archivo", "Acciones"],
@@ -900,20 +909,20 @@ function ficha({ u, p, ctx, citas, documentos, mensajes, op, q }) {
       )}`,
     );
   if (tab === "comunicaciones")
-    c += panel(
+    cabecera += panel(
       "Comunicaciones",
       tabla(
         ["Fecha", "Canal", "Estado", "Responsable"],
         mensajes.map((m) => [m.fecha, m.canal, m.estado, m.responsable]),
       ),
     );
-  return page(u, "Ficha del paciente", c);
+  return page(usuario, "Ficha del paciente", cabecera);
 }
-function reserva({ u, ctx, c, b, op, admin, volverAgenda, mensaje }) {
-  const p = ctx.profs.get(b.idProfesional);
-  const s = ctx.sedes.get(op.sedeBloque(b, p));
-  const tele = !!s?.telemedicina;
-  const status = estadoAgenda(b, c, c ? estado(c, tele, op) : "");
+function reserva({ u, ctx, c, b, op: servicioOperacion, admin, volverAgenda, mensaje }) {
+  const profesional = ctx.profs.get(b.idProfesional);
+  const sede = ctx.sedes.get(servicioOperacion.sedeBloque(b, profesional));
+  const tele = !!sede?.telemedicina;
+  const status = estadoAgenda(b, c, c ? estado(c, tele, servicioOperacion) : "");
   const cancelada = c?.estadoReserva === "CANCELADA";
   const titulo = c ? "Detalle de reserva" : "Detalle del cupo";
   const volver = volverAgenda || (admin ? "/admin/agendas" : "/tens/agenda") + "?" + new URLSearchParams({ fecha: b.fecha });
@@ -958,7 +967,7 @@ function reserva({ u, ctx, c, b, op, admin, volverAgenda, mensaje }) {
   }
 
   if (tele && c && !admin && !cancelada) {
-    const envio = op.estadoEnvioEnlace(c);
+    const envio = servicioOperacion.estadoEnvioEnlace(c);
     const solicitar = c.enlace && envio.estado !== "Pendiente de envío"
       ? post("/tens/comunicacion", {
           ...datosCita, canal: "Correo", tipo: "Enlace de atención", origen: "reserva",
@@ -976,15 +985,15 @@ function reserva({ u, ctx, c, b, op, admin, volverAgenda, mensaje }) {
   const datos = [
     ["Fecha", fechaAgenda(b.fecha, { day: "numeric", month: "long", year: "numeric" })],
     ["Hora", b.hora],
-    ["Profesional", p.nombre],
-    ["Especialidad", b.especialidad || p.especialidad],
-    ["Policlínico", s?.nombre],
+    ["Profesional", profesional.nombre],
+    ["Especialidad", b.especialidad || profesional.especialidad],
+    ["Policlínico", sede?.nombre],
     ...(c ? [["Paciente", ctx.pacientes.get(c.rut)?.nombre || "—"], ["RUT", c.rut]] : []),
     ...(c?.estadoConfirmacion === "SIN_RESPUESTA" && status === "Reservada" ? [["Confirmación", "Sin respuesta"]] : []),
   ];
   return page(u, titulo, `
     <div class="agenda-detalle" data-agenda-detalle="${titulo}">
-      <div class="agenda-detail-heading"><p>${E(b.hora)} · ${E(s?.nombre)}</p>
+      <div class="agenda-detail-heading"><p>${E(b.hora)} · ${E(sede?.nombre)}</p>
         ${btn("Volver a la agenda", volver, true)}</div>
       ${panel("Datos de " + (c ? "la reserva" : "la disponibilidad"), `
         <div class="agenda-detail-status">${estadoVisible(status)}</div>
@@ -995,13 +1004,13 @@ function reserva({ u, ctx, c, b, op, admin, volverAgenda, mensaje }) {
     </div>
   `, mensaje);
 }
-function espera({ u, ctx, lista, q, admin = false, avisos = [], mensaje }) {
-  const filtro = (q.get("q") || "").toLowerCase(),
-    esp = q.get("esp") || "",
-    prioridad = q.get("prioridad") || "",
-    est = q.get("estado") || "",
-    prof = q.get("prof") || "",
-    pendiente = q.get("pendiente") || "",
+function espera({ u, ctx, lista, q: consulta, admin = false, avisos = [], retenidos = [], mensaje }) {
+  const filtro = (consulta.get("q") || "").toLowerCase(),
+    esp = consulta.get("esp") || "",
+    prioridad = consulta.get("prioridad") || "",
+    est = consulta.get("estado") || "",
+    prof = consulta.get("prof") || "",
+    pendiente = consulta.get("pendiente") || "",
     hace30 = sumarDias(hoy(), -30);
   const diasEspera = (e) => Math.max(0, Math.floor((Date.parse(hoy()) - Date.parse(e.registradaEn)) / 864e5));
   const diasEsperaHtml = (e) => { const d = diasEspera(e); return `<b class="espera-dias"${d >= 30 ? ' data-largo="1"' : ""}>${d} ${d === 1 ? "día" : "días"}</b>`; };
@@ -1020,16 +1029,36 @@ function espera({ u, ctx, lista, q, admin = false, avisos = [], mensaje }) {
         (pendiente !== "antigua" || (e.registradaEn && e.registradaEn <= hace30)),
     )
     .sort((a, b) => a.registradaEn.localeCompare(b.registradaEn));
+  const idsRetenidos = new Set(retenidos.map((b) => b.id));
+  avisos = avisos.filter((a) => !idsRetenidos.has(a.idBloque));
+  const cuando = (b) => `${new Date(`${b.fecha}T12:00:00`).toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" })} · ${b.hora}`;
+  const candidatos = (b) => lista.filter((e) => e.cupos.some((c) => c.id === b.id)).sort((x, y) => String(x.registradaEn).localeCompare(String(y.registradaEn)));
+  const cuposRetenidos = retenidos.length
+    ? `<section class="espera-cupos" aria-label="Cupos disponibles para la lista de espera"><h2>Cupos disponibles para la lista de espera</h2><p>${admin ? "Estas horas quedaron libres y siguen fuera de la agenda pública hasta que TENS/TONS las asigne o las suelte." : "Estas horas quedaron libres y no están en la agenda pública. Asígnalas a quien espera o suéltalas tú."}</p><ul>${retenidos
+        .map((b) => {
+          const cand = candidatos(b);
+          const datos = `<div class="espera-cupo-hora"><b>${E(cuando(b))}</b><span>${E(b.especialidad)} · ${E(ctx.profs.get(b.idProfesional)?.nombre || "")}${admin ? ` · ${E(ctx.sedes.get(b.idPoliclinico)?.nombre || "")}` : ""}</span></div>`;
+          if (admin) return `<li class="espera-cupo">${datos}<span>${cand.length ? `${cand.length} en espera` : "Nadie en espera coincide"}</span></li>`;
+          const asignar = cand.length
+            ? `<form method="post" action="/tens/espera/asignar">${hidden({ idBloque: b.id })}<select name="idSolicitud" aria-label="Paciente que recibirá la hora">${cand.map((e) => `<option value="${e.id}">${E(ctx.pacientes.get(e.rut)?.nombre || e.rut)} · ${diasEspera(e)} ${diasEspera(e) === 1 ? "día" : "días"} esperando</option>`).join("")}</select><button type="submit" class="espera-asignar">Asignar cupo</button></form>`
+            : `<span class="espera-cupo-nadie">Ningún paciente en espera coincide con este horario.</span>`;
+          return `<li class="espera-cupo">${datos}${asignar}<form method="post" action="/tens/espera/soltar">${hidden({ idBloque: b.id })}<button type="submit" class="sec">Soltar a la agenda pública</button></form></li>`;
+        })
+        .join("")}</ul></section>`
+    : "";
   const liberadas = avisos.length ? `<section class="espera-liberadas" aria-label="Horas liberadas"><b>${avisos.length === 1 ? "Se liberó 1 hora" : `Se liberaron ${avisos.length} horas`}</b><ul>${avisos.map((a) => `<li>${E(String(a.texto || "").replace(/^Cupo liberado:\s*/, "").replace(/\s*Revisa la lista de espera\.$/, ""))}</li>`).join("")}</ul><p>Asigna la hora a quien lleva más tiempo esperando esa especialidad.</p></section>` : "";
   return page(
     u,
     admin ? "Supervisión de lista de espera" : "Lista de espera",
     cab(
-      "El paciente permanece en la lista aunque no responda.",
+      admin
+        ? "El paciente permanece en la lista aunque no responda. Las horas canceladas de las especialidades con lista de espera quedan retenidas hasta que TENS/TONS las asigne o las suelte."
+        : "El paciente permanece en la lista aunque no responda. Cuando se cancela una hora de una especialidad con lista de espera, queda retenida aquí hasta que tú la asignes o la sueltes.",
     ) +
+      cuposRetenidos +
       liberadas +
       (admin ? "" : `<details class="espera-nueva"><summary class="btn">Agregar a la lista de espera</summary><form class="form-grid" method="post" action="/tens/espera">${input("rut", "RUT del paciente", "", "text", "required")}${hidden({ idPoliclinico: u.idPoliclinico })}${select("especialidad", "Especialidad", opcionesTexto(ctx.especialidades || []))}${select("prioridad", "Prioridad", opcionesTexto(["Normal", "Media", "Alta"]))}${input("preferencia", "Preferencia de horario")}<button type="submit">Registrar</button></form></details>`) +
-      `<form class="filters">${input("q", "Paciente / RUT", q.get("q") || "", "search")}${select("esp", "Especialidad", [{ id: "", nombre: "Seleccionar especialidad…" }, ...opcionesTexto([...new Set(lista.map((e) => e.especialidad))])], esp)}${select("prof", "Profesional", [{ id: "", nombre: "Seleccionar profesional…" }, ...ctx.listaProfs], prof)}${select("prioridad", "Prioridad", [{ id: "", nombre: "Seleccionar prioridad…" }, ...opcionesTexto(["Alta", "Media", "Normal"])], prioridad)}${select("estado", "Estado", [{ id: "", nombre: "Seleccionar estado…" }, ...opcionesTexto(["Pendiente", "Contactado", "Hora ofrecida", "Reservado", "No responde"])], est)}${select("pendiente", "Seguimiento", [{ id: "", nombre: "Seleccionar seguimiento…" }, { id: "con-cupo", nombre: "Con cupo disponible" }, { id: "antigua", nombre: "Más de 30 días" }], pendiente)}<button type="submit">Filtrar · mayor espera</button></form>` +
+      `<form class="filters">${input("q", "Paciente / RUT", consulta.get("q") || "", "search")}${select("esp", "Especialidad", [{ id: "", nombre: "Seleccionar especialidad…" }, ...opcionesTexto([...new Set(lista.map((e) => e.especialidad))])], esp)}${select("prof", "Profesional", [{ id: "", nombre: "Seleccionar profesional…" }, ...ctx.listaProfs], prof)}${select("prioridad", "Prioridad", [{ id: "", nombre: "Seleccionar prioridad…" }, ...opcionesTexto(["Alta", "Media", "Normal"])], prioridad)}${select("estado", "Estado", [{ id: "", nombre: "Seleccionar estado…" }, ...opcionesTexto(["Pendiente", "Contactado", "Hora ofrecida", "Reservado", "No responde"])], est)}${select("pendiente", "Seguimiento", [{ id: "", nombre: "Seleccionar seguimiento…" }, { id: "con-cupo", nombre: "Con cupo disponible" }, { id: "antigua", nombre: "Más de 30 días" }], pendiente)}<button type="submit">Filtrar · mayor espera</button></form>` +
       tabla(
         [
           "Paciente",
@@ -1053,7 +1082,7 @@ function espera({ u, ctx, lista, q, admin = false, avisos = [], mensaje }) {
             ? [`${e.cupos.length} cupos compatibles`]
             : [
                 raw(`<details class="espera-contacto"><summary>Registrar contacto</summary><form class="espera-form" method="post" action="/tens/espera/gestion">${hidden({ idSolicitud: e.id })}<select name="estado" aria-label="Resultado del contacto">${opcionesTexto(["Contactado", "Hora ofrecida", "No responde"]).map((x) => `<option>${x.nombre}</option>`).join("")}</select><select name="canal" aria-label="Canal"><option>WhatsApp</option><option>Llamada</option></select><button type="submit">Guardar contacto</button></form></details><details class="espera-retirar"><summary>Retirar de la lista</summary><form class="espera-form" method="post" action="/tens/espera/retirar">${hidden({ idSolicitud: e.id })}<input name="motivo" required maxlength="200" placeholder="Motivo del retiro" aria-label="Motivo del retiro"><button type="submit" class="sec">Retirar</button></form></details>`),
-                raw(e.cupos.length ? `<form class="espera-form" method="post" action="/tens/espera/asignar">${hidden({ idSolicitud: e.id })}<select name="idBloque" aria-label="Cupo compatible">${e.cupos.map((b) => `<option value="${b.id}">${E(b.fecha)} ${E(b.hora)} · ${E(ctx.profs.get(b.idProfesional)?.nombre)}</option>`).join("")}</select><button type="submit" class="espera-asignar">Asignar cupo</button></form>` : btn("Buscar hora", "/tens/agenda?esp=" + encodeURIComponent(e.especialidad), true)),
+                raw(e.cupos.length ? `<form class="espera-form" method="post" action="/tens/espera/asignar">${hidden({ idSolicitud: e.id })}<select name="idBloque" aria-label="Cupo compatible">${e.cupos.map((b) => `<option value="${b.id}">${E(b.fecha)} ${E(b.hora)} · ${E(ctx.profs.get(b.idProfesional)?.nombre)}${b.retenido ? " · retenida" : ""}</option>`).join("")}</select><button type="submit" class="espera-asignar">Asignar cupo</button></form>` : btn("Buscar hora", "/tens/agenda?esp=" + encodeURIComponent(e.especialidad), true)),
               ]),
         ]),
       ),

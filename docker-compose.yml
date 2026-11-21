@@ -9,8 +9,9 @@ services:
       PORT: 3000
       PORT_PERSONAL: 3001
       URL_PORTAL: http://localhost:3000
-      DATABASE_URL: postgres://hermandad:cambiar_en_local@db:5432/hermandad
-      CLAVE_DEMO: demo1234
+      DATABASE_URL: postgres://hermandad:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (copia .env.example)}@db:5432/hermandad
+      NODE_ENV: ${NODE_ENV:-development}
+      CLAVE_DEMO: ${CLAVE_DEMO:-}
       DIR_DOCUMENTOS: /app/datos/documentos
     volumes:
       - adjuntos:/app/datos
@@ -22,18 +23,18 @@ services:
     environment:
       POSTGRES_DB: hermandad
       POSTGRES_USER: hermandad
-      POSTGRES_PASSWORD: cambiar_en_local
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (copia .env.example)}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hermandad -d hermandad"]
       interval: 3s
       timeout: 3s
       retries: 20
     volumes:
-      - ./db/hermandad_postgresql.sql:/docker-entrypoint-initdb.d/01_hermandad.sql:ro
-      - ./db/datos_ejemplo.sql:/docker-entrypoint-initdb.d/02_datos_ejemplo.sql:ro
-      - ./db/03_credencial.sql:/docker-entrypoint-initdb.d/03_credencial.sql:ro
+      - ./base-de-datos/01_estructura.sql:/docker-entrypoint-initdb.d/01_hermandad.sql:ro
+      - ./base-de-datos/02_datos_ejemplo.sql:/docker-entrypoint-initdb.d/02_datos_ejemplo.sql:ro
+      - ./base-de-datos/03_credenciales.sql:/docker-entrypoint-initdb.d/03_credenciales.sql:ro
       - dbdata:/var/lib/postgresql/data
 volumes:
   dbdata:

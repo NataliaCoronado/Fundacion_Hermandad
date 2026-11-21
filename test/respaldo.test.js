@@ -4,7 +4,7 @@ const assert = require("node:assert");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const R = require("../src/util/respaldo");
+const R = require("../src/herramientas/logicaDeRespaldo");
 
 function escenario() {
   const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "respaldo-"));

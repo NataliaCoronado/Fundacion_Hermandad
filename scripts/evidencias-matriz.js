@@ -3,12 +3,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const os = require("node:os");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
-const { textoLocal, hoy, sumarDias } = require("../src/util/tiempo");
+const { textoLocal, hoy, sumarDias } = require("../src/herramientas/tiempo");
 
 const SALIDA = path.resolve(process.argv[2] || "Evidencias_Pruebas");
-// Los adjuntos de prueba van a una carpeta temporal: nunca a datos/documentos del sistema.
 const DOCS_TEMPORALES = !process.env.DIR_DOCUMENTOS && fs.mkdtempSync(path.join(os.tmpdir(), "evidencias-docs-"));
 if (DOCS_TEMPORALES) {
   process.env.DIR_DOCUMENTOS = DOCS_TEMPORALES;
@@ -325,7 +324,7 @@ const CASOS = {
     const c = crearContenedor();
     const p = await c.catalogo.paciente(A);
     k.dato("Campos del paciente", Object.keys(p));
-    const sql = fs.readFileSync(path.join(__dirname, "../db/hermandad_postgresql.sql"), "utf8").toLowerCase();
+    const sql = fs.readFileSync(path.join(__dirname, "../base-de-datos/01_estructura.sql"), "utf8").toLowerCase();
     const clinicos = ["diagnostic", "anamnesis", "receta", "alergia", "tratamiento", "evolucion_clinica", "ficha_clinica"];
     const hallados = clinicos.filter((t) => Object.keys(p).join(" ").toLowerCase().includes(t) || new RegExp(`\\b${t}\\w*\\s+(varchar|text|jsonb)`).test(sql));
     k.chk(["rut", "telefono", "direccion", "fechaNacimiento"].every((x) => x in p), "Hay datos administrativos centralizados del paciente.");
@@ -520,7 +519,7 @@ const CASOS = {
   "CP-32": { req: "RF32", titulo: "Catálogo institucional", async run(k) {
     const s = await sitio();
     try {
-      const { SEDES, infoSede } = require("../src/models/sedesInfo");
+      const { SEDES, infoSede } = require("../src/models/informacionDeSedes");
       const h = await (await s.req("/admin/policlinicos", s.a)).text();
       k.dato("Lugares", SEDES.map((x) => x.nombre));
       k.chk(SEDES.length === 7 && SEDES.filter((x) => x.telemedicina).length === 1, "Hay seis policlínicos y Telemedicina.");
@@ -609,15 +608,15 @@ const CASOS = {
   } },
 
   "CP-42": { req: "RNF06", titulo: "Trazabilidad de operaciones y restauración de datos y archivos desde un respaldo", async run(k) {
-    const R = require("../src/util/respaldo");
-    const { Persistencia } = require("../src/repositories/Persistencia");
+    const R = require("../src/herramientas/logicaDeRespaldo");
+    const { GuardadoEnArchivoJson } = require("../src/repositories/GuardadoEnArchivoJson");
     const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "cp42-"));
     const datos = path.join(raiz, "datos"), respaldos = path.join(raiz, "respaldos"), archivo = path.join(datos, "estado.json");
     const docsPrevio = process.env.DIR_DOCUMENTOS;
     process.env.DIR_DOCUMENTOS = path.join(datos, "documentos");
     let s;
     try {
-      s = await sitio({ persistencia: new Persistencia(archivo) });
+      s = await sitio({ persistencia: new GuardadoEnArchivoJson(archivo) });
       const cuenta = await cuentaDe(s, A, "1980-01-01", "1111");
       const b1 = await bloqueLibre(s.c, { idPoliclinico: 1 });
       const b2 = (await s.c.agendamiento.bloquesDisponibles({ idPoliclinico: 1 })).filter((b) => b.id !== b1.id)[0];
@@ -671,7 +670,7 @@ const CASOS = {
       k.paso("Se restaura el respaldo con la aplicación detenida y se vuelve a iniciar desde disco.");
       const r = R.restaurar({ respaldo: carpeta, datos, destinoSeguridad: respaldos, baseDatos: "" });
       k.chk(!!r.seguridad && fs.existsSync(r.seguridad), "Antes de restaurar se respaldó automáticamente el estado del incidente (se puede deshacer).");
-      const restaurada = await sitio({ persistencia: new Persistencia(archivo) });
+      const restaurada = await sitio({ persistencia: new GuardadoEnArchivoJson(archivo) });
       s = restaurada;
       const despues = await foto(s.c);
       k.dato("Al respaldar", alRespaldar);

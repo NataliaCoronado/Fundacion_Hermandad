@@ -1,7 +1,6 @@
 'use strict';
-const { esc, tabla } = require('./util');
+const { esc, tabla } = require('./componentesComunes');
 
-// Paleta institucional: azul petróleo como color principal, verde azulado de apoyo y ámbar solo para alertas.
 const COLOR = {
   navy: '#0b3b4c', azul: '#1f5f7a', teal: '#16808b', aqua: '#2c9a8f', naranja: '#b8742a', ambar: '#b8742a',
   pizarra: '#657a86', previo: '#9aabb3', gris: '#c9d5d9',
@@ -13,7 +12,6 @@ const num = (n) => Number(n).toLocaleString('es-CL');
 
 const vistaTabla = (columnas, filas) => `<details class="vista-tabla"><summary>Ver datos en tabla</summary>${tabla(columnas, filas)}</details>`;
 const sinJs = '<noscript><p class="nota">Activa JavaScript para ver el gráfico; los mismos datos están en la tabla de abajo.</p></noscript>';
-// Cada gráfico es un contenedor con su especificación; graficos.script.js lo dibuja con ECharts.
 const lienzo = (spec, alto, titulo) => `<div class="ec" data-ec="${esc(JSON.stringify(spec))}" style="height:${alto}px" role="img" aria-label="${esc(titulo)}"></div>${sinJs}`;
 const leyenda = (items) => `<ul class="leyenda-g">${items.map((i) => `<li><i style="background:${i.color}"></i>${esc(i.nombre)}</li>`).join('')}</ul>`;
 const fmt = (v, sufijo = '') => (v == null ? 'Sin datos' : `${num(v)}${sufijo}`);
@@ -55,7 +53,6 @@ function segmentada(partes, titulo, { tabla: conTabla = true, unidad = 'citas' }
 ${conTabla ? vistaTabla(['Estado', 'Citas', 'Porcentaje'], partes.map((p) => [p.nombre, num(p.n), `${Math.round((p.n / total) * 100)} %`])) : ''}</figure>`;
 }
 
-// Mapa de calor: solo se usa donde la combinación de dos ejes (día × hora) aporta información.
 function mapaCalor({ x, y, datos, titulo, unidad = 'citas' }) {
   const max = Math.max(0, ...datos.map((d) => d[2]));
   if (!max) return '<p class="vacio">Sin datos en este período.</p>';

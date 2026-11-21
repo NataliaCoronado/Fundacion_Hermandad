@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { crearContenedor } = require('../src/contenedor');
+const { crearContenedor } = require('../src/armarAplicacion');
 const { crearServidor } = require('../src/server');
 
 async function levantar() {
@@ -101,7 +101,7 @@ test('portal: paciente nuevo completa datos y documentos, confirma, obtiene PDF 
     assert.match(form, /Completa los datos del paciente/);
     assert.match(form, /Nombres <span class="req"/, 'los obligatorios llevan asterisco');
     assert.strictEqual((await p.req('/agendar/datos', { t, ...NUEVO, direccion: '' }, true)).status, 400);
-    assert.match(await p.texto('/agendar/datos', { t, ...NUEVO, tipo1: 'Otro', doc1: { blob: new Blob(['MZ']), nombre: 'x.pdf' } }, true), /debe ser PDF, JPG o PNG/);
+    assert.match(await p.texto('/agendar/datos', { t, ...NUEVO, tipo1: 'Otro', doc1: { blob: new Blob(['MZ']), nombre: 'x.pdf' } }, true), /no es un PDF, JPG o PNG válido/);
     const pdf = new Blob([Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(500, 1)])], { type: 'application/pdf' });
     const r = await p.req('/agendar/datos', { t, ...NUEVO, tipo1: 'Cartola FONASA', doc1: { blob: pdf, nombre: 'fonasa.pdf' } }, true);
     assert.strictEqual(r.headers.get('location'), `/agendar/revisar?t=${t}`);
@@ -209,11 +209,18 @@ test('cuenta del paciente: crear con verificación, ingresar, mis horas, datos, 
     const t = tokenDe(await p.req('/agendar', { quien: '33333333-3', lugar: '1', modo: 'esp', esp: 'Medicina General', consentimiento: '1' }));
     const bloque = Number((await p.texto(`/agendar/calendario?t=${t}`)).match(/bloque=(\d+)/)[1]);
     assert.match(await p.texto(`/agendar/datos?t=${t}&bloque=${bloque}`), /Revisa los datos del paciente/);
-    assert.match(await p.texto('/paciente/mis-horas'), /Próximas horas/);
+    const horas = await p.texto('/paciente/mis-horas');
+    assert.match(horas, /Próximas horas/);
+    assert.match(horas, /<h1>Hola, [^<]+<\/h1>/, 'el saludo lleva solo el nombre');
+    assert.doesNotMatch(horas, /RUT\s+44444444-4/, 'el encabezado no muestra el RUT');
+    assert.match(horas, /<div class="cuenta-col">/, 'nav y contenido comparten la misma columna');
     assert.match(await p.texto('/paciente/mis-datos', { telefono: '+56944444444', direccion: 'Calle 44', idComuna: '1', genero: 'FEMENINO', nacionalidad: 'Chilena', tieneWhatsapp: '1' }), /Datos guardados/);
     assert.strictEqual((await c.catalogo.paciente('44444444-4')).direccion, 'Calle 44');
-    assert.match(await p.texto('/paciente/mis-datos/correccion', { detalle: 'Mi segundo apellido está mal escrito' }), /Solicitud enviada/);
-    assert.ok(c.extras.listar('notificaciones').some((n) => n.tipo === 'SOLICITUD_PACIENTE'));
+    const datos = await p.texto('/paciente/mis-datos');
+    assert.doesNotMatch(datos, /mis-datos\/correccion/, 'ya no se pide la corrección por formulario');
+    assert.match(datos, /Para corregir tu RUT, nombre o fecha de nacimiento, llama a tu policlínico/);
+    assert.match(datos, /href="tel:/, 'el teléfono se puede tocar para llamar');
+    assert.strictEqual((await p.req('/paciente/mis-datos/correccion', { detalle: 'x' })).status, 404);
     const pdf = { blob: new Blob([Buffer.from('%PDF-1.4 x')], { type: 'application/pdf' }), nombre: 'cesfam.pdf' };
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '44444444-4', tipo: 'Credencial CESFAM', archivo: pdf }, true), /Documento adjuntado/);
     assert.match(await p.texto('/paciente/mis-documentos', { rut: '33333333-3', tipo: 'Certificado', archivo: pdf }, true), /Documento adjuntado/);
@@ -282,7 +289,7 @@ test('portal: sin sesión los documentos y el cambio de datos se guardan igual (
 });
 
 test('rut: se acepta sin puntos ni guion y se normaliza', () => {
-  const { normalizarRut, rutValido } = require('../src/util/rut');
+  const { normalizarRut, rutValido } = require('../src/herramientas/rut');
   assert.strictEqual(normalizarRut('123456785'), '12345678-5');
   assert.strictEqual(normalizarRut('12.345.678-5'), '12345678-5');
   assert.strictEqual(normalizarRut('7654321k'), '7654321-K');
@@ -336,7 +343,7 @@ test('portal: la encuesta de agendamiento se ofrece tras reservar, es distinta d
     assert.match(form, /fácil fue reservar tu hora/);
     assert.match(form, /No es la encuesta de la atención/);
     assert.doesNotMatch(form, /name="rut"/, 'no pide el RUT: se responde con el token de la reserva');
-    assert.match(await p.texto('/agendar/encuesta', { t, nota: '9' }), /La nota debe ser de 1 a 5/);
+    assert.match(await p.texto('/agendar/encuesta', { t, nota: '9' }), /Elige una nota de 1 a 5/);
     assert.strictEqual(s.c.extras.listar('encuestasAgendamiento').length, 0);
     assert.match(await p.texto('/agendar/encuesta', { t, nota: '4', comentario: 'Fue sencillo' }), /quedó registrada/);
     const [e] = s.c.extras.listar('encuestasAgendamiento');

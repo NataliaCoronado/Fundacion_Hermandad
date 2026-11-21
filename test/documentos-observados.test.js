@@ -1,9 +1,9 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
-const { hoy } = require("../src/util/tiempo");
+const { hoy } = require("../src/herramientas/tiempo");
 
 async function sitio() {
   const c = crearContenedor();
@@ -66,7 +66,7 @@ test("Auditoría: la pantalla muestra la columna Resultado y filtra por ella", a
   try {
     const admin = await s.login("admin@ejemplo.cl");
     const tens = await s.login("tens@ejemplo.cl");
-    await s.pedir(tens, "/admin/resumen"); // rechazado (rol)
+    await s.pedir(tens, "/admin/resumen");
     let h = await s.pedir(admin, "/admin/auditoria");
     assert.match(h, /<th>Resultado<\/th>/);
     assert.match(h, /Seleccionar resultado…/);

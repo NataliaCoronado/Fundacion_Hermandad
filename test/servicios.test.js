@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { crearContenedor } = require('../src/contenedor');
-const { rutValido, normalizarRut } = require('../src/util/rut');
+const { crearContenedor } = require('../src/armarAplicacion');
+const { rutValido, normalizarRut } = require('../src/herramientas/rut');
 
 const A = '11111111-1'; const C = '33333333-3';
 const consentir = (c, rut) => { (c.operacion.meta.pacientes[rut] ||= {}).consentimientoComunicaciones = true; };

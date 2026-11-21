@@ -1,8 +1,8 @@
 "use strict";
 const vistas = require("../views/admin");
-const { error, ok } = require("./mensajes");
-const { cargarContexto } = require("./contexto");
-const { hoy, sumarDias, diaSemana, lunesDe } = require("../util/tiempo");
+const { error, ok } = require("./mensajesDeError");
+const { cargarContexto } = require("./cargarListasBase");
+const { hoy, sumarDias, diaSemana, lunesDe } = require("../herramientas/tiempo");
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA = /^\d{2}:\d{2}$/;
@@ -11,7 +11,7 @@ const aHora = (m) =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
 
-function crearAdminController({
+function crearControladorAdmin({
   catalogo,
   reportes,
   cambios,
@@ -25,7 +25,7 @@ function crearAdminController({
     consulta = new URLSearchParams(),
   ) => {
     const ctx = await cargarContexto(catalogo);
-    const h = hoy();
+    const hoyTexto = hoy();
     const filtro = {
       q: (consulta.get("q") || "").trim(),
       sede: consulta.get("sede") || "",
@@ -33,11 +33,11 @@ function crearAdminController({
       estado: consulta.get("estado") || "",
     };
     const [p30, prox] = await Promise.all([
-      reportes.porProfesional({ desde: sumarDias(h, -29), hasta: h }),
-      reportes.porProfesional({ desde: h, hasta: sumarDias(h, 13) }),
+      reportes.porProfesional({ desde: sumarDias(hoyTexto, -29), hasta: hoyTexto }),
+      reportes.porProfesional({ desde: hoyTexto, hasta: sumarDias(hoyTexto, 13) }),
     ]);
     const futuro = new Map(prox.map((x) => [x.id, x]));
-    const q = filtro.q.toLowerCase();
+    const textoBuscado = filtro.q.toLowerCase();
     const filas = p30
       .map((x) => ({
         ...x,
@@ -53,8 +53,8 @@ function crearAdminController({
           (!filtro.sede || String(x.idPoliclinico) === filtro.sede) &&
           (!filtro.esp || x.especialidad === filtro.esp) &&
           (!filtro.estado || (filtro.estado === "1") === x.activo) &&
-          (!q ||
-            `${x.profesional} ${x.especialidad}`.toLowerCase().includes(q)),
+          (!textoBuscado ||
+            `${x.profesional} ${x.especialidad}`.toLowerCase().includes(textoBuscado)),
       )
       .sort(
         (a, b) =>
@@ -147,35 +147,35 @@ function crearAdminController({
     if (!FECHA.test(desde || "") || !FECHA.test(hasta || ""))
       ({ desde, hasta } = porDefecto || {});
     if (desde && hasta && desde > hasta) [desde, hasta] = [hasta, desde];
-    const f = { desde, hasta };
+    const filtro = { desde, hasta };
     const sede = Number(consulta.get("sede"));
-    if (sede) f.idPoliclinico = sede;
-    if (consulta.get("esp")) f.especialidad = consulta.get("esp");
-    return f;
+    if (sede) filtro.idPoliclinico = sede;
+    if (consulta.get("esp")) filtro.especialidad = consulta.get("esp");
+    return filtro;
   };
   const filtroTexto = (f) =>
     `${f.desde || ""} a ${f.hasta || ""}${f.idPoliclinico ? `, sede ${f.idPoliclinico}` : ""}${f.especialidad ? `, ${f.especialidad}` : ""}`;
   const csvDe =
     (nombre, fn) =>
     async ({ consulta, usuario }) => {
-      const f = filtroDe(consulta, {});
+      const filtro = filtroDe(consulta, {});
       await auditoria.registrar(
         usuario,
         "Reporte descargado",
-        `${nombre}${f.desde ? ` (${filtroTexto(f)})` : ""}`,
+        `${nombre}${filtro.desde ? ` (${filtroTexto(filtro)})` : ""}`,
       );
-      return descarga(nombre, await fn(f));
+      return descarga(nombre, await fn(filtro));
     };
 
   return {
     panel: async ({ usuario }) => {
-      const h = hoy();
+      const hoyTexto = hoy();
       const [ctx, a30, a12, op, vigentes] = await Promise.all([
         cargarContexto(catalogo),
-        reportes.analitica({ desde: sumarDias(h, -29), hasta: h }),
+        reportes.analitica({ desde: sumarDias(hoyTexto, -29), hasta: hoyTexto }),
         reportes.analitica({
-          desde: sumarDias(lunesDe(h), -84),
-          hasta: sumarDias(lunesDe(h), -1),
+          desde: sumarDias(lunesDe(hoyTexto), -84),
+          hasta: sumarDias(lunesDe(hoyTexto), -1),
         }),
         reportes.operacion(),
         espera.vigentes(),
@@ -197,11 +197,11 @@ function crearAdminController({
       };
     },
     policlinicos: async ({ usuario }) => {
-      const h = hoy();
+      const hoyTexto = hoy();
       const ctx = await cargarContexto(catalogo);
       const [hoy30, prox] = await Promise.all([
-        reportes.porPoliclinico({ desde: sumarDias(h, -29), hasta: h }),
-        reportes.porPoliclinico({ desde: h, hasta: sumarDias(h, 13) }),
+        reportes.porPoliclinico({ desde: sumarDias(hoyTexto, -29), hasta: hoyTexto }),
+        reportes.porPoliclinico({ desde: hoyTexto, hasta: sumarDias(hoyTexto, 13) }),
       ]);
       return {
         html: vistas.policlinicos({
@@ -453,32 +453,32 @@ function crearAdminController({
       }
     },
     reportes: async ({ usuario, consulta }) => {
-      const h = hoy();
-      const filtro = filtroDe(consulta, { desde: sumarDias(h, -89), hasta: h });
+      const hoyTexto = hoy();
+      const filtro = filtroDe(consulta, { desde: sumarDias(hoyTexto, -89), hasta: hoyTexto });
       const ctx = await cargarContexto(catalogo);
       const extra = { sede: filtro.idPoliclinico, esp: filtro.especialidad };
       const rango = (d, a) =>
         `?${new URLSearchParams(Object.entries({ desde: d, hasta: a, ...extra }).filter(([, v]) => v)).toString()}`;
       const rapidos = [
-        ["Últimos 7 días", sumarDias(h, -6), h],
-        ["Últimos 30 días", sumarDias(h, -29), h],
-        ["Últimos 90 días", sumarDias(h, -89), h],
-        ["Próximos 14 días", h, sumarDias(h, 13)],
+        ["Últimos 7 días", sumarDias(hoyTexto, -6), hoyTexto],
+        ["Últimos 30 días", sumarDias(hoyTexto, -29), hoyTexto],
+        ["Últimos 90 días", sumarDias(hoyTexto, -89), hoyTexto],
+        ["Próximos 14 días", hoyTexto, sumarDias(hoyTexto, 13)],
       ].map(([t, d, a]) => ({
         t,
         qs: rango(d, a),
         act: filtro.desde === d && filtro.hasta === a,
       }));
       const qsDescarga = rango(filtro.desde, filtro.hasta);
-      const a = await reportes.analitica(filtro);
-      const completas = a.semanal.filter(
+      const analitica = await reportes.analitica(filtro);
+      const completas = analitica.semanal.filter(
         (w) =>
           w.semana >= filtro.desde && sumarDias(w.semana, 6) <= filtro.hasta,
       );
-      if (completas.length >= 2) a.semanal = completas;
+      if (completas.length >= 2) analitica.semanal = completas;
       return {
         html: vistas.reportes({
-          a,
+          a: analitica,
           filtro,
           sedes: ctx.listaSedes,
           especialidades: await catalogo.especialidades(),
@@ -501,12 +501,12 @@ function crearAdminController({
       }),
     }),
     auditoria: ({ usuario, consulta }) => {
-      const q = (consulta.get("q") || "").trim().toLowerCase();
+      const textoBuscado = (consulta.get("q") || "").trim().toLowerCase();
       const todo = auditoria.listar();
       const lista = (
-        q
+        textoBuscado
           ? todo.filter((x) =>
-              `${x.usuario} ${x.accion} ${x.detalle}`.toLowerCase().includes(q),
+              `${x.usuario} ${x.accion} ${x.detalle}`.toLowerCase().includes(textoBuscado),
             )
           : todo
       ).slice(0, 200);
@@ -514,11 +514,11 @@ function crearAdminController({
         html: vistas.auditoria({
           lista,
           q: consulta.get("q") || "",
-          total: q
+          total: textoBuscado
             ? todo.filter((x) =>
                 `${x.usuario} ${x.accion} ${x.detalle}`
                   .toLowerCase()
-                  .includes(q),
+                  .includes(textoBuscado),
               ).length
             : todo.length,
           usuario,
@@ -527,4 +527,4 @@ function crearAdminController({
     },
   };
 }
-module.exports = { crearAdminController };
+module.exports = { crearControladorAdmin };

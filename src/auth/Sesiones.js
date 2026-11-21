@@ -17,14 +17,14 @@ class Sesiones {
     return token;
   }
   obtener(token) {
-    const s = this.mapa.get(token);
-    if (!s) return null;
-    if (this.vencida(s)) {
+    const sesion = this.mapa.get(token);
+    if (!sesion) return null;
+    if (this.vencida(sesion)) {
       this.mapa.delete(token);
       return null;
     }
-    s.ultimaActividad = Date.now();
-    return s.usuario;
+    sesion.ultimaActividad = Date.now();
+    return sesion.usuario;
   }
   guardarAviso(token, destino, mensaje) {
     const sesion = this.mapa.get(token);

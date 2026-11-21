@@ -1,6 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
-const { textoLocal } = require('../util/tiempo');
+const { textoLocal } = require('../herramientas/tiempo');
 
 const ETIQUETAS = { delivered: 'Entregado al teléfono del paciente.', read: 'Leído por el paciente.' };
 const digitos = (t) => String(t || '').replace(/\D/g, '');
@@ -37,21 +37,21 @@ class WebhookWhatsApp {
   }
 
   async procesar(cuerpo) {
-    const r = { estados: 0, respuestas: 0, avisos: 0, duplicados: 0, ignorados: 0 };
-    if (cuerpo?.object !== 'whatsapp_business_account') { r.ignorados++; return r; }
+    const conteo = { estados: 0, respuestas: 0, avisos: 0, duplicados: 0, ignorados: 0 };
+    if (cuerpo?.object !== 'whatsapp_business_account') { conteo.ignorados++; return conteo; }
     for (const entrada of cuerpo.entry || [])
       for (const cambio of entrada.changes || []) {
         const v = cambio.value || {};
         for (const s of v.statuses || []) {
-          if (!this.primeraVez(`estado:${s.id}:${s.status}`)) { r.duplicados++; continue; }
-          (await this.estado(s)) ? r.estados++ : r.ignorados++;
+          if (!this.primeraVez(`estado:${s.id}:${s.status}`)) { conteo.duplicados++; continue; }
+          (await this.estado(s)) ? conteo.estados++ : conteo.ignorados++;
         }
         for (const m of v.messages || []) {
-          if (!this.primeraVez(`mensaje:${m.id}`)) { r.duplicados++; continue; }
-          (await this.mensaje(m)) === 'aviso' ? r.avisos++ : r.respuestas++;
+          if (!this.primeraVez(`mensaje:${m.id}`)) { conteo.duplicados++; continue; }
+          (await this.mensaje(m)) === 'aviso' ? conteo.avisos++ : conteo.respuestas++;
         }
       }
-    return r;
+    return conteo;
   }
 
   async estado(s) {
@@ -89,8 +89,8 @@ class WebhookWhatsApp {
     const idCita = await this.citaDe(m);
     if (!idCita) return this.avisarSinCita(m, texto);
     const cita = await this.citaRepo.buscarPorId(idCita);
-    const d = await this.bot.detalle(cita);
-    const sede = d.prof ? d.prof.idPoliclinico : null;
+    const detalle = await this.bot.detalle(cita);
+    const sede = detalle.prof ? detalle.prof.idPoliclinico : null;
     this.auditoria.registrar({ nombre: 'Paciente (WhatsApp)', id: null }, 'Respuesta por WhatsApp', `cita ${idCita}: ${String(texto || '').slice(0, 80)}`, { modulo: 'Comunicaciones', registro: String(idCita), idPoliclinico: sede });
     await this.bot.responder({ idCita, boton: String(texto || '').trim() });
     return 'respuesta';
@@ -116,7 +116,7 @@ class WebhookWhatsApp {
     const pac = (await this.catalogo.pacientes()).find((p) => digitos(p.telefono) === tel);
     const citas = pac ? (await this.citaRepo.buscarPorRut(pac.rut)).filter((c) => c.estadoReserva === 'ACTIVA') : [];
     let sede = null;
-    if (citas.length) { const d = await this.bot.detalle(citas[citas.length - 1]); sede = d.prof ? d.prof.idPoliclinico : null; }
+    if (citas.length) { const detalle = await this.bot.detalle(citas[citas.length - 1]); sede = detalle.prof ? detalle.prof.idPoliclinico : null; }
     const quien = pac ? `${pac.nombre} (+${tel})` : `+${tel}`;
     const motivo = citas.length > 1 ? `tiene ${citas.length} horas activas y no se sabe a cuál responde` : 'no se pudo asociar a una cita';
     this.extras.agregar('notificaciones', { tipo: 'WHATSAPP_SIN_CITA', fecha: textoLocal(), idPoliclinico: sede, leida: false,

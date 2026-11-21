@@ -1,12 +1,12 @@
 'use strict';
 const { pagina, WHATSAPP, iniciales } = require('./layout');
 const { ico } = require('./iconos');
-const { esc, etiquetaDocumento } = require('./util');
+const { esc, etiquetaDocumento } = require('./componentesComunes');
 const { fechaLarga, fila } = require('./paciente');
-const { infoSede, formatoTelefono } = require('../models/sedesInfo');
+const { infoSede, formatoTelefono } = require('../models/informacionDeSedes');
 
 const PASOS = ['Buscar', 'Fecha y hora', 'Datos', 'Confirmar'];
-const barra = (n) => `<ol class="barra" aria-label="Pasos de la reserva">${PASOS.map((p, i) => `<li class="${i + 1 < n ? 'hecho' : i + 1 === n ? 'actual' : ''}"${i + 1 === n ? ' aria-current="step"' : ''}><span class="cuenta" aria-hidden="true">${i + 1}</span><span class="et">${p}${i + 1 < n ? '<span class="sr"> (listo)</span>' : ''}</span></li>`).join('')}</ol>`;
+const barra = (n) => `<div class="camino"><p class="paso-n">Paso ${n} de ${PASOS.length} · ${PASOS[n - 1]}</p><ol class="barra" aria-label="Pasos de la reserva">${PASOS.map((p, i) => `<li class="${i + 1 < n ? 'hecho' : i + 1 === n ? 'actual' : ''}"${i + 1 === n ? ' aria-current="step"' : ''}><span class="cuenta" aria-hidden="true">${i + 1}</span><span class="et">${p}${i + 1 < n ? '<span class="sr"> (listo)</span>' : ''}</span></li>`).join('')}</ol></div>`;
 const q = (o) => new URLSearchParams(o).toString();
 const AST = '<span class="req" aria-hidden="true">*</span>';
 const ESTILOS = `<style>
@@ -14,14 +14,19 @@ const ESTILOS = `<style>
 .form2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.form2 .full{grid-column:1/-1}
 @media(max-width:640px){.form2{grid-template-columns:1fr}}
 .bloqueado input{background:#f1f5f6;color:var(--muted)}
-.ficha-res{display:flex;gap:12px;align-items:flex-start;margin:16px 0 4px;padding:12px 14px;border:1.5px dashed var(--borde-2);border-radius:8px;background:#f1f5f6;color:var(--muted);font-size:.92rem}
-.ficha-res svg{width:16px;height:16px;flex:none;margin-top:3px;color:var(--suave)}.ficha-res b{display:block;color:var(--navy);font-size:1rem}.ficha-res span{display:block}
+.datos-bloq{margin:18px 0 0;min-width:0}.datos-bloq .form2{gap:0 18px}.datos-bloq>.nota{margin:10px 0 0;max-width:none}
+.et-bloq{display:block;font-weight:600;font-size:1rem;margin:14px 0 6px;color:var(--navy)}
+.valor-bloq{display:flex;align-items:center;gap:10px;min-height:46px;padding:9px 14px;border:1.5px dashed var(--borde-2);border-radius:var(--r-s);background:#f1f5f6;color:var(--navy);font-size:1rem;font-weight:600;overflow-wrap:anywhere}
+.valor-bloq svg,.dato-bloq svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.dato-bloq{display:flex;align-items:center;gap:8px;margin:0 0 8px;color:var(--muted);font-size:.94rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .datos-contacto{margin:22px 0 0;min-width:0}.datos-contacto-t{font-size:1rem;margin:0 0 4px}.datos-contacto>.nota{margin:0 0 12px;max-width:none}
 .datos-contacto .form2{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+.datos-contacto .form2>div{display:flex;flex-direction:column;min-width:0}
+.datos-contacto .form2>div>:is(input,select){margin-top:auto}
 .datos-contacto input,.datos-contacto select{width:100%;min-width:0}
-.datos-contacto label{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;overflow-wrap:anywhere}
-@media(max-width:640px){.datos-contacto .form2{grid-template-columns:1fr}}.actual{font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
-.bloqueado label:after{content:' (bloqueado)';font-weight:400;color:var(--suave)}
+.datos-contacto label{overflow-wrap:anywhere}
+@media(max-width:640px){.datos-contacto .form2{grid-template-columns:1fr}}
+.bloqueado label:after{content:' (bloqueado)';font-weight:400;color:var(--muted)}
 .busqueda-r{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid var(--borde);border-radius:var(--r);padding:12px 16px;margin:0 0 22px}
 .busqueda-r b{color:var(--navy)}.busqueda-r a{margin-left:auto}
 .mes{background:#fff;border:1px solid var(--borde);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sombra);max-width:620px;margin:0 0 26px}
@@ -29,7 +34,7 @@ const ESTILOS = `<style>
 .mes-cab a,.mes-cab span{width:38px;height:38px;display:grid;place-items:center;border-radius:10px;border:1.5px solid var(--borde-2);text-decoration:none;color:var(--navy);font-weight:800}
 .mes-cab span{opacity:.35}
 .mes-g{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}
-.mes-g small{font-size:.72rem;color:var(--suave);font-weight:700}
+.mes-g small{font-size:.72rem;color:var(--muted);font-weight:700}
 .mes-g a,.mes-g span{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;border-radius:10px;font-weight:700;text-decoration:none}
 .mes-g span{color:#b6c3c8}.mes-g span.vacio{visibility:hidden}
 .mes-g a{color:var(--navy);background:var(--claro);border:1.5px solid #cbe6eb}.mes-g a i{font-style:normal;font-size:.68rem;font-weight:600;color:var(--teal-t)}
@@ -44,7 +49,9 @@ details.docs summary{font-size:1rem}
 </style>`;
 const lateral = (n, { paciente, atencion, fecha, lugar, cambiar = [] } = {}) => {
   const fila = (rotulo, valor, pendiente = 'Sin elegir') => `<div><dt>${rotulo}</dt><dd>${valor ? esc(valor) : `<span class="pend">${pendiente}</span>`}</dd></div>`;
-  return `<aside class="flujo-resumen" data-paso="${n}" aria-label="Tu reserva"><h2>Tu reserva</h2><dl>${fila('Paciente', paciente, 'Sin indicar')}${fila('Atención', atencion)}${fila('Fecha y hora', fecha)}${lugar ? fila('Lugar', lugar) : ''}</dl>${cambiar.length ? `<p class="cambiar">${cambiar.map(([href, txt]) => `<a class="btn sec chico" href="${href}">${esc(txt)}</a>`).join('')}</p>` : ''}<p class="ayuda">¿Necesitas ayuda? Escríbenos al WhatsApp <a href="https://wa.me/${WHATSAPP.replace(/\D/g, '')}">${WHATSAPP}</a>.</p></aside>`;
+  const vacio = n === 1 && !paciente && !atencion && !fecha;
+  const filas = n === 1 ? [['Paciente', paciente], ['Atención', atencion], ['Fecha y hora', fecha]].filter(([, v]) => v).map(([r, v]) => fila(r, v)).join('') : `${fila('Paciente', paciente, 'Sin indicar')}${fila('Atención', atencion)}${fila('Fecha y hora', fecha)}${lugar ? fila('Lugar', lugar) : ''}`;
+  return `<aside class="flujo-resumen" data-paso="${n}" aria-label="Tu reserva"><h2>Tu reserva</h2>${vacio ? '<p class="vacio-res">Aquí verás el resumen de tu hora a medida que avances.</p>' : `<dl>${filas}</dl>`}${cambiar.length ? `<p class="cambiar">${cambiar.map(([href, txt]) => `<a class="btn sec chico" href="${href}">${esc(txt)}</a>`).join('')}</p>` : ''}<p class="ayuda">¿Necesitas ayuda? Escríbenos al WhatsApp <a href="https://wa.me/${WHATSAPP.replace(/\D/g, '')}">${WHATSAPP}</a>.</p></aside>`;
 };
 const marco = (n, titulo, sub, cuerpo, mensaje, usuario, volver, lat) => pagina({
   titulo, usuario, mensaje, portal: true, activo: 'agendar', encabezado: false, volver,
@@ -56,16 +63,19 @@ const mascaraNombre = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w
 const ocultaFin = (s, ver = 4) => { const x = String(s || ''); return x.length > ver ? '*'.repeat(x.length - ver) + x.slice(-ver) : x; };
 const ocultaCorreo = (c) => (c ? String(c).replace(/^(.)[^@]*(@.*)$/, '$1***$2') : '');
 const ocultaFecha = (f) => (f ? `**-**-${String(f).slice(0, 4)}` : '');
-const actual = (id, valor) => `<span class="actual" id="${id}-act">Actual: ${valor ? esc(valor) : 'no registrado'}</span>`;
-const editOculto = (nombre, titulo, mascara, valor, ayuda, { tipo = 'text', full = false, extra = '' } = {}) => `<div${full ? ' class="full"' : ''}><label for="${nombre}">${titulo} ${actual(nombre, mascara)}</label><input id="${nombre}" name="${nombre}" type="${tipo}" value="${esc(valor || '')}" placeholder="${esc(ayuda)}" aria-describedby="${nombre}-act" ${extra}></div>`;
+const actual = (id, valor) => `<p class="dato-bloq" id="${id}-act">${ico('candado')}<span>Actual: ${valor ? esc(valor) : 'no registrado'}</span></p>`;
+const editOculto = (nombre, titulo, mascara, valor, ayuda, { tipo = 'text', full = false, extra = '' } = {}) => `<div${full ? ' class="full"' : ''}><label for="${nombre}">${titulo}</label>${actual(nombre, mascara)}<input id="${nombre}" name="${nombre}" type="${tipo}" value="${esc(valor || '')}" placeholder="${esc(ayuda)}" aria-describedby="${nombre}-act" ${extra}></div>`;
+const bloqueado = (rotulo, valor, full = false) => `<div${full ? ' class="full"' : ''}><span class="et-bloq">${rotulo}</span><div class="valor-bloq">${ico('candado')}<span>${esc(valor)}</span><span class="sr"> (bloqueado)</span></div></div>`;
 const fichaOculta = (ficha, rut, comunas, v = {}) => {
   const comuna = (comunas || []).find((c) => String(c.id) === String(ficha.idComuna));
-  return `<div class="ficha-res" aria-label="Datos guardados del paciente">${ico('candado')}<div><b>${esc(ficha.nombre)}</b><span>RUT ${esc(rut)} · Nacimiento ${esc(ocultaFecha(ficha.fechaNacimiento) || 'no registrado')}</span><span class="nota">Para corregir estos datos, pídelo a TENS/TONS de tu policlínico.</span></div></div>
+  return `<div class="datos-bloq" role="group" aria-labelledby="bloq-t"><h3 class="datos-contacto-t" id="bloq-t">Datos guardados</h3>
+<div class="form2">${bloqueado('Nombre completo', ficha.nombre, true)}${bloqueado('RUT', rut)}${bloqueado('Fecha de nacimiento', ocultaFecha(ficha.fechaNacimiento) || 'No registrada')}</div>
+<p class="nota">Están bloqueados para proteger la ficha. Para corregirlos, pídelo a TENS/TONS de tu policlínico.</p></div>
 <div class="datos-contacto" role="group" aria-labelledby="contacto-t"><h3 class="datos-contacto-t" id="contacto-t">Datos de contacto</h3>
 <p class="nota">Escribe un dato solo si cambió; si no, deja el campo vacío. El personal del policlínico recibe los cambios y actualiza la ficha.</p>
 <div class="form2">${editOculto('nTelefono', 'Celular', ocultaFin(ficha.telefono), v.nTelefono, 'Nuevo celular, ej. +56912345678', { tipo: 'tel', extra: 'autocomplete="tel" maxlength="20"' })}${editOculto('nCorreo', 'Correo electrónico', ocultaCorreo(ficha.correo), v.nCorreo, 'Nuevo correo', { tipo: 'email', extra: 'autocomplete="email" maxlength="120"' })}
 ${editOculto('nDireccion', 'Dirección', mascaraNombre(ficha.direccion), v.nDireccion, 'Nueva dirección', { full: true, extra: 'autocomplete="street-address" maxlength="150"' })}
-<div class="full"><label for="nIdComuna">Comuna ${actual('nIdComuna', comuna && comuna.nombre)}</label><select id="nIdComuna" name="nIdComuna" aria-describedby="nIdComuna-act"><option value="">Sin cambios</option>${opciones(comunas || [], v.nIdComuna)}</select></div></div></div>`;
+<div class="full"><label for="nIdComuna">Comuna</label>${actual('nIdComuna', comuna && comuna.nombre)}<select id="nIdComuna" name="nIdComuna" aria-describedby="nIdComuna-act"><option value="">Sin cambios</option>${opciones(comunas || [], v.nIdComuna)}</select></div></div></div>`;
 };
 
 const inicio = ({ oferta, d = {}, mensaje, usuario, cuenta }) => {
@@ -78,30 +88,34 @@ const inicio = ({ oferta, d = {}, mensaje, usuario, cuenta }) => {
     ? `<label for="quien">¿Para quién es la hora? ${AST}</label><select id="quien" name="quien">${opciones([{ id: cuenta.rut, nombre: `Para mí (${cuenta.nombre})` }, ...cuenta.familiares.map((f) => ({ id: f.rut, nombre: `${f.nombre} (familiar)` })), { id: 'otra', nombre: 'Otra persona' }], d.quien || cuenta.rut)}</select>
 <div id="otra-rut"${(d.quien || cuenta.rut) === 'otra' ? '' : ' hidden'}><label for="rut">RUT de quien recibirá la atención ${AST}</label><input id="rut" name="rut" value="${esc(d.rut || '')}" placeholder="12345678-5" maxlength="12" autocomplete="off" autocomplete="off"></div>`
     : `<label for="rut" style="margin-top:0">RUT de quien recibirá la atención ${AST}</label><input id="rut" name="rut" value="${esc(d.rut || '')}" placeholder="12345678-5" maxlength="12" autocomplete="off" required autocomplete="off">
-<p class="nota">¿Reservas para un familiar? Escribe el RUT de la persona que se va a atender, no el tuyo.</p>`;
+<p class="nota ayuda-campo">Si reservas para un familiar, escribe su RUT.</p>`;
   const modo = d.modo === 'prof' ? 'prof' : 'esp';
   const form = `<form method="post" action="/agendar" class="tarjeta" id="buscar">
+<div class="buscar-cab"><h2>¿Quién es el paciente?</h2><p>Completa los datos del paciente para continuar con la reserva.</p></div>
 <div class="buscar-g"><div class="buscar-c">${quien}</div>
-<div class="buscar-c"><label for="lugar">Lugar de atención ${AST}</label><select id="lugar" name="lugar" required>${opciones(lugares, d.lugar || 'red')}</select></div>
-<fieldset class="buscar-c buscar-modo"><legend>Buscar por ${AST}</legend>
-<label class="check"><input type="radio" name="modo" value="esp"${modo === 'esp' ? ' checked' : ''}> Especialidad</label>
-<label class="check"><input type="radio" name="modo" value="prof"${modo === 'prof' ? ' checked' : ''}> Profesional</label></fieldset>
-<div class="buscar-c"><div id="campo-esp"${modo === 'esp' ? '' : ' hidden'}><label for="esp">Especialidad ${AST}</label><select id="esp" name="esp"><option value="">Elige una especialidad</option>${opciones(espOpts, d.esp)}</select></div>
+<div class="buscar-c"><label for="lugar">Lugar de atención ${AST}</label><select id="lugar" name="lugar" required>${opciones(lugares, d.lugar || 'red')}</select><p class="nota ayuda-campo">Define las especialidades y profesionales que verás.</p></div>
+<fieldset class="buscar-modo conmut"><legend>Buscar por ${AST}</legend>
+<label><input type="radio" name="modo" value="esp"${modo === 'esp' ? ' checked' : ''}> Especialidad</label>
+<label><input type="radio" name="modo" value="prof"${modo === 'prof' ? ' checked' : ''}> Profesional</label></fieldset>
+<div class="buscar-c buscar-full"><div id="campo-esp"${modo === 'esp' ? '' : ' hidden'}><label for="esp">Especialidad ${AST}</label><select id="esp" name="esp"><option value="">Elige una especialidad</option>${opciones(espOpts, d.esp)}</select></div>
 <div id="campo-prof"${modo === 'prof' ? '' : ' hidden'}><label for="prof">Profesional ${AST}</label><select id="prof" name="prof"><option value="">Elige un profesional</option>${opciones(profOpts, d.prof)}</select></div></div></div>
-<div class="buscar-ok"><label class="check"><input type="checkbox" name="consentimiento" value="1" required${d.consentimiento ? ' checked' : ''}> <span>Acepto el tratamiento de los datos personales para gestionar la atención, según la <a href="/privacidad">Política de privacidad</a>. ${AST}</span></label>
-<label class="check"><input type="checkbox" name="comunicaciones" value="1"${d.comunicaciones ? ' checked' : ''}> <span>Acepto recibir el comprobante, recordatorios y avisos de la hora por WhatsApp o correo (opcional).</span></label></div>
-<button class="btn blq" type="submit">Ver días y horas disponibles</button></form>
+<div class="buscar-ok"><label class="check"><input type="checkbox" name="consentimiento" value="1" required${d.consentimiento ? ' checked' : ''}> <span>Acepto el tratamiento de los datos personales para gestionar la atención, según la <a href="/privacidad">Política de privacidad</a>.${AST}</span></label>
+<label class="check opc"><input type="checkbox" name="comunicaciones" value="1"${d.comunicaciones ? ' checked' : ''}> <span>Acepto recibir el comprobante, recordatorios y avisos de la hora por WhatsApp o correo (opcional).</span></label></div>
+<button class="btn blq continuar" type="submit">Continuar</button></form>
 <script>(function(){var f=document.getElementById('buscar');if(!f)return;var l=f.querySelector('#lugar');
 function filtrar(sel){[].forEach.call(f.querySelectorAll(sel+' option[data-lugares]'),function(o){var ok=l.value==='red'||o.dataset.lugares.split(',').indexOf(l.value)>=0;o.hidden=!ok;o.disabled=!ok;if(!ok&&o.selected)f.querySelector(sel).value='';});}
 function modo(){var m=f.querySelector('[name=modo]:checked').value;f.querySelector('#campo-esp').hidden=m!=='esp';f.querySelector('#campo-prof').hidden=m!=='prof';}
 function quien(){var s=f.querySelector('#quien'),o=f.querySelector('#otra-rut');if(s&&o){o.hidden=s.value!=='otra';}}
 l.addEventListener('change',function(){filtrar('#esp');filtrar('#prof');});[].forEach.call(f.querySelectorAll('[name=modo]'),function(r){r.addEventListener('change',modo);});
-var s=f.querySelector('#quien');if(s)s.addEventListener('change',quien);filtrar('#esp');filtrar('#prof');})();</script>`;
-  const ayuda = `<p class="nota ayuda-l">¿Necesitas ayuda? Escríbenos al WhatsApp <a href="https://wa.me/${WHATSAPP.replace(/\D/g, '')}">${WHATSAPP}</a>.</p>`;
+var s=f.querySelector('#quien');if(s)s.addEventListener('change',quien);filtrar('#esp');filtrar('#prof');
+var b=f.querySelector('.continuar');
+function listo(){var r=f.querySelector('#rut'),o=f.querySelector('#otra-rut'),q=f.querySelector('#quien');var rutOk=(q&&o&&o.hidden)||(r&&r.value.trim().length>=8);var m=f.querySelector('[name=modo]:checked').value;var sel=f.querySelector(m==='esp'?'#esp':'#prof');var c=f.querySelector('[name=consentimiento]');return !!(rutOk&&l.value&&sel&&sel.value&&c&&c.checked);}
+function revisar(){b.classList.toggle('pendiente',!listo());}
+f.addEventListener('input',revisar);f.addEventListener('change',revisar);revisar();})();</script>`;
   return pagina({
     titulo: 'Reservar hora', usuario, mensaje, portal: true, activo: 'agendar', encabezado: false, volver: false,
-    portada: { titulo: 'Reserva tu hora', lead: 'No necesitas cuenta: basta con el RUT de quien se va a atender.', extra: barra(1) },
-    contenido: `${ESTILOS}<div class="flujo"><div class="flujo-main">${form}${ayuda}</div>${lateral(1, { paciente: d.rut })}</div>`,
+    portada: { titulo: 'Reserva tu hora', lead: 'No necesitas cuenta: solo el RUT del paciente.', extra: barra(1) },
+    contenido: `${ESTILOS}<div class="flujo"><div class="flujo-main">${form}</div>${lateral(1, { paciente: d.rut })}</div>`,
   });
 };
 
@@ -133,7 +147,7 @@ const GENEROS = [['FEMENINO', 'Femenino'], ['MASCULINO', 'Masculino'], ['OTRO', 
 const camposEditables = (v, comunas) => `
 ${campo('telefono', 'Celular', v.telefono, { tipo: 'tel', req: true, extra: 'placeholder="+56912345678" autocomplete="tel"' })}
 ${campo('correo', 'Correo electrónico (opcional)', v.correo, { tipo: 'email', extra: 'autocomplete="email"' })}
-<div class="full"><label class="check"><input type="checkbox" name="tieneWhatsapp" value="1"${v.tieneWhatsapp ? ' checked' : ''}> El celular tiene WhatsApp</label></div>
+<div class="full"><label class="check"><input type="checkbox" name="tieneWhatsapp" value="1"${v.tieneWhatsapp === false ? '' : ' checked'}> El celular tiene WhatsApp</label></div>
 ${campo('direccion', 'Dirección', v.direccion, { req: true, full: true, extra: 'autocomplete="street-address"' })}
 <div><label for="idComuna">Comuna ${AST}</label><select id="idComuna" name="idComuna" required><option value="">Elige la comuna</option>${opciones(comunas, v.idComuna)}</select></div>
 <div><label for="genero">Género ${AST}</label><select id="genero" name="genero" required><option value="">Elige una opción</option>${opciones(GENEROS.map(([id, nombre]) => ({ id, nombre })), v.genero)}</select></div>
@@ -162,7 +176,7 @@ ${seccionDocs({ tipos, pendientes })}
   } else {
     const nuevo = modo === 'nuevo';
     const fuente = nuevo ? v : { ...ficha, ...v };
-    const menor = (fuente.fechaNacimiento && require('../services/PacienteService').edad(fuente.fechaNacimiento) < 18) || false;
+    const menor = (fuente.fechaNacimiento && require('../services/PacienteServicio').edad(fuente.fechaNacimiento) < 18) || false;
     const identidad = nuevo
       ? `${campo('rutVista', 'RUT', rut, { req: true, extra: 'readonly' })}${campo('fechaNacimiento', 'Fecha de nacimiento', v.fechaNacimiento, { tipo: 'date', req: true })}
 ${campo('nombres', 'Nombres', v.nombres, { req: true, extra: 'autocomplete="given-name"' })}${campo('apellidos', 'Apellidos', v.apellidos, { req: true, extra: 'autocomplete="family-name"' })}`
@@ -185,7 +199,7 @@ const revisar = ({ t, r, mensaje, usuario }) => marco(4, 'Revisa y confirma tu r
 <form method="post" action="/agendar/confirmar"><input type="hidden" name="t" value="${esc(t)}"><button class="btn blq" type="submit">Confirmar reserva</button></form>
 <p style="text-align:center;margin-top:12px"><a href="/agendar/calendario?${q({ t })}">Cambiar hora</a></p></div>`, mensaje, usuario, { href: `/agendar/datos?${q({ t })}`, texto: 'Volver a los datos' }, lateral(4, { paciente: r.rut, atencion: `${r.esp} · ${r.prof}`, fecha: `${fechaLarga(r.fecha)} · ${r.hora}`, lugar: r.lugar, cambiar: [[`/agendar/calendario?${q({ t })}`, 'Cambiar hora']] }));
 
-const confirmada = ({ t, r, envio, cuenta, usuario }) => {
+const confirmada = ({ t, r, envio, verMensajes, cuenta, usuario }) => {
   const info = infoSede(r.idSede) || {}; const wa = formatoTelefono(info.whatsapp || '+56927468124');
   return pagina({
     titulo: 'Tu hora fue reservada correctamente', usuario, portal: true, activo: 'agendar', encabezado: false,
@@ -194,7 +208,7 @@ const confirmada = ({ t, r, envio, cuenta, usuario }) => {
 <div class="dos"><div class="tarjeta"><p class="sec-t">PACIENTE</p>${fila('Nombre', r.nombre)}${fila('RUT', r.rut)}
 <p class="sec-t">ATENCIÓN</p>${fila('Especialidad', r.esp)}${fila('Profesional', r.prof)}${fila('Lugar', r.tele ? 'Telemedicina' : `${r.lugar}${info.direccion ? ` · ${info.direccion}` : ''}`)}${fila('Fecha y hora', `${fechaLarga(r.fecha)} · ${r.hora}`)}
 <p class="no-imprimir" style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="/agendar/comprobante.pdf?${q({ t })}">Descargar comprobante (PDF)</a><button type="button" class="btn sec" onclick="window.print()">Imprimir</button></p>
-${envio ? `<p class="nota">${envio}</p>` : ''}</div>
+${envio ? `<p class="nota">${envio}</p>` : ''}${verMensajes ? `<a class="btn sec no-imprimir" href="${esc(verMensajes)}">Ver mensaje de demostración</a>` : ""}</div>
 <div><div class="tarjeta"><h3>${r.tele ? 'Cómo conectarte' : 'Qué llevar'}</h3><p>${r.tele ? 'El equipo de Telemedicina te hará llegar el enlace de la videollamada antes de tu hora. Necesitas cámara, micrófono y buena conexión.' : 'Tu cédula de identidad y, si tienes, la orden o derivación. Llega 10 minutos antes.'}</p></div>
 <div class="tarjeta" style="margin-top:12px"><h3>¿Cancelar o cambiar?</h3><p>Escribe al WhatsApp ${esc(wa)} o comunícate con tu policlínico indicando el RUT; el personal registrará el cambio. Una reserva no se cancela por falta de respuesta.</p></div>
 <div class="tarjeta no-imprimir" style="margin-top:12px"><h3>¿Cómo fue reservar tu hora?</h3><p>Dos preguntas voluntarias sobre la experiencia de reservar. No es la encuesta de la atención: esa se responde cuando ya te hayan atendido.</p><a class="btn sec" href="/agendar/encuesta?${q({ t })}">Responder la encuesta</a></div>
@@ -210,7 +224,7 @@ ${respondida
     ? '<div class="tarjeta col"><p>Tu respuesta quedó registrada. Gracias por ayudarnos a mejorar el agendamiento.</p><a class="btn sec" href="/">Volver al inicio</a></div>'
     : `<form method="post" action="/agendar/encuesta" class="tarjeta col"><input type="hidden" name="t" value="${esc(t)}">
 <label for="n">¿Qué tan fácil fue reservar tu hora? De 1 (muy difícil) a 5 (muy fácil)</label><select id="n" name="nota"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
-<label for="c">¿Qué mejorarías? (opcional, máximo 300 letras)</label><textarea id="c" name="comentario" maxlength="300" rows="4"></textarea>
+<label for="c">¿Qué mejorarías? (opcional, hasta 300 caracteres)</label><textarea id="c" name="comentario" maxlength="300" rows="4"></textarea>
 <button class="btn blq" type="submit">Enviar respuesta</button></form>
 <p class="nota">Responder es opcional y no afecta tu hora ya reservada.</p>`}`,
 });

@@ -1,18 +1,18 @@
 "use strict";
-const { crearAdminController } = require("./controllers/admin");
-const { crearTensController } = require("./controllers/tens");
-const { crearPacienteController } = require("./controllers/paciente");
-const { crearAuthController } = require("./controllers/auth");
-const { crearReservaController } = require("./controllers/reserva");
+const { crearControladorAdmin } = require("./controllers/admin");
+const { crearControladorAtencionDelDia } = require("./controllers/atencionDelDia");
+const { crearControladorPaciente } = require("./controllers/paciente");
+const { crearControladorAuth } = require("./controllers/autenticacion");
+const { crearControladorReserva } = require("./controllers/reserva");
 const { rutaAgenda } = require("./auth/permisos");
 
-function crearRutas(c) {
-  const admin = crearAdminController(c);
-  const tens = crearTensController(c);
-  const paciente = crearPacienteController(c);
-  const auth = crearAuthController(c);
-  const reserva = crearReservaController(c);
-  const cuenta = require("./controllers/cuenta").crearCuentaController(c, reserva);
+function crearRutas(aplicacion) {
+  const admin = crearControladorAdmin(aplicacion);
+  const tens = crearControladorAtencionDelDia(aplicacion);
+  const paciente = crearControladorPaciente(aplicacion);
+  const auth = crearControladorAuth(aplicacion);
+  const reserva = crearControladorReserva(aplicacion);
+  const cuenta = require("./controllers/cuentaDelPaciente").crearControladorCuentaDelPaciente(aplicacion, reserva);
   const r = (metodo, ruta, area, manejador) => ({
     metodo,
     ruta,
@@ -27,10 +27,11 @@ function crearRutas(c) {
   };
   const get = (ruta, area, m) => r("GET", ruta, area, m);
   const post = (ruta, area, m) => r("POST", ruta, area, m);
-  const botActivo = process.env.BOT_WHATSAPP === "1";
-  const op = require("./controllers/operacion").crearOperacionController(c);
-  const rep = require("./controllers/reportes").crearReportesController(c);
-  const extra = require("./controllers/gestionAdicional").crearGestionAdicionalController(c);
+  const mensajesPaciente = require("./controllers/mensajesDelPaciente").crearControladorMensajesDelPaciente(aplicacion);
+  const demoMensajes = require("./controllers/demoMensajes").crearControladorDemoMensajes(aplicacion);
+  const controladorOperacion = require("./controllers/operacion").crearControladorOperacion(aplicacion);
+  const rep = require("./controllers/reportes").crearControladorReportes(aplicacion);
+  const extra = require("./controllers/cancelacionesYReprogramaciones").crearControladorCancelacionesYReprogramaciones(aplicacion);
   const nuevas = [
     get("/admin/cancelaciones", "admin", extra.cancelaciones),
     post("/admin/cancelaciones", "admin", extra.cancelar),
@@ -39,54 +40,54 @@ function crearRutas(c) {
     get("/admin/cupos/rango", "admin", extra.rango),
     post("/admin/cupos/rango", "admin", extra.rangoAplicar),
     post("/admin/equipo/eliminar", "admin", extra.equipoEliminar),
-    post("/admin/comunicacion","admin",op.comunicacion),post("/admin/reagendar","admin",op.reagendar),
+    post("/admin/comunicacion","admin",controladorOperacion.comunicacion),post("/admin/reagendar","admin",controladorOperacion.reagendar),
     get("/admin/reportes", "admin", rep.ver),
     get("/admin/reportes/exportar", "admin", rep.exportar),
     get("/admin/reportes/agenda.json", "admin", rep.agendaJson),
-    get("/admin/resumen", "admin", op.resumen),
+    get("/admin/resumen", "admin", controladorOperacion.resumen),
     get("/admin/panel", "admin", irAAgenda),
-    get("/admin/agendas", "admin", op.adminAgenda),
-    get("/admin/bloque/nuevo", "admin", op.bloqueNuevo),
-    post("/admin/bloque/revisar", "admin", op.bloqueRevisar),
-    post("/admin/bloque/guardar", "admin", op.bloqueGuardar),
-    get("/admin/profesionales", "admin", op.equipo),
-    post("/admin/profesionales/estado", "admin", op.equipoEstado),
-    post("/admin/equipo/revisar", "admin", op.equipoRevisar),
-    post("/admin/equipo/guardar", "admin", op.equipoGuardar),
-    get("/admin/policlinicos", "admin", op.lugares),
-    post("/admin/lugar", "admin", op.lugarGuardar),
-    post("/admin/especialidad", "admin", op.especialidadGuardar),
-    get("/admin/colores", "admin", op.colores),
-    get("/admin/cambios", "admin", op.cambios),
-    post("/admin/cambio/revisar", "admin", op.cambioRevisar),
-    post("/admin/cambio/guardar", "admin", op.cambioGuardar),
-    get("/admin/cupo", "admin", op.cupo),
-    post("/admin/cupo/estado", "admin", op.cupoEstado),
-    get("/admin/espera", "admin", op.supervision),
-    get("/admin/comunicaciones", "admin", op.comunicaciones),
-    get("/admin/usuarios", "admin", op.usuarios),
-    post("/admin/usuario", "admin", op.usuarioGuardar),
-    post("/admin/usuario/enlace", "admin", op.usuarioEnlace),
-    get("/admin/auditoria", "admin", op.auditoria),
-    get("/restablecer", null, op.restablecer),
-    post("/restablecer", null, op.guardarClave),
-    get("/tens/resumen", "tens", op.resumen),
+    get("/admin/agendas", "admin", controladorOperacion.adminAgenda),
+    get("/admin/bloque/nuevo", "admin", controladorOperacion.bloqueNuevo),
+    post("/admin/bloque/revisar", "admin", controladorOperacion.bloqueRevisar),
+    post("/admin/bloque/guardar", "admin", controladorOperacion.bloqueGuardar),
+    get("/admin/profesionales", "admin", controladorOperacion.equipo),
+    post("/admin/profesionales/estado", "admin", controladorOperacion.equipoEstado),
+    post("/admin/equipo/revisar", "admin", controladorOperacion.equipoRevisar),
+    post("/admin/equipo/guardar", "admin", controladorOperacion.equipoGuardar),
+    get("/admin/policlinicos", "admin", controladorOperacion.lugares),
+    post("/admin/lugar", "admin", controladorOperacion.lugarGuardar),
+    post("/admin/especialidad", "admin", controladorOperacion.especialidadGuardar),
+    get("/admin/colores", "admin", controladorOperacion.colores),
+    get("/admin/cambios", "admin", controladorOperacion.cambios),
+    post("/admin/cambio/revisar", "admin", controladorOperacion.cambioRevisar),
+    post("/admin/cambio/guardar", "admin", controladorOperacion.cambioGuardar),
+    get("/admin/cupo", "admin", controladorOperacion.cupo),
+    post("/admin/cupo/estado", "admin", controladorOperacion.cupoEstado),
+    get("/admin/espera", "admin", controladorOperacion.supervision),
+    get("/admin/comunicaciones", "admin", controladorOperacion.comunicaciones),
+    get("/admin/usuarios", "admin", controladorOperacion.usuarios),
+    post("/admin/usuario", "admin", controladorOperacion.usuarioGuardar),
+    post("/admin/usuario/enlace", "admin", controladorOperacion.usuarioEnlace),
+    get("/admin/auditoria", "admin", controladorOperacion.auditoria),
+    get("/restablecer", null, controladorOperacion.restablecer),
+    post("/restablecer", null, controladorOperacion.guardarClave),
+    get("/tens/resumen", "tens", controladorOperacion.resumen),
     get("/tens/panel", "tens", irAAgenda),
-    get("/tens/agenda", "tens", op.tensAgenda),
-    get("/tens/pacientes", "tens", op.pacientes),
-    get("/tens/ficha", "tens", op.ficha),
-    post("/tens/paciente/preferencias", "tens", op.preferencias),
-    post("/tens/paciente/desactivar", "tens", op.desactivar),
-    get("/tens/reserva", "tens", op.reserva),
-    post("/tens/flujo", "tens", op.flujo),
-    post("/tens/cancelar", "tens", op.cancelar),
-    post("/tens/reagendar", "tens", op.reagendar),
-    get("/tens/espera", "tens", op.espera),
-    post("/tens/espera/gestion", "tens", op.esperaGestion),
-    get("/tens/comunicaciones", "tens", op.comunicaciones),
-    post("/tens/comunicacion", "tens", op.comunicacion),
-    post("/tens/enlace", "tens", op.enlace),
-    post("/tens/documentos/archivar", "tens", op.documentoArchivar),
+    get("/tens/agenda", "tens", controladorOperacion.tensAgenda),
+    get("/tens/pacientes", "tens", controladorOperacion.pacientes),
+    get("/tens/ficha", "tens", controladorOperacion.ficha),
+    post("/tens/paciente/preferencias", "tens", controladorOperacion.preferencias),
+    post("/tens/paciente/desactivar", "tens", controladorOperacion.desactivar),
+    get("/tens/reserva", "tens", controladorOperacion.reserva),
+    post("/tens/flujo", "tens", controladorOperacion.flujo),
+    post("/tens/cancelar", "tens", controladorOperacion.cancelar),
+    post("/tens/reagendar", "tens", controladorOperacion.reagendar),
+    get("/tens/espera", "tens", controladorOperacion.espera),
+    post("/tens/espera/gestion", "tens", controladorOperacion.esperaGestion),
+    get("/tens/comunicaciones", "tens", controladorOperacion.comunicaciones),
+    post("/tens/comunicacion", "tens", controladorOperacion.comunicacion),
+    post("/tens/enlace", "tens", controladorOperacion.enlace),
+    post("/tens/documentos/archivar", "tens", controladorOperacion.documentoArchivar),
   ];
   const todas = [
     ...nuevas,
@@ -96,9 +97,19 @@ function crearRutas(c) {
     post("/paciente/cuenta/acceso", null, cuenta.enviar),
     post("/paciente/salir", null, cuenta.salir),
     get("/paciente/mis-horas", null, cuenta.misHoras),
+    get("/demo/mensajes", null, demoMensajes.ver),
+    post("/demo/mensajes/responder", null, demoMensajes.responder),
+    post("/demo/mensajes/enviar", null, demoMensajes.enviar),
+    post("/demo/mensajes/avanzar", null, demoMensajes.avanzar),
+    post("/demo/mensajes/activar-whatsapp", null, demoMensajes.activarWhatsapp),
+    get("/demo/mensajes/encuesta", null, demoMensajes.encuesta),
+    post("/demo/mensajes/encuesta", null, demoMensajes.responderEncuesta),
+    get("/paciente/mensajes", null, mensajesPaciente.bandeja),
+    post("/paciente/mensajes/responder", null, mensajesPaciente.responder),
+    get("/paciente/mensajes/encuesta", null, mensajesPaciente.encuesta),
+    post("/paciente/mensajes/encuesta", null, mensajesPaciente.responderEncuesta),
     get("/paciente/mis-datos", null, cuenta.misDatos),
     post("/paciente/mis-datos", null, cuenta.guardarDatos),
-    post("/paciente/mis-datos/correccion", null, cuenta.correccion),
     get("/paciente/mis-documentos", null, cuenta.misDocumentos),
     post("/paciente/mis-documentos", null, cuenta.subirDocumento),
     get("/paciente/mis-documentos/archivo", null, cuenta.archivoDocumento),
@@ -139,6 +150,7 @@ function crearRutas(c) {
     post("/tens/espera", "tens", tens.registrarEspera),
     post("/tens/espera/asignar", "tens", tens.asignarEspera),
     post("/tens/espera/retirar", "tens", tens.retirarEspera),
+    post("/tens/espera/soltar", "tens", tens.soltarEspera),
     get("/tens/recepcion", "tens", tens.recepcion),
     post("/tens/recepcion", "tens", tens.registrarAsistencia),
     post("/tens/recepcion/llegada", "tens", tens.registrarLlegada),
@@ -148,9 +160,6 @@ function crearRutas(c) {
     post("/tens/documentos/verificar", "tens", tens.verificarDocumento),
     post("/tens/documentos/observar", "tens", tens.observarDocumento),
     get("/tens/documentos/archivo", "tens", tens.descargarDocumento),
-    get("/tens/bot", "tens", tens.bot),
-    post("/tens/bot/ejecutar", "tens", tens.ejecutarBot),
-    post("/tens/bot/responder", "tens", tens.responderBot),
     get("/tens/avisos", "tens", tens.avisos),
     post("/tens/avisos/leer", "tens", tens.leerAviso),
 
@@ -174,6 +183,6 @@ function crearRutas(c) {
     get("/admin/usuarios", "admin", admin.usuarios),
     get("/admin/auditoria", "admin", admin.auditoria),
   ];
-  return todas.filter((x) => botActivo || !x.ruta.startsWith("/tens/bot"));
+  return todas;
 }
 module.exports = { crearRutas };

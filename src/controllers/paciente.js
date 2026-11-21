@@ -1,15 +1,15 @@
 'use strict';
 const vistas = require('../views/paciente');
-const { normalizarRut } = require('../util/rut');
-const { error, ok } = require('./mensajes');
-const { cargarContexto, detalleCita } = require('./contexto');
-const { crearLimitador } = require('../util/limitador');
-const { infoSede } = require('../models/sedesInfo');
+const { normalizarRut } = require('../herramientas/rut');
+const { error, ok } = require('./mensajesDeError');
+const { cargarContexto, detalleCita } = require('./cargarListasBase');
+const { crearLimitador } = require('../herramientas/limitador');
+const { infoSede } = require('../models/informacionDeSedes');
 
 const LIMITE = 5;
 const VENTANA_MS = 60_000;
 
-function crearPacienteController({ citaRepo, catalogo, encuestas, cuentas }) {
+function crearControladorPaciente({ citaRepo, catalogo, encuestas, cuentas }) {
   const limitar = crearLimitador(VENTANA_MS);
   const excedido = (ip) => limitar(ip, LIMITE);
   return {
@@ -22,7 +22,7 @@ function crearPacienteController({ citaRepo, catalogo, encuestas, cuentas }) {
       const ctx = await cargarContexto(catalogo);
       const citas = (await citaRepo.buscarPorRut(rut))
         .filter((c) => c.estadoReserva === 'ACTIVA')
-        .map((c) => { const d = detalleCita(c, ctx); return { fecha: d.b?.fecha, hora: d.b?.hora, policlinico: d.pol?.nombre, whatsapp: d.pol && infoSede(d.pol.id)?.whatsapp, especialidad: d.prof?.especialidad, profesional: (d.reemplazo || d.prof)?.nombre, confirmada: c.estadoConfirmacion === 'CONFIRMADA' }; });
+        .map((c) => { const detalle = detalleCita(c, ctx); return { fecha: detalle.b?.fecha, hora: detalle.b?.hora, policlinico: detalle.pol?.nombre, whatsapp: detalle.pol && infoSede(detalle.pol.id)?.whatsapp, especialidad: detalle.prof?.especialidad, profesional: (detalle.reemplazo || detalle.prof)?.nombre, confirmada: c.estadoConfirmacion === 'CONFIRMADA' }; });
       return { html: vistas.formulario({ citas }, usuario) };
     },
     ayuda: async ({ usuario }) => ({ html: vistas.ayuda(usuario, await catalogo.policlinicos()) }),
@@ -37,4 +37,4 @@ function crearPacienteController({ citaRepo, catalogo, encuestas, cuentas }) {
     },
   };
 }
-module.exports = { crearPacienteController };
+module.exports = { crearControladorPaciente };

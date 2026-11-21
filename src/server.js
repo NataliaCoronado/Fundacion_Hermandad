@@ -1,36 +1,49 @@
 "use strict";
-require("./util/entorno").cargarEnv();
+const { cargarEnv, datosDemoActivos, cookieSegura } = require("./herramientas/entorno");
+cargarEnv();
 process.env.TZ ||= "America/Santiago";
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const { crearContenedor } = require("./contenedor");
+const { crearContenedor } = require("./armarAplicacion");
 const { crearRutas } = require("./rutas");
 const { leerCookie, DURACION_MS } = require("./auth/Sesiones");
 const { permitido, rutaInicio } = require("./auth/permisos");
-const { correr } = require("./util/contextoSolicitud");
-const { esValidacion } = require("./util/rechazos");
+const { correr } = require("./herramientas/contextoSolicitud");
+const { esValidacion } = require("./herramientas/erroresDeValidacion");
 const { pagina } = require("./views/layout");
-const { prohibido } = require("./views/auth");
+const { prohibido } = require("./views/autenticacion");
 const { conPeticion } = require("./views/contextoPortal");
 
+// Las vistas usan estilos y scripts en línea y las tipografías de Google Fonts.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
 const TIPOS = { ".jpg": "image/jpeg", ".png": "image/png", ".js": "text/javascript; charset=utf-8" };
 function archivoEstatico(pathname) {
-  // ECharts se sirve desde el propio servidor (sin CDN, sin cookies ni datos hacia terceros).
   if (pathname === "/vendor/echarts.min.js") {
     const ruta = path.join(__dirname, "..", "node_modules", "echarts", "dist", "echarts.min.js");
     return fs.existsSync(ruta) ? { ruta, tipo: TIPOS[".js"] } : null;
   }
-  const m = /^\/img\/([a-z0-9_-]+\.(?:jpg|png))$/.exec(pathname);
-  if (!m) return null;
-  const ruta = m[1].startsWith("profesional-") ? path.join(__dirname,"../datos/fotos",m[1]) : path.join(__dirname, "..", "public", "img", m[1]);
+  const coincidencia = /^\/img\/([a-z0-9_-]+\.(?:jpg|png))$/.exec(pathname);
+  if (!coincidencia) return null;
+  const ruta = coincidencia[1].startsWith("profesional-") ? path.join(__dirname,"../datos/fotos",coincidencia[1]) : path.join(__dirname, "..", "public", "img", coincidencia[1]);
   return fs.existsSync(ruta) ? { ruta, tipo: TIPOS[path.extname(ruta)] } : null;
 }
 
-const { parsearMultipart } = require("./util/multipart");
+const { parsearMultipart } = require("./herramientas/formulario-multipart");
 const MAX_FORM = 1e6;
 const MAX_ADJUNTO =
-  3 * require("./services/DocumentoService").MAX_BYTES + 1024 * 1024;
+  3 * require("./services/DocumentoServicio").MAX_BYTES + 1024 * 1024;
 const leerCuerpo = (req) =>
   new Promise((resolver) => {
     const tipo = req.headers["content-type"] || "";
@@ -75,26 +88,31 @@ const hostDeOrigen = (origen) => {
 };
 
 const RUTAS_PERSONAL_PUBLICAS = new Set(["/login", "/logout", "/restablecer"]);
-function crearServidor(c, modo = "todo") {
+function crearServidor(aplicacion, modo = "todo") {
   const esPersonal = (r) =>
     r.area !== null || RUTAS_PERSONAL_PUBLICAS.has(r.ruta);
-  const rutas = crearRutas(c).filter(
+  const rutas = crearRutas(aplicacion).filter(
     (r) =>
       modo === "todo" ||
       (modo === "personal" ? esPersonal(r) && r.ruta !== "/" : !esPersonal(r)),
   );
-  c.colaMutacion ||= Promise.resolve();
-  if (!c.limpieza) {
-    c.limpieza = setInterval(() => {
-      c.sesiones?.limpiar?.();
-      c.sesionesPaciente?.limpiar?.();
+  aplicacion.colaMutacion ||= Promise.resolve();
+  if (!aplicacion.limpieza) {
+    aplicacion.limpieza = setInterval(() => {
+      aplicacion.sesiones?.limpiar?.();
+      aplicacion.sesionesPaciente?.limpiar?.();
     }, 10 * 60_000);
-    c.limpieza.unref();
+    aplicacion.limpieza.unref();
   }
-  const secure = process.env.COOKIE_SECURE === "1" ? "; Secure" : "";
+  const segura = cookieSegura();
+  const secure = segura ? "; Secure" : "";
+  const seguridad = {
+    "Content-Security-Policy": CSP,
+    ...(segura ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+  };
   return http.createServer((req, res) => {
     const tokenPaciente = leerCookie(req.headers.cookie, "psid");
-    const paciente = tokenPaciente && c.sesionesPaciente ? c.sesionesPaciente.obtener(tokenPaciente) : null;
+    const paciente = tokenPaciente && aplicacion.sesionesPaciente ? aplicacion.sesionesPaciente.obtener(tokenPaciente) : null;
     return conPeticion({ paciente }, () =>
       atender(req, res, paciente, tokenPaciente).catch((e) => {
         console.error(e);
@@ -104,15 +122,15 @@ function crearServidor(c, modo = "todo") {
     );
   });
   async function webhookWhatsApp(req, res, url) {
-    const w = c.webhook;
+    const w = aplicacion.webhook;
     const responder = (estado, texto) => {
       res.writeHead(estado, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
       res.end(texto);
     };
     if (!w?.activo) return responder(404, "No encontrado.");
     if (req.method === "GET") {
-      const r = w.verificarSuscripcion(url.searchParams);
-      return responder(r.estado, r.cuerpo);
+      const respuesta = w.verificarSuscripcion(url.searchParams);
+      return responder(respuesta.estado, respuesta.cuerpo);
     }
     if (req.method !== "POST") return responder(405, "Método no permitido.");
     const trozos = [];
@@ -130,13 +148,13 @@ function crearServidor(c, modo = "todo") {
     } catch {
       return responder(400, "JSON inválido.");
     }
-    const anterior = c.colaMutacion;
+    const anterior = aplicacion.colaMutacion;
     let liberar;
-    c.colaMutacion = new Promise((r) => (liberar = r));
+    aplicacion.colaMutacion = new Promise((r) => (liberar = r));
     await anterior;
     try {
       await w.procesar(cuerpo);
-      c.guardar?.();
+      aplicacion.guardar?.();
       return responder(200, "EVENT_RECEIVED");
     } catch (e) {
       console.error("Webhook de WhatsApp:", e);
@@ -149,6 +167,7 @@ function crearServidor(c, modo = "todo") {
     const url = new URL(req.url, "http://localhost");
     if (url.pathname === "/webhook/whatsapp") return webhookWhatsApp(req, res, url);
     const cabeceras = {
+      ...seguridad,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
@@ -163,14 +182,13 @@ function crearServidor(c, modo = "todo") {
       res.end(html);
     };
     const token = leerCookie(req.headers.cookie, "sid");
-    const usuario = token ? c.sesiones.obtener(token) : null;
-    // Contexto de la solicitud: sirve para registrar quién hizo cada cambio y los intentos rechazados.
+    const usuario = token ? aplicacion.sesiones.obtener(token) : null;
     const solicitud = { usuario, ruta: url.pathname, metodo: req.method, registrado: false };
     const rechazar = (accion, detalle) => {
       if (solicitud.registrado) return;
       solicitud.registrado = true;
-      c.auditoria.rechazo(usuario, accion, detalle, { registro: url.pathname, idPoliclinico: usuario?.idPoliclinico || null });
-      c.guardar?.();
+      aplicacion.auditoria.rechazo(usuario, accion, detalle, { registro: url.pathname, idPoliclinico: usuario?.idPoliclinico || null });
+      aplicacion.guardar?.();
     };
     solicitud.registrarRechazo = (e) => {
       if (esValidacion(e.message)) return;
@@ -179,18 +197,18 @@ function crearServidor(c, modo = "todo") {
         DEMASIADOS_INTENTOS: "Límite de intentos superado",
         FUERA_DE_SEDE: "Acceso rechazado",
       }[e.message];
-      // Sin correo ni contraseña en el detalle: solo el motivo.
       rechazar(nombre || "Operación rechazada", String(e.message).slice(0, 200));
     };
     const est = req.method === "GET" && archivoEstatico(url.pathname);
     if (est) {
-      if(url.pathname.startsWith('/img/profesional-')) {
-        const equipo=(await c.catalogo.profesionales()).filter(p=>p.foto===url.pathname);
-        if(!usuario || (usuario.rol!=='ADMINISTRACION' && !equipo.some(p=>c.operacion.lugares(p).includes(Number(usuario.idPoliclinico))))) return enviar(403,prohibido(usuario));
+      const fotoPrivada = url.pathname.startsWith('/img/profesional-');
+      if(fotoPrivada) {
+        const equipo=(await aplicacion.catalogo.profesionales()).filter(p=>p.foto===url.pathname);
+        if(!usuario || (usuario.rol!=='ADMINISTRACION' && !equipo.some(p=>aplicacion.operacion.lugares(p).includes(Number(usuario.idPoliclinico))))) return enviar(403,prohibido(usuario));
       }
       res.writeHead(200, {
         "Content-Type": est.tipo,
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": fotoPrivada ? "private, max-age=3600" : "public, max-age=86400",
         "X-Content-Type-Options": "nosniff",
       });
       return fs.createReadStream(est.ruta).pipe(res);
@@ -237,8 +255,8 @@ function crearServidor(c, modo = "todo") {
     const cuerpo = req.method === "POST" ? await leerCuerpo(req) : {};
     let liberar;
     if (req.method === "POST" && !cuerpo.__excedido) {
-      const anterior = c.colaMutacion;
-      c.colaMutacion = new Promise((r) => {
+      const anterior = aplicacion.colaMutacion;
+      aplicacion.colaMutacion = new Promise((r) => {
         liberar = r;
       });
       await anterior;
@@ -255,14 +273,14 @@ function crearServidor(c, modo = "todo") {
           }),
         );
       if (ruta.area === "tens")
-        await require("./controllers/alcance").validar(
-          c,
+        await require("./controllers/validarAccesoPorSede").validarAccesoPorSede(
+          aplicacion,
           usuario,
           url.pathname,
           url.searchParams,
           cuerpo,
         );
-      const r = await correr(solicitud, () =>
+      const respuesta = await correr(solicitud, () =>
         ruta.manejador({
           consulta: url.searchParams,
           cuerpo,
@@ -273,49 +291,49 @@ function crearServidor(c, modo = "todo") {
           tokenPaciente,
         }),
       );
-      if (r.estado === 401) rechazar("Inicio de sesión rechazado", `${req.method} ${url.pathname}`);
-      else if (r.estado === 429) rechazar("Límite de intentos superado", `${req.method} ${url.pathname}`);
-      else if (r.estado === 403) rechazar("Acceso rechazado", `${req.method} ${url.pathname}`);
-      else if (r.estado === 400 && r.rechazo) solicitud.registrarRechazo({ message: r.rechazo });
-      c.guardar?.();
-      if (r.binario) {
+      if (respuesta.estado === 401) rechazar("Inicio de sesión rechazado", `${req.method} ${url.pathname}`);
+      else if (respuesta.estado === 429) rechazar("Límite de intentos superado", `${req.method} ${url.pathname}`);
+      else if (respuesta.estado === 403) rechazar("Acceso rechazado", `${req.method} ${url.pathname}`);
+      else if (respuesta.estado === 400 && respuesta.rechazo) solicitud.registrarRechazo({ message: respuesta.rechazo });
+      aplicacion.guardar?.();
+      if (respuesta.binario) {
         res.writeHead(200, {
           ...cabeceras,
-          "Content-Type": r.mime,
-          "Content-Disposition": `${r.enLinea ? "inline" : "attachment"}; filename="${r.nombreArchivo}"`,
+          "Content-Type": respuesta.mime,
+          "Content-Disposition": `${respuesta.enLinea ? "inline" : "attachment"}; filename="${respuesta.nombreArchivo}"`,
         });
-        return res.end(r.binario);
+        return res.end(respuesta.binario);
       }
-      if (r.redirigir) {
-        const extra = { Location: r.redirigir };
+      if (respuesta.redirigir) {
+        const extra = { Location: respuesta.redirigir };
         const galleta = (nombre, valor) =>
           `${nombre}=${valor}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${valor ? Math.floor(DURACION_MS / 1000) : 0}${secure}`;
         const galletas = [];
-        if (r.cookie !== undefined) galletas.push(galleta("sid", r.cookie));
-        if (r.cookiePaciente !== undefined) galletas.push(galleta("psid", r.cookiePaciente));
+        if (respuesta.cookie !== undefined) galletas.push(galleta("sid", respuesta.cookie));
+        if (respuesta.cookiePaciente !== undefined) galletas.push(galleta("psid", respuesta.cookiePaciente));
         if (galletas.length) extra["Set-Cookie"] = galletas;
         res.writeHead(302, { ...extra, ...cabeceras });
         return res.end();
       }
-      if (r.archivo) {
-        const nombre = r.archivo.nombre.replace(/[^\w.\- ]/g, "_");
+      if (respuesta.archivo) {
+        const nombre = respuesta.archivo.nombre.replace(/[^\w.\- ]/g, "_");
         res.writeHead(200, {
-          "Content-Type": r.archivo.mime,
-          "Content-Disposition": `${r.archivo.inline ? "inline" : "attachment"}; filename="${nombre}"`,
+          "Content-Type": respuesta.archivo.mime,
+          "Content-Disposition": `${respuesta.archivo.inline ? "inline" : "attachment"}; filename="${nombre}"`,
           "Cache-Control": "private, no-store",
           ...cabeceras,
         });
-        return fs.createReadStream(r.archivo.ruta).pipe(res);
+        return fs.createReadStream(respuesta.archivo.ruta).pipe(res);
       }
-      if (r.csv !== undefined) {
+      if (respuesta.csv !== undefined) {
         res.writeHead(200, {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${r.nombreArchivo}"`,
+          "Content-Disposition": `attachment; filename="${respuesta.nombreArchivo}"`,
           ...cabeceras,
         });
-        return res.end(r.csv);
+        return res.end(respuesta.csv);
       }
-      enviar(r.estado || 200, r.html);
+      enviar(respuesta.estado || 200, respuesta.html);
     } catch (e) {
       if (
         [
@@ -346,20 +364,20 @@ function crearServidor(c, modo = "todo") {
 
 async function arrancar() {
   const url = process.env.DATABASE_URL;
-  const db = url ? require("./db/pool").crearDb(url) : null;
+  const db = url ? require("./db/conexion-postgres").crearDb(url) : null;
   const persistencia =
-    new (require("./repositories/Persistencia").Persistencia)(
+    new (require("./repositories/GuardadoEnArchivoJson").GuardadoEnArchivoJson)(
       process.env.ARCHIVO_DATOS ||
         path.join(__dirname, "../datos", db ? "extras.json" : "estado.json"),
     );
-  const c = crearContenedor({
+  const aplicacion = crearContenedor({
     db,
     persistencia,
-    demo: process.env.DATOS_DEMO !== "0",
+    demo: datosDemoActivos(),
   });
-  await c.inicializar();
-  c.guardar();
-  require("./automaticos").iniciarAutomaticos(c);
+  await aplicacion.inicializar();
+  aplicacion.guardar();
+  require("./tareasProgramadas").iniciarAutomaticos(aplicacion);
   const argumentoPuerto = process.argv.findIndex((x) => x === "--port");
   const puertoCli =
     argumentoPuerto >= 0 && /^\d+$/.test(process.argv[argumentoPuerto + 1] || "")
@@ -370,19 +388,19 @@ async function arrancar() {
     process.env.PORT_PERSONAL ?? (puertoCli ? 0 : 3001),
   );
   if (!puertoPersonal) {
-    crearServidor(c).listen(puerto, () =>
+    crearServidor(aplicacion).listen(puerto, () =>
       console.log(
-        `Hermandad citas (todo en uno) en http://localhost:${puerto} (almacenamiento: ${c.modo})`,
+        `Hermandad citas (todo en uno) en http://localhost:${puerto} (almacenamiento: ${aplicacion.modo})`,
       ),
     );
     return;
   }
-  crearServidor(c, "paciente").listen(puerto, () =>
+  crearServidor(aplicacion, "paciente").listen(puerto, () =>
     console.log(`Portal de pacientes:  http://localhost:${puerto}`),
   );
-  crearServidor(c, "personal").listen(puertoPersonal, () =>
+  crearServidor(aplicacion, "personal").listen(puertoPersonal, () =>
     console.log(
-      `Sitio del personal:    http://localhost:${puertoPersonal}  (almacenamiento: ${c.modo})`,
+      `Sitio del personal:    http://localhost:${puertoPersonal}  (almacenamiento: ${aplicacion.modo})`,
     ),
   );
 }

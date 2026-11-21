@@ -2,7 +2,7 @@
 const test = require("node:test"),
   assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearPg } = require("./helpers/pglite");
 
 const PDF = { nombre: "cartola.pdf", datos: Buffer.from("%PDF-1.4\nprueba") };
@@ -32,7 +32,6 @@ test("BD: la auditoría se guarda en la tabla auditoria con su resultado", async
     assert.deepEqual([filas[0].operacion, filas[0].entidad, filas[0].resultado], ["Cita agendada", "Citas", "EXITOSO"]);
     assert.equal(filas[0].u, s.tens.id);
     assert.deepEqual([filas[1].operacion, filas[1].resultado], ["Acceso rechazado", "RECHAZADO"]);
-    // al reiniciar la aplicación el historial vuelve desde la base
     const c2 = await s.recrear();
     assert.equal(c2.auditoria.listar().length, 2);
     assert.equal(c2.auditoria.listar()[0].resultado, "RECHAZADO");
@@ -103,7 +102,7 @@ test("BD: cada cambio de estado de una cita deja una fila en cita_historial", as
 test("BD: la migración agrega lo necesario y se puede repetir sin error", async () => {
   const { pg, db } = await crearPg();
   try {
-    const sql = fs.readFileSync(path.join(__dirname, "..", "db", "04_migracion_auditoria_documentos.sql"), "utf8");
+    const sql = fs.readFileSync(path.join(__dirname, "..", "base-de-datos", "04_migracion_auditoria_documentos.sql"), "utf8");
     await pg.exec("ALTER TABLE auditoria DROP COLUMN IF EXISTS resultado");
     await pg.exec(sql);
     await pg.exec(sql);
@@ -115,7 +114,7 @@ test("BD: la migración agrega lo necesario y se puede repetir sin error", async
 test("Migración: auditoría y documentos de extras.json pasan a las tablas sin duplicarse", async () => {
   const s = await contenedor();
   try {
-    const { migrar } = require("../src/repositories/MigracionExtras");
+    const { migrar } = require("../src/repositories/MigracionRegistrosComplementarios");
     const extras = {
       auditoria: [{ id: 1, fecha: "2026-11-18 10:00", usuario: "TENS", accion: "Cita agendada", detalle: "cita 1", idUsuario: s.tens.id, modulo: "Citas", registro: "1", idPoliclinico: 1 }],
       documentos: [{ id: 1, rut: RUT, tipo: "Orden médica / derivación", registradoPor: "TENS", fecha: "2026-11-18 10:05", verificado: true, verificadoPor: s.tens.nombre, idPoliclinico: 1, observacion: "", adjunto: { guardado: "11111111-1_Orden_2026-11-18_abc123.pdf", original: "orden.pdf", formato: "PDF", mime: "application/pdf", kb: 3 } }],
@@ -130,7 +129,6 @@ test("Migración: auditoría y documentos de extras.json pasan a las tablas sin 
   } finally { limpiar(); await s.db.cerrar(); }
 });
 
-// Simula una base creada antes de este cambio: sin resultado en auditoria y sin las columnas nuevas de documento.
 const dejarComoAntes = async (pg) => {
   await pg.exec(`ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS ck_auditoria_resultado;
     ALTER TABLE auditoria DROP COLUMN resultado;
@@ -139,7 +137,7 @@ const dejarComoAntes = async (pg) => {
     ALTER TABLE documento DROP COLUMN etiqueta_tipo, DROP COLUMN nombre_original, DROP COLUMN id_policlinico, DROP COLUMN especialidad, DROP COLUMN vigente_hasta, DROP COLUMN reemplaza, DROP COLUMN archivado;`);
 };
 const extrasHeredados = (c) => ({
-  ...require("../src/models/datos").crearDatos().extras,
+  ...require("../src/models/datosIniciales").crearDatos().extras,
   auditoria: [
     { id: 1, fecha: "2026-11-18 10:00", usuario: "TENS", accion: "Cita agendada", detalle: "cita 1", idUsuario: null, modulo: "Citas", registro: "1", idPoliclinico: 1 },
     { id: 2, fecha: "2026-11-18 10:05", usuario: "TENS", accion: "Estado del integrante actualizado con un nombre bastante largo para la columna", detalle: "x", idUsuario: null, modulo: "Equipo", registro: "7", idPoliclinico: 1 },

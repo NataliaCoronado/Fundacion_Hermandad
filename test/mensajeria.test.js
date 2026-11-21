@@ -1,9 +1,9 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert");
-const { crearContenedor } = require("../src/contenedor");
-const { WhatsAppMeta } = require("../src/transport/WhatsAppMeta");
-const { ejecutarCiclo } = require("../src/automaticos");
+const { crearContenedor } = require("../src/armarAplicacion");
+const { WhatsAppMeta } = require("../src/mensajeria/WhatsAppMeta");
+const { ejecutarCiclo } = require("../src/tareasProgramadas");
 
 const tens = { id: "u2", nombre: "TENS", rol: "TENS_TONS", idPoliclinico: 1 };
 const consentir = (c, rut, valor = true) => {
@@ -26,7 +26,7 @@ test("despachador: con transporte simulado el estado es Simulado, nunca Enviado 
   assert.strictEqual(f.estado, "Simulado");
   assert.match(f.detalle, /no salió ningún mensaje real/);
   assert.ok(!c.extras.listar("comunicaciones").some((x) => ["Enviado", "Entregado"].includes(x.estado)));
-  assert.match(bandejaSaliente(c)[0].texto, /Hermandad de Dolores:.*comprobante/);
+  assert.match(bandejaSaliente(c)[0].texto, /Hermandad de Dolores:[\s\S]*comprobante/);
   assert.ok(!/código/i.test(bandejaSaliente(c)[0].texto), "el comprobante no menciona un código de reserva");
   assert.strictEqual((await c.despachador.procesar()).simulados, 0);
   assert.strictEqual(bandejaSaliente(c).length, 1);
@@ -224,4 +224,28 @@ test("despachador: el enlace que no cambió se envía igual que antes", async ()
   await c.despachador.procesar();
   assert.strictEqual(c.extras.buscar("comunicaciones", m.id).estado, "Simulado");
   assert.match(bandejaSaliente(c)[0].texto, /SALA-A$/);
+});
+
+test("recibo web (sin botones: la confirmación llega después) y encuesta después de asistir, en ambos canales simulados", async () => {
+  const { notificarEncuestaAtencion } = require("../src/services/ComunicacionesPaciente");
+  for (const canal of ["WhatsApp", "Correo"]) {
+    const c = crearContenedor({ whatsapp: "simulado" });
+    const anterior = await c.citaRepo.buscarPorId(1);
+    const ficha = await c.catalogo.paciente(anterior.rut);
+    await c.catalogo.actualizarPaciente(ficha.rut, { ...ficha, correo: "paciente@ejemplo.cl" });
+    const cita = await c.citaRepo.actualizar({ ...anterior, canal: "WEB" });
+    consentir(c, cita.rut);
+    const recibo = await c.operacion.comunicar(tens, cita, canal, "Comprobante de reserva");
+    assert.strictEqual((await c.despachador.enviar(recibo)).estado, "Simulado");
+    assert.deepStrictEqual(bandejaSaliente(c)[0].botones, []);
+    assert.strictEqual(bandejaSaliente(c)[0].encuestaReserva, true);
+    assert.strictEqual(await notificarEncuestaAtencion(c, cita, tens), null);
+    assert.strictEqual(await notificarEncuestaAtencion(c, { ...cita, asistencia: "NO_ASISTIO" }, tens), null);
+    const atendida = await c.agendamiento.registrarAsistencia(cita.id, true);
+    const envios = await Promise.all([notificarEncuestaAtencion(c, atendida, tens), notificarEncuestaAtencion(c, atendida, tens)]);
+    assert.strictEqual(envios.filter(Boolean).length, 1);
+    const encuestas = bandejaSaliente(c).filter((m) => m.tipo === "Encuesta de atención");
+    assert.strictEqual(encuestas.length, 1);
+    assert.strictEqual(encuestas[0].canal || "WhatsApp", canal);
+  }
 });

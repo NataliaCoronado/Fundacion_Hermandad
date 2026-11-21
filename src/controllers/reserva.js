@@ -2,12 +2,12 @@
 const crypto = require("node:crypto");
 const vistas = require("../views/reserva");
 const { fechaLarga } = require("../views/paciente");
-const { normalizarRut, rutValido } = require("../util/rut");
-const { hoy, textoLocal } = require("../util/tiempo");
-const { error, ok } = require("./mensajes");
-const { crearLimitador } = require("../util/limitador");
-const { comprobantePdf } = require("../services/ComprobanteService");
-const { MAX_BYTES } = require("../services/DocumentoService");
+const { normalizarRut, rutValido } = require("../herramientas/rut");
+const { hoy, textoLocal } = require("../herramientas/tiempo");
+const { error, ok } = require("./mensajesDeError");
+const { crearLimitador } = require("../herramientas/limitador");
+const { comprobantePdf } = require("../services/ComprobanteServicio");
+const { MAX_BYTES } = require("../services/DocumentoServicio");
 
 const TTL_MS = 20 * 60_000;
 const LIMITE = 10;
@@ -17,26 +17,26 @@ const REQUISITOS = ["Cartola FONASA", "Credencial CESFAM"];
 const maxBytesFlujos = () => Number(process.env.MAX_MB_ADJUNTOS_EN_ESPERA || 150) * 1024 * 1024;
 const FIRMAS = [Buffer.from("%PDF"), Buffer.from([0xff, 0xd8, 0xff]), Buffer.from([0x89, 0x50, 0x4e, 0x47])];
 
-function crearReservaController(c) {
-  const { catalogo, agendamiento, pacientes, documentos, operacion: op, cuentas, auditoria, encuestas } = c;
+function crearControladorReserva(aplicacion) {
+  const { catalogo, agendamiento, pacientes, documentos, operacion: servicioOperacion, cuentas, encuestas } = aplicacion;
   const flujos = new Map();
   const limitar = crearLimitador(VENTANA_MS);
   const excedido = (ip) => limitar(ip, LIMITE);
   const activo = () => process.env.RESERVA_WEB !== "0";
   const apagado = (usuario) => ({ estado: 503, html: vistas.apagado({ usuario }) });
   const sesion = (t) => {
-    const n = Date.now();
-    for (const [k, v] of flujos) if (v.vence < n) flujos.delete(k);
-    const f = t && flujos.get(t);
-    if (f) f.vence = n + TTL_MS;
-    return f || null;
+    const ahora = Date.now();
+    for (const [k, v] of flujos) if (v.vence < ahora) flujos.delete(k);
+    const flujo = t && flujos.get(t);
+    if (flujo) flujo.vence = ahora + TTL_MS;
+    return flujo || null;
   };
   const guard = (fn) => async (a) => {
     if (!activo()) return apagado(a.usuario);
-    const t = a.consulta.get("t") || a.cuerpo.t;
-    const f = sesion(t);
-    if (!f) return { redirigir: "/agendar" };
-    return fn({ ...a, t, f });
+    const token = a.consulta.get("t") || a.cuerpo.t;
+    const flujo = sesion(token);
+    if (!flujo) return { redirigir: "/agendar" };
+    return fn({ ...a, t: token, f: flujo });
   };
 
   const espsDe = (p) => (p.especialidades?.length ? p.especialidades : [p.especialidad]);
@@ -45,7 +45,7 @@ function crearReservaController(c) {
     const ids = new Set(sedes.map((s) => s.id));
     const profs = (await catalogo.profesionales())
       .filter((p) => p.activo)
-      .map((p) => ({ ...p, lugares: op.lugares(p).filter((id) => ids.has(id)), esps: espsDe(p).filter((e) => catalogo.especialidadActiva?.(e) !== false) }))
+      .map((p) => ({ ...p, lugares: servicioOperacion.lugares(p).filter((id) => ids.has(id)), esps: espsDe(p).filter((e) => catalogo.especialidadActiva?.(e) !== false) }))
       .filter((p) => p.lugares.length && p.esps.length)
       .sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
     const espsPorLugar = {};
@@ -53,19 +53,19 @@ function crearReservaController(c) {
     return { sedes, profs, espsPorLugar };
   }
   async function libres(f) {
-    let bs = await agendamiento.bloquesDisponibles({
+    let bloquesDisponibles = await agendamiento.bloquesDisponibles({
       idPoliclinico: f.lugar === "red" ? undefined : f.lugar,
       especialidad: f.modo === "esp" ? f.esp : undefined,
     });
-    if (f.modo === "prof") bs = bs.filter((b) => b.idProfesional === f.prof);
+    if (f.modo === "prof") bloquesDisponibles = bloquesDisponibles.filter((b) => b.idProfesional === f.prof);
     const ahora = textoLocal();
-    return bs.filter((b) => `${b.fecha} ${b.hora}` > ahora);
+    return bloquesDisponibles.filter((b) => `${b.fecha} ${b.hora}` > ahora);
   }
   const ctxBloque = async (idBloque) => {
-    const b = await catalogo.bloque(idBloque);
-    const prof = b && (await catalogo.profesional(b.idProfesional));
-    const sede = prof && (await catalogo.policlinico(op.sedeBloque(b, prof)));
-    return b && prof && sede ? { b, prof, sede, esp: b.especialidad || prof.especialidad } : null;
+    const bloque = await catalogo.bloque(idBloque);
+    const prof = bloque && (await catalogo.profesional(bloque.idProfesional));
+    const sede = prof && (await catalogo.policlinico(servicioOperacion.sedeBloque(bloque, prof)));
+    return bloque && prof && sede ? { b: bloque, prof, sede, esp: bloque.especialidad || prof.especialidad } : null;
   };
   const resumenBusqueda = async (f) => {
     const lugar = f.lugar === "red" ? "Toda la red" : (await catalogo.policlinico(f.lugar))?.nombre;
@@ -83,8 +83,8 @@ function crearReservaController(c) {
 
   async function vistaDatos({ t, f, usuario, mensaje, v }) {
     const ficha = await catalogo.paciente(f.rut);
-    const x = await ctxBloque(f.idBloque);
-    const cita = `${x.esp} · ${x.prof.nombre} · ${fechaLarga(x.b.fecha)}, ${x.b.hora} · ${x.sede.nombre}`;
+    const contextoBloque = await ctxBloque(f.idBloque);
+    const cita = `${contextoBloque.esp} · ${contextoBloque.prof.nombre} · ${fechaLarga(contextoBloque.b.fecha)}, ${contextoBloque.b.hora} · ${contextoBloque.sede.nombre}`;
     const modo = !ficha ? "nuevo" : f.verificado ? "existente" : "existente-sin-sesion";
     const docs = ficha && f.verificado ? await docsDe(f.rut) : [];
     return {
@@ -97,22 +97,22 @@ function crearReservaController(c) {
   }
   async function resumen(f) {
     const ficha = await catalogo.paciente(f.rut);
-    const x = await ctxBloque(f.idBloque);
+    const contextoBloque = await ctxBloque(f.idBloque);
     const identificado = !ficha || f.verificado;
     const nombre = ficha ? ficha.nombre : `${f.nuevo.nombres} ${f.nuevo.apellidos}`.trim();
     const contacto = ficha && !f.actualizar ? ficha : { ...(f.nuevo || {}), ...(f.actualizar || {}) };
     const canal = !f.comunicaciones || !identificado ? null : contacto.tieneWhatsapp && contacto.telefono ? "WhatsApp" : contacto.correo ? "Correo" : null;
     return {
-      nombre, identificado, rut: f.rut, nuevo: !ficha, actualiza: !!f.actualizar, lugar: x.sede.nombre, tele: !!x.sede.telemedicina, idSede: x.sede.id,
-      esp: x.esp, prof: x.prof.nombre, fecha: x.b.fecha, hora: x.b.hora, docs: f.docs.map((d) => ({ tipo: d.tipo, nombre: d.archivo.nombre })), cambio: f.cambioDatos || "", canal,
+      nombre, identificado, rut: f.rut, nuevo: !ficha, actualiza: !!f.actualizar, lugar: contextoBloque.sede.nombre, tele: !!contextoBloque.sede.telemedicina, idSede: contextoBloque.sede.id,
+      esp: contextoBloque.esp, prof: contextoBloque.prof.nombre, fecha: contextoBloque.b.fecha, hora: contextoBloque.b.hora, docs: f.docs.map((d) => ({ tipo: d.tipo, nombre: d.archivo.nombre })), cambio: f.cambioDatos || "", canal,
     };
   }
 
   return {
     inicio: async ({ usuario, paciente, consulta }) => {
       if (!activo()) return apagado(usuario);
-      const f = sesion(consulta.get("t"));
-      const d = f ? { rut: f.rut, quien: f.quien, lugar: f.lugar, modo: f.modo, esp: f.esp, prof: f.prof, consentimiento: true, comunicaciones: f.comunicaciones } : { quien: consulta.get("quien") || undefined, lugar: consulta.get("lugar") || undefined };
+      const flujo = sesion(consulta.get("t"));
+      const d = flujo ? { rut: flujo.rut, quien: flujo.quien, lugar: flujo.lugar, modo: flujo.modo, esp: flujo.esp, prof: flujo.prof, consentimiento: true, comunicaciones: flujo.comunicaciones } : { quien: consulta.get("quien") || undefined, lugar: consulta.get("lugar") || undefined };
       return { html: vistas.inicio({ oferta: await oferta(), d, usuario, cuenta: await datosCuenta(paciente) }) };
     },
     iniciar: async ({ cuerpo: d, ip, usuario, paciente }) => {
@@ -140,15 +140,15 @@ function crearReservaController(c) {
       const ficha = await catalogo.paciente(rut);
       if (ficha && ficha.activo === false) return fallo("Este RUT no puede reservar por internet. Comunícate con tu policlínico.");
       const verificado = !!(cuenta && (await cuentas.puedeVer(cuenta.rut, rut)));
-      const t = crypto.randomBytes(18).toString("hex");
-      flujos.set(t, { rut, quien: d.quien, lugar, modo, esp, prof, comunicaciones: d.comunicaciones === "1", verificado, docs: [], vence: Date.now() + TTL_MS });
-      return { redirigir: `/agendar/calendario?t=${t}` };
+      const token = crypto.randomBytes(18).toString("hex");
+      flujos.set(token, { rut, quien: d.quien, lugar, modo, esp, prof, comunicaciones: d.comunicaciones === "1", verificado, docs: [], vence: Date.now() + TTL_MS });
+      return { redirigir: `/agendar/calendario?t=${token}` };
     },
 
     calendario: guard(async ({ t, f, consulta, usuario }) => {
-      const bs = await libres(f);
+      const bloquesLibres = await libres(f);
       const dias = new Map();
-      for (const b of bs) dias.set(b.fecha, (dias.get(b.fecha) || 0) + 1);
+      for (const b of bloquesLibres) dias.set(b.fecha, (dias.get(b.fecha) || 0) + 1);
       const fechas = [...dias.keys()].sort();
       const MES = /^\d{4}-\d{2}$/;
       const mesHoy = hoy().slice(0, 7);
@@ -161,17 +161,17 @@ function crearReservaController(c) {
       const dia = pedidoDia && pedidoDia.startsWith(mes) ? pedidoDia : [...delMes.keys()].sort()[0] || "";
       const mover = (n) => {
         const [a, m] = mes.split("-").map(Number);
-        const d = new Date(Date.UTC(a, m - 1 + n, 1));
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        const fecha = new Date(Date.UTC(a, m - 1 + n, 1));
+        return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`;
       };
       const antes = mes > mesHoy ? mover(-1) : "";
       const despues = mes < ultimo ? mover(1) : "";
       const grupos = [];
-      for (const b of bs.filter((x) => x.fecha === dia).sort((x, y) => x.hora.localeCompare(y.hora))) {
-        const x = await ctxBloque(b.id);
-        if (!x) continue;
-        let g = grupos.find((y) => y.prof.id === x.prof.id && y.sede.id === x.sede.id);
-        if (!g) grupos.push((g = { prof: x.prof, sede: x.sede, esp: x.esp, bloques: [] }));
+      for (const b of bloquesLibres.filter((x) => x.fecha === dia).sort((x, y) => x.hora.localeCompare(y.hora))) {
+        const contextoBloque = await ctxBloque(b.id);
+        if (!contextoBloque) continue;
+        let g = grupos.find((y) => y.prof.id === contextoBloque.prof.id && y.sede.id === contextoBloque.sede.id);
+        if (!g) grupos.push((g = { prof: contextoBloque.prof, sede: contextoBloque.sede, esp: contextoBloque.esp, bloques: [] }));
         g.bloques.push(b);
       }
       return { html: vistas.calendario({ t, resumen: await resumenBusqueda(f), rut: f.rut, mes, antes, despues, dias: delMes, dia, grupos, usuario }) };
@@ -197,7 +197,7 @@ function crearReservaController(c) {
           if (!a || typeof a === "string") continue;
           if (!TIPOS_PORTAL.includes(d[`tipo${i}`])) throw new Error(`Elige el tipo del documento ${i}.`);
           if (a.datos.length > MAX_BYTES) throw new Error(`El documento ${i} supera los 5 MB.`);
-          if (!FIRMAS.some((s) => a.datos.subarray(0, s.length).equals(s))) throw new Error(`El documento ${i} debe ser PDF, JPG o PNG.`);
+          if (!FIRMAS.some((s) => a.datos.subarray(0, s.length).equals(s))) throw new Error(`El documento ${i} no es un PDF, JPG o PNG válido. Sube otro archivo.`);
           docs.push({ tipo: d[`tipo${i}`], archivo: { nombre: a.nombre, datos: a.datos } });
         }
         const base = { ...entrada, tieneWhatsapp: d.tieneWhatsapp === "1" };
@@ -240,39 +240,45 @@ function crearReservaController(c) {
       return { html: vistas.revisar({ t, r: await resumen(f), usuario }) };
     }),
     confirmar: guard(async ({ t, f, usuario, paciente }) => {
-      if (f.confirmada) return { html: vistas.confirmada({ t, r: f.confirmada.r, envio: f.confirmada.envio, cuenta: !!paciente, usuario }) };
+      if (f.confirmada) return { html: vistas.confirmada({ t, r: f.confirmada.r, envio: f.confirmada.envio, verMensajes: paciente?.rut === f.rut ? f.confirmada.verMensajes : null, cuenta: !!paciente, usuario }) };
       if (!f.idBloque) return { redirigir: `/agendar/calendario?t=${t}` };
-      const x = await ctxBloque(f.idBloque);
-      const portal = { id: null, nombre: "Paciente (portal web)", idPoliclinico: x?.sede.id };
+      const contextoBloque = await ctxBloque(f.idBloque);
+      const portal = { id: null, nombre: "Paciente (portal web)", idPoliclinico: contextoBloque?.sede.id };
       try {
-        if (!x || !(await libres(f)).some((b) => b.id === f.idBloque)) throw new Error("BLOQUE_NO_DISPONIBLE");
+        if (!contextoBloque || !(await libres(f)).some((b) => b.id === f.idBloque)) throw new Error("BLOQUE_NO_DISPONIBLE");
         const ficha = await catalogo.paciente(f.rut);
         if (!ficha) {
           if (!f.nuevo) return { redirigir: `/agendar/datos?t=${t}` };
           await pacientes.crear({ ...f.nuevo, rut: f.rut, consentimiento: true });
-          op.aud(portal, "Ficha creada desde el portal", "Pacientes", f.rut, null, { rut: f.rut }, x.sede.id);
+          servicioOperacion.aud(portal, "Ficha creada desde el portal", "Pacientes", f.rut, null, { rut: f.rut }, contextoBloque.sede.id);
         } else if (f.actualizar) {
           await pacientes.actualizar(f.rut, f.actualizar);
-          op.aud(portal, "Datos actualizados desde el portal", "Pacientes", f.rut, ficha, await catalogo.paciente(f.rut), x.sede.id);
+          servicioOperacion.aud(portal, "Datos actualizados desde el portal", "Pacientes", f.rut, ficha, await catalogo.paciente(f.rut), contextoBloque.sede.id);
         }
         const identificado = !ficha || f.verificado;
-        if (identificado) op.registrarConsentimiento(f.rut, { canal: "Portal web", comunicaciones: f.comunicaciones, usuario: portal });
+        if (identificado) servicioOperacion.registrarConsentimiento(f.rut, { canal: "Portal web", comunicaciones: f.comunicaciones, usuario: portal });
         const cita = await agendamiento.agendar({ rut: f.rut, idBloque: f.idBloque, canal: "WEB" });
-        op.asociarPaciente({ idPoliclinico: x.sede.id }, f.rut);
+        servicioOperacion.asociarPaciente({ idPoliclinico: contextoBloque.sede.id }, f.rut);
         for (const doc of f.docs)
           await documentos.registrar({
             rut: f.rut, tipo: doc.tipo, archivo: doc.archivo, usuario: portal,
             observacion: identificado ? "Adjuntado por el paciente en el portal" : "Adjuntado en el portal sin iniciar sesión: confirmar la identidad al revisar",
           });
         if (f.cambioDatos)
-          cuentas.solicitar({ rut: f.rut, tipo: "Actualización de datos (portal, sin iniciar sesión)", detalle: f.cambioDatos, idPoliclinico: x.sede.id });
-        op.aud(portal, "Reserva web registrada", "Reservas", cita.id, null, { rut: f.rut, idBloque: f.idBloque, documentos: f.docs.length }, x.sede.id);
+          cuentas.solicitar({ rut: f.rut, tipo: "Actualización de datos (portal, sin iniciar sesión)", detalle: f.cambioDatos, idPoliclinico: contextoBloque.sede.id });
+        servicioOperacion.aud(portal, "Reserva web registrada", "Reservas", cita.id, null, { rut: f.rut, idBloque: f.idBloque, documentos: f.docs.length }, contextoBloque.sede.id);
         f.verificado ||= !ficha;
         const r = await resumen({ ...f, actualizar: null, nuevo: null });
-        let envio = "";
+        let envio = "", verMensajes;
         if (r.canal) {
-          let m = await op.comunicar(portal, cita, r.canal, "Comprobante de reserva");
-          try { m = await c.despachador.enviar(m); } catch (e) { console.error(e); }
+          let m = await servicioOperacion.comunicar(portal, cita, r.canal, "Comprobante de reserva");
+          try { m = await aplicacion.despachador.enviar(m); } catch (e) { console.error(e); }
+          if (m.estado === "Simulado") {
+            const mensaje = aplicacion.extras.listar("bandeja").findLast((x) => x.idComunicacion === m.id && x.idCita === cita.id);
+            if (mensaje) verMensajes = "/paciente/mensajes?" + new URLSearchParams({
+              canal: r.canal.toLowerCase(), mensaje: r.canal === "Correo" ? "b-" + mensaje.id : "hermandad",
+            });
+          }
           envio = {
             Enviado: `Te enviamos el comprobante por ${r.canal}.`,
             Simulado: `El envío automático por ${r.canal} aún no está activo, por lo que no se envió ningún mensaje. Descarga el comprobante.`,
@@ -280,9 +286,9 @@ function crearReservaController(c) {
           }[m.estado] || `No fue posible enviar el comprobante por ${r.canal}. Descarga el comprobante.`;
         } else if (!f.comunicaciones) envio = "No autorizaste el envío por WhatsApp o correo: descarga o imprime el comprobante.";
         else if (!r.identificado) envio = "Por seguridad, el comprobante no se envía a los datos de contacto guardados si no has iniciado sesión. Descárgalo o imprímelo.";
-        f.confirmada = { idCita: cita.id, r, envio };
+        f.confirmada = { idCita: cita.id, r, envio, verMensajes };
         f.docs = [];
-        return { html: vistas.confirmada({ t, r, envio, cuenta: !!paciente, usuario }) };
+        return { html: vistas.confirmada({ t, r, envio, verMensajes: paciente?.rut === f.rut ? verMensajes : null, cuenta: !!paciente, usuario }) };
       } catch (e) {
         if (["BLOQUE_OCUPADO", "BLOQUE_NO_DISPONIBLE"].includes(e.message))
           return { estado: 409, html: vistas.revisar({ t, r: await resumen(f), usuario, mensaje: { tipo: "error", texto: "Esa hora ya no está disponible. Elige otra hora en el calendario." } }) };
@@ -316,17 +322,17 @@ function crearReservaController(c) {
   };
 
   async function pdfDeCita(idCita) {
-    const cita = await c.citaRepo.buscarPorId(idCita);
-    const x = cita && (await ctxBloque(cita.idBloque));
-    const p = cita && (await catalogo.paciente(cita.rut));
-    if (!cita || cita.estadoReserva === "CANCELADA" || !x || !p) throw new Error("CITA_NO_ENCONTRADA");
+    const cita = await aplicacion.citaRepo.buscarPorId(idCita);
+    const contextoBloque = cita && (await ctxBloque(cita.idBloque));
+    const paciente = cita && (await catalogo.paciente(cita.rut));
+    if (!cita || cita.estadoReserva === "CANCELADA" || !contextoBloque || !paciente) throw new Error("CITA_NO_ENCONTRADA");
     return comprobantePdf({
-      paciente: { rut: p.rut, nombre: p.nombre },
-      bloque: { ...x.b, especialidad: x.esp },
-      profesional: cita.idProfesionalReemplazo ? await catalogo.profesional(cita.idProfesionalReemplazo) : x.prof,
-      sede: x.sede,
+      paciente: { rut: paciente.rut, nombre: paciente.nombre },
+      bloque: { ...contextoBloque.b, especialidad: contextoBloque.esp },
+      profesional: cita.idProfesionalReemplazo ? await catalogo.profesional(cita.idProfesionalReemplazo) : contextoBloque.prof,
+      sede: contextoBloque.sede,
       emitido: textoLocal(),
     });
   }
 }
-module.exports = { crearReservaController };
+module.exports = { crearControladorReserva };

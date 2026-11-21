@@ -7,12 +7,12 @@
     "dev": "node --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test",
-    "test:postgres-embebido": "node scripts/verificar-postgres-embebido.js",
+    "test:postgres-embebido": "node scripts/pruebas-integracion-pglite.js",
     "start:json": "node src/server.js",
-    "humo": "node scripts/humo.js",
+    "humo": "node scripts/verificar-paginas.js",
     "datos:demo": "node scripts/datos-demo.js",
-    "respaldo": "node scripts/respaldo.js",
-    "restaurar": "node scripts/respaldo.js restaurar"
+    "respaldo": "node scripts/ejecutarRespaldo.js",
+    "restaurar": "node scripts/ejecutarRespaldo.js restaurar"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",

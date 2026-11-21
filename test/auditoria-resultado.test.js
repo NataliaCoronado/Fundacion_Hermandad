@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 
 async function sitio() {
@@ -44,7 +44,6 @@ test("Auditoría: un intento fuera de la sede o del rol queda como RECHAZADO", a
     assert.match(a.accion, /Acceso rechazado/);
     assert.equal(a.usuario, "TENS/TONS San Isidro");
     assert.match(a.detalle, /\/admin\/resumen/);
-    // otra sede intentando verificar un documento ajeno
     await s.c.documentos.registrar({ rut: "11111111-1", tipo: "Cartola FONASA", usuario: { nombre: "TENS", idPoliclinico: 1 } });
     const id = s.c.documentos.listar()[0].id;
     const antes = s.c.auditoria.listar().length;

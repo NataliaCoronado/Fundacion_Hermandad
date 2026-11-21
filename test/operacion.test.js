@@ -4,9 +4,8 @@ const test = require("node:test"),
   fs = require("node:fs"),
   os = require("node:os"),
   path = require("node:path");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
-const { hoy, sumarDias } = require("../src/util/tiempo");
 const admin = { id: "u1", nombre: "Administración", rol: "ADMINISTRACION" },
   tens = { id: "u2", nombre: "TENS", rol: "TENS_TONS", idPoliclinico: 1 },
   tele = { id: "u3", nombre: "Remoto", rol: "TELEMEDICINA", idPoliclinico: 7 };
@@ -185,13 +184,13 @@ test("expiración por inactividad y permisos de cuentas sin lugar", async () => 
 test("persistencia: conserva pacientes, metadatos y auditoría entre contenedores", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hermandad-")),
     archivo = path.join(dir, "estado.json"),
-    { Persistencia } = require("../src/repositories/Persistencia");
+    { GuardadoEnArchivoJson } = require("../src/repositories/GuardadoEnArchivoJson");
   try {
-    let c = crearContenedor({ persistencia: new Persistencia(archivo) });
+    let c = crearContenedor({ persistencia: new GuardadoEnArchivoJson(archivo) });
     c.operacion.asociarPaciente(tens, "33333333-3");
     await c.operacion.crearSerie(serie(), admin);
     c.guardar();
-    c = crearContenedor({ persistencia: new Persistencia(archivo) });
+    c = crearContenedor({ persistencia: new GuardadoEnArchivoJson(archivo) });
     assert.equal(await c.operacion.acceso(tens, "33333333-3"), true);
     assert.ok(
       (await c.catalogo.bloques()).some((b) => b.fecha === "2028-01-03"),
@@ -320,7 +319,7 @@ test("HTTP: Lista del día filtra por RUT, mantiene filtros y registra llegada d
     });
     assert.equal(respuesta.status, 302);
     assert.equal(respuesta.headers.get("location"), ruta);
-    assert.match(await (await s.req(ruta, s.t)).text(), /El estado de la reserva se guardó/);
+    assert.match(await (await s.req(ruta, s.t)).text(), /Estado de la reserva actualizado/);
 
     filtros.set("estado", "Llegó");
     const actualizado = await (await s.req("/tens/agenda?" + filtros, s.t)).text();

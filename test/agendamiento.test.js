@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { crearContenedor } = require('../src/contenedor');
+const { crearContenedor } = require('../src/armarAplicacion');
 
-const A = '11111111-1'; const B = '22222222-2'; const C = '33333333-3';
+const A = '11111111-1'; const C = '33333333-3';
 
 test('un bloque no admite dos citas activas (RNF04)', async () => {
   const { agendamiento } = crearContenedor();

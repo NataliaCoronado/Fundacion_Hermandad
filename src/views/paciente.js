@@ -1,7 +1,7 @@
 'use strict';
 const { pagina, WHATSAPP, CORREO } = require('./layout');
-const { esc, foto } = require('./util');
-const { infoSede, formatoTelefono, enlaceWhatsapp } = require('../models/sedesInfo');
+const { esc, foto } = require('./componentesComunes');
+const { infoSede, formatoTelefono, enlaceWhatsapp } = require('../models/informacionDeSedes');
 
 const fechaLarga = (f) => {
   const [a, m, d] = f.split('-').map(Number);
@@ -28,20 +28,20 @@ ${fila('Policlínico', c.policlinico)}${c.whatsapp ? fila('WhatsApp', formatoTel
 <form method="post" action="/paciente/consulta" class="tarjeta col"><label for="rut">RUT del paciente <span aria-hidden="true">*</span></label><input id="rut" name="rut" placeholder="12345678-5" maxlength="12" autocomplete="off" autocomplete="off" required>
 <label for="fechaNacimiento">Fecha de nacimiento <span aria-hidden="true">*</span></label><input id="fechaNacimiento" name="fechaNacimiento" type="date" required>
 <label for="celular4">Últimos 4 dígitos del celular registrado <span aria-hidden="true">*</span></label><input id="celular4" name="celular4" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required>
-<button class="btn blq" type="submit">Consultar</button></form>
-<p class="col col-c" style="color:var(--muted)">Aquí solo puedes consultar la cita. Confirmación y cancelación: por WhatsApp.</p>
+<button class="btn blq" type="submit">Ver mis reservas</button></form>
+<p class="col col-c" style="color:var(--muted)">Aquí solo puedes ver tu reserva. Para confirmar o cancelar tu hora, escríbenos por WhatsApp.</p>
 ${cuerpo}`,
   });
 };
 
 const encuesta = ({ mensaje, usuario }) => pagina({
   titulo: 'Encuesta de atención', usuario, mensaje, portal: true,
-  contenido: `<p class="lead">Solo disponible después de una atención registrada.</p>
+  contenido: `<p class="lead">Cuéntanos cómo fue tu atención. Puedes responder cuando tu atención ya esté registrada.</p>
 <form method="post" action="/paciente/encuesta" class="tarjeta col">
-<label for="r">RUT</label><input id="r" name="rut" required>
-<label for="n">Nota de 1 (mala) a 5 (muy buena)</label><select id="n" name="nota"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
-<label for="c">Comentario (opcional, máx. 300 letras)</label><textarea id="c" name="comentario" maxlength="300" rows="4"></textarea>
-<button class="btn blq" type="submit">Enviar</button></form>`,
+<label for="r">RUT del paciente</label><input id="r" name="rut" placeholder="12345678-5" maxlength="12" autocomplete="off" required>
+<label for="n">¿Cómo calificas tu atención? De 1 (muy mala) a 5 (muy buena)</label><select id="n" name="nota"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select>
+<label for="c">Comentario (opcional, hasta 300 caracteres)</label><textarea id="c" name="comentario" maxlength="300" rows="4"></textarea>
+<button class="btn blq" type="submit">Enviar encuesta</button></form>`,
 });
 
 const ayuda = (usuario, sedes) => pagina({
@@ -57,7 +57,7 @@ ${(i?.extras || []).map((x) => `<p>${esc(x.etiqueta)}: <a href="${esc(enlaceWhat
 <p>${esc((i?.especialidades || []).join(' · '))}</p></div>`; }).join('')}</div>
 <h2 style="margin-top:28px">Preguntas frecuentes</h2>
 <details><summary>¿Cómo agendo una hora?</summary><p>Entra a <a href="/agendar">Agendar hora</a>, escribe tu RUT y elige policlínico, especialidad, día y hora.</p></details>
-<details><summary>¿Dónde reviso mi reserva?</summary><p>En <a href="/paciente/consulta">Consultar mi reserva</a>, solo con tu RUT.</p></details>
+<details><summary>¿Dónde reviso mi reserva?</summary><p>En <a href="/paciente/consulta">Consultar mi reserva</a>. Para proteger tu información, te pedimos tu RUT, tu fecha de nacimiento y los últimos 4 dígitos del celular registrado.</p></details>
 <details><summary>¿Cómo cancelo una hora?</summary><p>Escribe al WhatsApp ${WHATSAPP} o comunícate con tu policlínico indicando tu RUT; el personal registrará la cancelación. Si no respondes a un contacto, tu reserva no se cancela.</p></details>
 <details><summary>¿Qué documentos necesito?</summary><p>Tu cédula de identidad y, si tienes, la orden o derivación. Llega 10 minutos antes.</p></details>
 <details><summary>¿Cómo funciona Telemedicina?</summary><p>El equipo de Telemedicina te hará llegar el enlace de la videollamada antes de tu hora. Necesitas cámara, micrófono y buena conexión.</p></details>`,

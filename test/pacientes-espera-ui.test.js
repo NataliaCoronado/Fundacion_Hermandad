@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"),
   assert = require("node:assert/strict");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 
 async function sitio() {
@@ -10,6 +10,7 @@ async function sitio() {
   const ps = (await c.catalogo.pacientes()).slice(0, 3);
   for (const p of ps) { c.operacion.meta.pacientes[p.rut] = c.operacion.meta.pacientes[p.rut] || {}; c.operacion.meta.pacientes[p.rut].sedes = [1]; }
   const esps = ["Kinesiología", "Fonoaudiología", "Medicina General"];
+  for (const e of ["Fonoaudiología", "Medicina General"]) (c.operacion.meta.especialidades[e] ||= {}).listaEspera = true;
   for (const [i, p] of ps.entries()) {
     const e = await c.espera.registrar({ rut: p.rut, idPoliclinico: 1, especialidad: esps[i], idUsuario: "u2" });
     c.operacion.meta.espera[e.id] = { prioridad: "Alta" };

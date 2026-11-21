@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { crearContenedor } = require('../src/contenedor');
+const { crearContenedor } = require('../src/armarAplicacion');
 const { crearServidor } = require('../src/server');
 
 async function levantar() {
@@ -236,7 +236,7 @@ test('personal: adjuntar y descargar un documento, editar ficha, liberar cupos; 
     assert.strictEqual((await fetch(`${s.base}/tens/documentos/archivo?id=${id}`, { redirect: 'manual' })).status, 302);
     assert.strictEqual((await fetch(`${s.base}/tens/documentos/archivo?id=${id}`, { headers: { Cookie: a } })).status, 403);
     const malo = new FormData(); malo.set('rut', '11111111-1'); malo.set('tipo', 'Otro'); malo.set('archivo', new Blob(['MZ ejecutable']), 'virus.pdf');
-    assert.match(await (await fetch(`${s.base}/tens/documentos`, { method: 'POST', headers: { Cookie: t }, body: malo })).text(), /debe ser PDF, JPG o PNG/);
+    assert.match(await (await fetch(`${s.base}/tens/documentos`, { method: 'POST', headers: { Cookie: t }, body: malo })).text(), /Sube un PDF, JPG o PNG/);
     const mediano = new FormData(); mediano.set('rut', '11111111-1'); mediano.set('tipo', 'Otro'); mediano.set('archivo', new Blob([Buffer.concat([Buffer.from('%PDF'), Buffer.alloc(7 * 1024 * 1024)])]), 'm.pdf');
     assert.match(await (await fetch(`${s.base}/tens/documentos`, { method: 'POST', headers: { Cookie: t }, body: mediano })).text(), /5 MB/);
     const grande = new FormData(); grande.set('rut', '11111111-1'); grande.set('tipo', 'Otro'); grande.set('archivo', new Blob([Buffer.alloc(17 * 1024 * 1024)]), 'g.pdf');

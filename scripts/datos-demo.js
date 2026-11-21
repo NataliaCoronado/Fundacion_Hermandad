@@ -1,23 +1,13 @@
 "use strict";
-// Carga (o quita) datos FICTICIOS de demostración en PostgreSQL para poder ver los
-// reportes y gráficos con volumen: pacientes, ~12 semanas de citas, lista de espera,
-// encuestas, auditoría, nombres de profesionales y usuarios TENS/TONS por lugar.
-//
-//   npm run datos:demo           carga (reemplaza una carga demo anterior)
-//   npm run datos:demo -- quitar elimina los datos demo y restaura los nombres de prueba
-//
-// Todo lo cargado es identificable: pacientes con correo demo*@ejemplo.cl, agendas con
-// vigencia 2026-08-01 a 2027-01-31, usuarios tens.demo.*@ejemplo.cl y registros con
-// "demo": true en datos/extras.json. Detén el servidor antes de ejecutarlo.
 const fs = require("node:fs");
 const path = require("node:path");
 const { Pool } = require("pg");
-const { cargarEnv } = require("../src/util/entorno");
+const { cargarEnv } = require("../src/herramientas/entorno");
 cargarEnv();
-const { crearDatos } = require("../src/models/datos");
-const { agregarDemo } = require("../src/models/datosDemo");
-const { SEDES } = require("../src/models/sedesInfo");
-const { hoy, sumarDias } = require("../src/util/tiempo");
+const { crearDatos } = require("../src/models/datosIniciales");
+const { agregarDemo } = require("../src/models/datosDeDemostracion");
+const { SEDES } = require("../src/models/informacionDeSedes");
+const { hoy, sumarDias } = require("../src/herramientas/tiempo");
 
 const ADMIN = "00000000-0000-0000-0000-000000000001";
 const DESDE = "2026-08-01", HASTA = "2027-01-31";
@@ -61,7 +51,7 @@ function extrasSinDemo() {
 }
 function guardarExtras(e) {
   fs.copyFileSync(ARCHIVO_EXTRAS, ARCHIVO_EXTRAS + ".respaldo-antes-demo");
-  fs.writeFileSync(ARCHIVO_EXTRAS, JSON.stringify(e));
+  fs.writeFileSync(ARCHIVO_EXTRAS, JSON.stringify(e, null, 2));
 }
 
 async function main() {
@@ -78,7 +68,6 @@ async function main() {
       console.log("Datos de demostración eliminados y nombres de prueba restaurados.");
       return;
     }
-    // Sin disparadores ni verificación de llaves: se cargan históricos coherentes por construcción.
     await cli.query("SET LOCAL session_replication_role = replica");
 
     const base = crearDatos();
@@ -87,7 +76,6 @@ async function main() {
     const mem = agregarDemo(crearDatos());
     const pacientes = mem.pacientes.filter((p) => !rutsBase.has(p.rut));
 
-    // 1) Nombres ficticios de profesionales y usuarios.
     const profs = (await cli.query("SELECT id_profesional::int AS id FROM profesional ORDER BY id_profesional")).rows;
     for (const p of profs) {
       const n = nombreDe(p.id, 3);
@@ -97,7 +85,6 @@ async function main() {
     await cli.query("UPDATE usuario SET nombres = 'Rodrigo', apellidos = 'Soto Vera (TENS San Isidro)' WHERE correo = 'tens@ejemplo.cl'");
     await cli.query("UPDATE usuario SET nombres = 'Paula', apellidos = 'Araya Núñez (Telemedicina)' WHERE correo = 'telemedicina.usuario@ejemplo.cl'");
 
-    // 2) TENS/TONS de demostración: uno por lugar que aún no tiene.
     const rol = (await cli.query("SELECT id_rol FROM rol WHERE codigo = 'TENS_TONS'")).rows[0].id_rol;
     for (const s of SEDES.filter((x) => !x.telemedicina && x.id !== 1)) {
       const n = nombreDe(s.id, 9);
@@ -109,13 +96,11 @@ async function main() {
     const usuarioDeSede = new Map();
     for (const u of (await cli.query("SELECT id_usuario, id_policlinico::int AS sede FROM usuario WHERE id_policlinico IS NOT NULL ORDER BY creado_en")).rows) if (!usuarioDeSede.has(u.sede)) usuarioDeSede.set(u.sede, u.id_usuario);
 
-    // 3) Pacientes ficticios.
     await insertar(cli, "paciente", ["numero_documento", "nombres", "apellidos", "fecha_nacimiento", "genero", "nacionalidad", "telefono_celular", "tiene_whatsapp", "correo", "direccion", "id_comuna"],
       pacientes.map((p, i) => { const n = nombreDe(i + 1, 17); return [p.rut, n.nombres, n.apellidos, p.fechaNacimiento, p.genero, p.nacionalidad, p.telefono, p.tieneWhatsapp, `demo${i + 1}@ejemplo.cl`, p.direccion, p.idComuna]; }));
     const idPaciente = new Map((await cli.query("SELECT numero_documento, id_paciente FROM paciente WHERE correo LIKE 'demo%@ejemplo.cl'")).rows.map((r) => [r.numero_documento, r.id_paciente]));
     const telDe = new Map(pacientes.map((p) => [p.rut, p.telefono]));
 
-    // 4) Una agenda de demostración por profesional y sus bloques horarios.
     const agendaDe = new Map();
     for (const p of mem.profesionales) {
       const ini = p.id % 2 ? "09:00" : "14:00";
@@ -143,14 +128,12 @@ async function main() {
     const sedeDeProf = new Map(mem.profesionales.map((p) => [p.id, p.idPoliclinico]));
     const bloqueMem = new Map(bloques.map((b) => [b.id, b]));
 
-    // 5) Citas.
     const ORIGEN = { WHATSAPP: "PACIENTE_WSP", ASISTIDA: "ASISTIDA", INSTITUCIONAL: "INSTITUCIONAL" };
     const filas = [], memDeFila = [];
     for (const c of citasMem) {
       const idB = bloquePorMem.get(c.idBloque), idP = idPaciente.get(c.rut), b = bloqueMem.get(c.idBloque);
       if (!idB || !idP) continue;
       const cancelada = c.estadoReserva === "CANCELADA";
-      // Las citas de hoy cuya hora ya pasó quedan registradas (salvo algunas, para que el Resumen muestre alertas reales).
       const yaPaso = b.fecha === hoy() && b.hora < new Date().toTimeString().slice(0, 5);
       const asistencia = c.asistencia || (!cancelada && yaPaso && c.id % 6 !== 0 ? (c.id % 7 === 0 ? "NO_ASISTIO" : "ASISTIO") : null);
       const estado = cancelada ? "CANCELADA" : asistencia || "RESERVADA";
@@ -164,7 +147,6 @@ async function main() {
     await insertar(cli, "cita", ["id_paciente", "id_bloque", "canal_reserva", "telefono_contacto", "estado_reserva", "estado_confirmacion", "origen_cancelacion", "cancelada_en", "creada_por", "creada_en", "id_profesional_reemplazo"], filas);
     const pgCita = new Map((await cli.query("SELECT id_cita, id_bloque FROM cita WHERE estado_reserva <> 'CANCELADA' AND id_paciente = ANY($1)", [[...idPaciente.values()]])).rows.map((r) => [String(r.id_bloque), r.id_cita]));
 
-    // 6) Lista de espera.
     const espera = [];
     for (const [i, e] of mem.espera.filter((x) => idPaciente.has(x.rut)).entries()) {
       const esp = (await cli.query("SELECT id_especialidad FROM especialidad WHERE nombre = $1", [e.especialidad])).rows[0];
@@ -172,7 +154,6 @@ async function main() {
     }
     await insertar(cli, "solicitud_espera", ["id_paciente", "id_policlinico", "id_especialidad", "ingresada_en", "estado", "registrado_por", "prioridad"], espera, "ON CONFLICT DO NOTHING");
 
-    // 7) Encuestas y auditoría (viven en datos/extras.json cuando se usa PostgreSQL).
     if (extras) {
       const cita = (c) => pgCita.get(String(bloquePorMem.get(c.idBloque)));
       const hoyTxt = hoy();

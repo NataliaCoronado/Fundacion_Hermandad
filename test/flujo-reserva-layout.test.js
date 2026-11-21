@@ -2,7 +2,7 @@
 const test = require("node:test"),
   assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
-const { crearContenedor } = require("../src/contenedor");
+const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 const portalCss = require("../src/views/portal.css");
 
@@ -29,7 +29,7 @@ async function levantar() {
 const flujo = (h) => h.match(/<div class="flujo">[\s\S]*<\/aside>/)?.[0] || "";
 const aside = (h) => h.match(/<aside class="flujo-resumen"[^>]*>[\s\S]*?<\/aside>/)?.[0] || "";
 
-test("Paso 1: formulario y resumen «Tu reserva» en dos columnas", async () => {
+test("Paso 1: formulario y resumen «Tu reserva» en dos columnas, sin filas vacías", async () => {
   const s = await levantar();
   try {
     const h = await s.texto("/");
@@ -37,8 +37,24 @@ test("Paso 1: formulario y resumen «Tu reserva» en dos columnas", async () => 
     assert.match(h, /<div class="flujo-main">[\s\S]*id="buscar"/);
     const a = aside(h);
     assert.match(a, /aria-label="Tu reserva"/);
-    for (const rotulo of ["Paciente", "Atención", "Fecha y hora"]) assert.match(a, new RegExp(`<dt>${rotulo}</dt>`));
-    assert.match(a, /Sin elegir/);
+    assert.doesNotMatch(a, /Sin elegir|Sin indicar/, "el resumen vacío no lista filas pendientes");
+    assert.match(a, /class="vacio-res"/, "explica qué verá al avanzar");
+  } finally { await s.cerrar(); }
+});
+
+test("Paso 1: «Buscar por» es un selector agrupado, la ayuda aparece una vez y los consentimientos se distinguen", async () => {
+  const s = await levantar();
+  try {
+    const h = await s.texto("/");
+    const modo = h.match(/<fieldset class="buscar-modo conmut">[\s\S]*?<\/fieldset>/)?.[0] || "";
+    assert.match(modo, /name="modo" value="esp"/);
+    assert.match(modo, /name="modo" value="prof"/);
+    assert.equal((h.match(/¿Necesitas ayuda\?/g) || []).length, 1, "la ayuda de WhatsApp no se duplica");
+    const ok = h.match(/<div class="buscar-ok">[\s\S]*?<\/div>/)?.[0] || "";
+    assert.match(ok, /name="consentimiento"[^>]*required/);
+    assert.match(ok, /<span class="req"[^>]*>\*<\/span><\/span><\/label>/, "el asterisco queda dentro del texto");
+    assert.match(ok, /class="check opc"[\s\S]*\(opcional\)/);
+    assert.equal((h.match(/class="nota ayuda-campo"/g) || []).length, 2, "cada columna de la fila 1 tiene su ayuda corta");
   } finally { await s.cerrar(); }
 });
 
@@ -81,4 +97,6 @@ test("Estilos: columnas del flujo, calendario de filas fijas y cabecera en una l
   assert.match(portalCss, /\.mes-g\s*\{[^}]*grid-auto-rows:\s*\d+px/);
   assert.match(portalCss, /\.portada:has\(\.barra\)\s*\{[^}]*display:\s*grid/);
   assert.match(portalCss, /\.flujo\s+\.tarjeta\s+details\.docs/);
+  assert.match(portalCss, /#buscar\s+\.conmut\s+label[^{]*\{/, "selector tipo pastilla");
+  assert.match(portalCss, /#buscar\s+\.buscar-ok[^{]*\{[^}]*text-wrap:\s*pretty/);
 });

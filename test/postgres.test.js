@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { crearContenedor } = require('../src/contenedor');
+const { crearContenedor } = require('../src/armarAplicacion');
 const { crearDbPsql, ejecutarSql } = require('./helpers/dbPsql');
 
 const ARGS = process.env.PSQL_TEST_ARGS;
@@ -13,7 +13,7 @@ const A = '11111111-1'; const C = '33333333-3';
 test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'define PSQL_TEST_ARGS para probar con PostgreSQL' }, async () => {
   const admin = (sql) => spawnSync('psql', [...ARGS.split(/\s+/), '-X', '-q', '-d', 'postgres', '-c', sql], { encoding: 'utf8' });
   admin(`DROP DATABASE IF EXISTS ${BD}`); admin(`CREATE DATABASE ${BD}`);
-  for (const f of ['hermandad_postgresql.sql', 'datos_ejemplo.sql', '03_credencial.sql']) ejecutarSql(ARGS, path.join(__dirname, '..', 'db', f), BD);
+  for (const f of ['01_estructura.sql', '02_datos_ejemplo.sql', '03_credenciales.sql']) ejecutarSql(ARGS, path.join(__dirname, '..', 'base-de-datos', f), BD);
 
   process.env.CLAVE_DEMO = 'demo1234';
   const db = crearDbPsql(ARGS, BD);

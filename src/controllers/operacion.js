@@ -1,11 +1,12 @@
 "use strict";
-const V = require("../views/operacion"),
-  { tabla, raw, esc } = require("../views/util");
-const { cargarContexto } = require("./contexto");
-const { normalizarRut } = require("../util/rut");
-const { hoy, sumarDias, textoLocal } = require("../util/tiempo");
-const { infoSede } = require("../models/sedesInfo");
-const { fechaValida, ids } = require("../services/OperacionService");
+const { notificarEncuestaAtencion } = require("../services/ComunicacionesPaciente");
+const vistas = require("../views/operacion"),
+  { tabla, raw, esc } = require("../views/componentesComunes");
+const { cargarContexto } = require("./cargarListasBase");
+const { normalizarRut } = require("../herramientas/rut");
+const { hoy, sumarDias, textoLocal } = require("../herramientas/tiempo");
+const { infoSede } = require("../models/informacionDeSedes");
+const { fechaValida, ids } = require("../services/OperacionServicio");
 const RUTA_AGENDA_PERSONAL = "/tens/agenda";
 const RUTA_AGENDA_ADMIN = "/admin/agendas";
 
@@ -30,16 +31,16 @@ function urlAgenda(valor, ruta) {
 const urlAgendaPersonal = (valor) => urlAgenda(valor, RUTA_AGENDA_PERSONAL);
 const urlAgendaAdmin = (valor) => urlAgenda(valor, RUTA_AGENDA_ADMIN);
 
-function crearOperacionController(c) {
+function crearControladorOperacion(aplicacion) {
   const {
-    operacion: op,
+    operacion: servicioOperacion,
     catalogo,
     citaRepo,
     extras,
     agendamiento,
     espera,
     auditoria,
-  } = c;
+  } = aplicacion;
   const contexto = async () => ({
     ...(await cargarContexto(catalogo)),
     comunas: await catalogo.comunas(),
@@ -49,7 +50,7 @@ function crearOperacionController(c) {
     const ctx = contextoExistente || await contexto();
     return (await citaRepo.listar()).filter(
       (x) =>
-        op.sedeBloque(
+        servicioOperacion.sedeBloque(
           ctx.bloques.get(x.idBloque),
           ctx.profs.get(ctx.bloques.get(x.idBloque)?.idProfesional),
         ) === Number(u.idPoliclinico),
@@ -61,7 +62,7 @@ function crearOperacionController(c) {
     } catch (e) {
       if (e.message === "FUERA_DE_SEDE") throw e;
       const destino = typeof volver === "function" ? volver(r) : volver;
-      return { estado: 400, html: V.errorPage(r.usuario, e, destino), rechazo: e.message };
+      return { estado: 400, html: vistas.errorPage(r.usuario, e, destino), rechazo: e.message };
     }
   };
   const redirect = (redirigir) => ({ redirigir });
@@ -79,23 +80,23 @@ function crearOperacionController(c) {
     const ruta = admin ? RUTA_AGENDA_ADMIN : RUTA_AGENDA_PERSONAL;
     const ctx = await contexto();
     return {
-      html: V.calendario({
-        u, q, ctx, op, admin,
+      html: vistas.calendario({
+        u, q, ctx, op: servicioOperacion, admin,
         citas: admin ? await citaRepo.listar() : await visible(u, ctx),
-        mensaje: c.sesiones.tomarAviso(token, urlAgenda(ruta + "?" + q, ruta)),
+        mensaje: aplicacion.sesiones.tomarAviso(token, urlAgenda(ruta + "?" + q, ruta)),
       }),
     };
   };
   const pacienteVisible = async (u, rut) => {
-    await op.exigirPaciente(u, rut);
+    await servicioOperacion.exigirPaciente(u, rut);
     return catalogo.paciente(normalizarRut(rut));
   };
   const documentoVisible = async (u, id) => {
-    const d = extras.buscar("documentos", id);
-    if (!d || (d.idPoliclinico && d.idPoliclinico !== +u.idPoliclinico))
+    const documento = extras.buscar("documentos", id);
+    if (!documento || (documento.idPoliclinico && documento.idPoliclinico !== +u.idPoliclinico))
       throw new Error("FUERA_DE_SEDE");
-    await op.exigirPaciente(u, d.rut);
-    return d;
+    await servicioOperacion.exigirPaciente(u, documento.rut);
+    return documento;
   };
   const camposCancelacion = (d) => {
     if (!d.motivo?.trim())
@@ -108,12 +109,12 @@ function crearOperacionController(c) {
   const planCambio = async (d) => {
     if (!fechaValida(d.fecha) || !d.motivo?.trim())
       throw new Error("Completa fecha y motivo.");
-    const p = await catalogo.profesional(d.idProfesional);
-    if (!p) throw new Error("PROFESIONAL_NO_ENCONTRADO");
+    const profesional = await catalogo.profesional(d.idProfesional);
+    if (!profesional) throw new Error("PROFESIONAL_NO_ENCONTRADO");
     const bloques = (await catalogo.bloques()).filter(
-      (b) => b.idProfesional === p.id && b.fecha === d.fecha,
+      (b) => b.idProfesional === profesional.id && b.fecha === d.fecha,
     );
-    const afectadas = await op.afectados(p.id, d.fecha);
+    const afectadas = await servicioOperacion.afectados(profesional.id, d.fecha);
     if (
       !["AUSENCIA", "REEMPLAZO", "CANCELACION", "LUGAR", "HORARIO"].includes(
         d.tipo,
@@ -121,27 +122,27 @@ function crearOperacionController(c) {
     )
       throw new Error("Tipo de cambio inválido.");
     if (d.tipo === "REEMPLAZO") {
-      const r = await catalogo.profesional(d.idReemplazo);
+      const reemplazo = await catalogo.profesional(d.idReemplazo);
       if (
-        !r?.activo ||
-        r.id === p.id ||
-        !(r.especialidades || [r.especialidad]).includes(p.especialidad)
+        !reemplazo?.activo ||
+        reemplazo.id === profesional.id ||
+        !(reemplazo.especialidades || [reemplazo.especialidad]).includes(profesional.especialidad)
       )
         throw new Error("Reemplazo no compatible.");
       for (const b of bloques) {
-        if (!op.lugares(r, b.fecha).includes(op.sedeBloque(b, p)))
+        if (!servicioOperacion.lugares(reemplazo, b.fecha).includes(servicioOperacion.sedeBloque(b, profesional)))
           throw new Error("El reemplazo no está asignado al lugar.");
         if (
           (await catalogo.bloques()).some(
             (x) =>
-              x.idProfesional === r.id &&
+              x.idProfesional === reemplazo.id &&
               x.fecha === b.fecha &&
-              require("../services/OperacionService").minutos(x.hora) <
-                require("../services/OperacionService").minutos(b.hora) +
+              require("../services/OperacionServicio").minutos(x.hora) <
+                require("../services/OperacionServicio").minutos(b.hora) +
                   (b.duracion || 30) &&
-              require("../services/OperacionService").minutos(x.hora) +
+              require("../services/OperacionServicio").minutos(x.hora) +
                 (x.duracion || 30) >
-                require("../services/OperacionService").minutos(b.hora),
+                require("../services/OperacionServicio").minutos(b.hora),
           )
         )
           throw new Error("El reemplazo tiene un cruce horario.");
@@ -149,13 +150,13 @@ function crearOperacionController(c) {
     }
     if (
       d.tipo === "LUGAR" &&
-      !op.lugares(p, d.fecha).includes(+d.idPoliclinico)
+      !servicioOperacion.lugares(profesional, d.fecha).includes(+d.idPoliclinico)
     )
       throw new Error("Lugar no asignado al profesional.");
     const propuestos=[];
     if (d.tipo === "HORARIO") {
       if(!fechaValida(d.nuevaFecha)) throw new Error('Selecciona una nueva fecha.');
-      const {minutos,hora}=require('../services/OperacionService');
+      const {minutos,hora}=require('../services/OperacionServicio');
       const inicio=Math.min(...bloques.map(b=>minutos(b.hora)));
       const delta=d.nuevaHoraInicio?minutos(d.nuevaHoraInicio)-inicio:0;
       const todos=await catalogo.bloques();
@@ -163,26 +164,26 @@ function crearOperacionController(c) {
         const m=minutos(b.hora)+delta;
         if(m<0||m+(b.duracion||30)>1440) throw new Error('El bloque propuesto excede el día.');
         const propuesta={...b,fecha:d.nuevaFecha,hora:hora(m)};
-        if(!op.lugares(p,d.nuevaFecha).includes(op.sedeBloque(b,p))) throw new Error('Asignación no vigente en la fecha propuesta.');
-        if(todos.some(x=>!bloques.some(y=>y.id===x.id)&&x.idProfesional===p.id&&x.fecha===d.nuevaFecha&&minutos(x.hora)<m+(b.duracion||30)&&minutos(x.hora)+(x.duracion||30)>m)) throw new Error('El horario propuesto tiene cruces.');
+        if(!servicioOperacion.lugares(profesional,d.nuevaFecha).includes(servicioOperacion.sedeBloque(b,profesional))) throw new Error('Asignación no vigente en la fecha propuesta.');
+        if(todos.some(x=>!bloques.some(y=>y.id===x.id)&&x.idProfesional===profesional.id&&x.fecha===d.nuevaFecha&&minutos(x.hora)<m+(b.duracion||30)&&minutos(x.hora)+(x.duracion||30)>m)) throw new Error('El horario propuesto tiene cruces.');
         propuestos.push(propuesta);
       }
     }
-    return { p, bloques, afectadas, propuestos, datos: d };
+    return { p: profesional, bloques, afectadas, propuestos, datos: d };
   };
   const cambiosVista = async (u, d = {}, plan) => {
     const ctx = await contexto();
     return {
-      html: V.page(
+      html: vistas.page(
         u,
         "Cambios de agenda",
-        V.cab(
+        vistas.cab(
           "Revisa las reservas afectadas antes de aplicar una modificación.",
-          V.btn("Volver a agendas", "/admin/agendas", true)+V.btn("Estado de notificaciones","/admin/comunicaciones",true),
+          vistas.btn("Volver a agendas", "/admin/agendas", true)+vistas.btn("Estado de notificaciones","/admin/comunicaciones",true),
         ) +
-          V.panel(
+          vistas.panel(
             "Proponer cambio",
-            `<form class="form-grid" method="post" action="/admin/cambio/revisar">${V.select("idProfesional", "Profesional", ctx.listaProfs, d.idProfesional)}${V.input("fecha", "Fecha de agenda", d.fecha || hoy(), "date", "required")}${V.select(
+            `<form class="form-grid" method="post" action="/admin/cambio/revisar">${vistas.select("idProfesional", "Profesional", ctx.listaProfs, d.idProfesional)}${vistas.input("fecha", "Fecha de agenda", d.fecha || hoy(), "date", "required")}${vistas.select(
               "tipo",
               "Cambio",
               [
@@ -193,12 +194,12 @@ function crearOperacionController(c) {
                 { id: "CANCELACION", nombre: "Cancelación institucional" },
               ],
               d.tipo,
-            )}${V.select("idReemplazo", "Profesional reemplazante", ctx.listaProfs, d.idReemplazo)}${V.select("idPoliclinico", "Lugar propuesto", ctx.listaSedes, d.idPoliclinico)}${V.input("nuevaFecha", "Fecha propuesta", d.nuevaFecha || hoy(), "date")}${V.input("nuevaHoraInicio", "Nueva hora inicial (opcional)", d.nuevaHoraInicio || "", "time")}${V.input("motivo", "Motivo", d.motivo || "", "text", "required")}${V.select("destino", "Horario cancelado", V.opcionesTexto(["Bloqueado", "Disponible"]), d.destino || "Bloqueado")}<label class="check"><input type="checkbox" name="whatsapp" value="1" ${d.whatsapp === "1" ? "checked" : ""}>Notificar por WhatsApp</label><label class="check"><input type="checkbox" name="correo" value="1" ${d.correo === "1" ? "checked" : ""}>Notificar por correo</label><button type="submit">Ver Agenda actual versus Cambio propuesto</button></form>`,
+            )}${vistas.select("idReemplazo", "Profesional reemplazante", ctx.listaProfs, d.idReemplazo)}${vistas.select("idPoliclinico", "Lugar propuesto", ctx.listaSedes, d.idPoliclinico)}${vistas.input("nuevaFecha", "Fecha propuesta", d.nuevaFecha || hoy(), "date")}${vistas.input("nuevaHoraInicio", "Nueva hora inicial (opcional)", d.nuevaHoraInicio || "", "time")}${vistas.input("motivo", "Motivo", d.motivo || "", "text", "required")}${vistas.select("destino", "Horario cancelado", vistas.opcionesTexto(["Bloqueado", "Disponible"]), d.destino || "Bloqueado")}<label class="check"><input type="checkbox" name="whatsapp" value="1" ${d.whatsapp === "1" ? "checked" : ""}>Notificar por WhatsApp</label><label class="check"><input type="checkbox" name="correo" value="1" ${d.correo === "1" ? "checked" : ""}>Notificar por correo</label><button type="submit">Ver Agenda actual versus Cambio propuesto</button></form>`,
           ) +
           (plan
-            ? V.panel(
+            ? vistas.panel(
                 "Agenda actual versus Cambio propuesto",
-                `<div class="comparison"><div><h3>Agenda actual</h3><p>${esc(plan.p.nombre)} · ${esc(d.fecha)}</p><p>${plan.bloques.length} cupos · ${plan.afectadas.length} reservas</p></div><div><h3>Cambio propuesto</h3><p>${esc(d.tipo)} · ${esc(d.motivo)}</p><p>${esc(d.nuevaFecha||d.fecha)} ${esc(d.nuevaHoraInicio||'')} · ${esc(ctx.sedes.get(+d.idPoliclinico)?.nombre||'')}</p><p>Responsable: ${esc(u.nombre)}</p></div></div><form method="post" action="/admin/cambio/guardar">${V.hidden({ ...d, huella: require("node:crypto").createHash("sha256").update(JSON.stringify(plan.afectadas)).digest("hex") })}<p>${plan.afectadas.length} reservas afectadas. Selecciona las citas para cancelar si corresponde.</p>${tabla(
+                `<div class="comparison"><div><h3>Agenda actual</h3><p>${esc(plan.p.nombre)} · ${esc(d.fecha)}</p><p>${plan.bloques.length} cupos · ${plan.afectadas.length} reservas</p></div><div><h3>Cambio propuesto</h3><p>${esc(d.tipo)} · ${esc(d.motivo)}</p><p>${esc(d.nuevaFecha||d.fecha)} ${esc(d.nuevaHoraInicio||'')} · ${esc(ctx.sedes.get(+d.idPoliclinico)?.nombre||'')}</p><p>Responsable: ${esc(u.nombre)}</p></div></div><form method="post" action="/admin/cambio/guardar">${vistas.hidden({ ...d, huella: require("node:crypto").createHash("sha256").update(JSON.stringify(plan.afectadas)).digest("hex") })}<p>${plan.afectadas.length} reservas afectadas. Selecciona las citas para cancelar si corresponde.</p>${tabla(
                   [
                     "Seleccionar",
                     "Paciente",
@@ -214,7 +215,7 @@ function crearOperacionController(c) {
                     x.rut,
                     `${ctx.bloques.get(x.idBloque)?.fecha} ${ctx.bloques.get(x.idBloque)?.hora}`,
                     raw(
-                      V.btn(
+                      vistas.btn(
                         "Buscar alternativas",
                         "/admin/agendas?esp=" +
                           encodeURIComponent(plan.p.especialidad),
@@ -222,14 +223,14 @@ function crearOperacionController(c) {
                       ),
                     ),
                   ]),
-                )}${V.hidden({ idCitas: plan.afectadas.map((x) => x.id).join(",") })}<button type="submit">Confirmar cambio · ${esc(u.nombre)}</button></form>`,
+                )}${vistas.hidden({ idCitas: plan.afectadas.map((x) => x.id).join(",") })}<button type="submit">Confirmar cambio · ${esc(u.nombre)}</button></form>`,
               )
             : "") +
-          V.panel(
+          vistas.panel(
             "Cambios registrados",
             tabla(
               ["Fecha", "Tipo", "Motivo", "Reservas afectadas", "Responsable"],
-              c.cambios
+              aplicacion.cambios
                 .listar()
                 .map((x) => [
                   x.fecha,
@@ -245,7 +246,7 @@ function crearOperacionController(c) {
   };
   return {
     resumen: async ({ usuario: u, consulta = new URLSearchParams() }) => {
-      const R = require("../views/resumen");
+      const vistaResumen = require("../views/resumen");
       const { indicadoresResumen, pct } = require("./resumen");
       const admin = u.rol === "ADMINISTRACION";
       const ctx = await contexto();
@@ -255,17 +256,17 @@ function crearOperacionController(c) {
         manana = sumarDias(fHoy, 1),
         semana = sumarDias(fHoy, 6),
         hace30 = sumarDias(fHoy, -30);
-      const sedeDe = (b) => op.sedeBloque(b, ctx.profs.get(b?.idProfesional));
+      const sedeDe = (b) => servicioOperacion.sedeBloque(b, ctx.profs.get(b?.idProfesional));
       const miSede = (idSede) => admin || idSede === Number(u.idPoliclinico);
       const citas = (await citaRepo.listar())
         .map((x) => ({ x, b: ctx.bloques.get(x.idBloque) }))
         .filter(({ b }) => b && miSede(sedeDe(b)));
       const base = admin ? "/admin" : "/tens";
       const sedes = ctx.listaSedes.filter((s) => miSede(s.id));
-      const profesionales = ctx.listaProfs.filter((p) => p.activo).map((p) => ({ id: p.id, nombre: p.nombre, sedes: op.lugares(p) })).sort((x, y) => x.nombre.localeCompare(y.nombre, "es", { numeric: true }));
+      const profesionales = ctx.listaProfs.filter((p) => p.activo).map((p) => ({ id: p.id, nombre: p.nombre, sedes: servicioOperacion.lugares(p) })).sort((x, y) => x.nombre.localeCompare(y.nombre, "es", { numeric: true }));
       const indicadores = indicadoresResumen({ consulta, fecha: fHoy, bloques: ctx.bloques, citas, sedes, sedeDe, idPoliclinico: admin ? undefined : Number(u.idPoliclinico), profesionales });
       if (consulta.get("fragmento") === "indicadores")
-        return { html: R.indicadores(indicadores, base, consulta.get("alerta")) };
+        return { html: vistaResumen.indicadores(indicadores, base, consulta.get("alerta")) };
       const activas = citas.filter(({ x }) => x.estadoReserva === "ACTIVA");
       const tele = (b) => !!ctx.sedes.get(sedeDe(b))?.telemedicina;
       const esPendiente = ({ x }) => !x.asistencia && x.estadoConfirmacion !== "CONFIRMADA";
@@ -273,7 +274,7 @@ function crearOperacionController(c) {
       const proximas48 = activas.filter(({ b }) => b.fecha === fHoy || b.fecha === manana);
       const sinConfirmar = proximas48.filter(esPendiente);
       const sinAsistencia = hoyC.filter(({ x, b }) => !x.asistencia && b.hora <= hora);
-      const sinEnlace = proximas48.filter(({ x, b }) => tele(b) && !x.asistencia && ["Enlace pendiente", "Error de envío"].includes(op.estadoEnvioEnlace(x).estado));
+      const sinEnlace = proximas48.filter(({ x, b }) => tele(b) && !x.asistencia && ["Enlace pendiente", "Error de envío"].includes(servicioOperacion.estadoEnvioEnlace(x).estado));
       const reservados = new Set(activas.map(({ x }) => x.idBloque));
       const cuposSemana = [...ctx.bloques.values()].filter((b) => b.publicado && b.fecha >= fHoy && b.fecha <= semana && miSede(sedeDe(b)));
       const ocupadosSemana = cuposSemana.filter((b) => reservados.has(b.id)).length;
@@ -318,14 +319,14 @@ function crearOperacionController(c) {
       ].map((a) => a.filas ? { ...a, n: a.filas.length, href: urlAlerta(a.id) } : a);
       const aCita = ({ x, b }) => {
         const prof = ctx.profs.get(x.idProfesionalReemplazo || b.idProfesional);
-        const est = V.estado(x, tele(b), op);
+        const est = vistas.estado(x, tele(b), servicioOperacion);
         return {
           fecha: b.fecha,
           hora: b.hora,
           paciente: ctx.pacientes.get(x.rut)?.nombre || x.rut,
           detalle: [b.especialidad || prof?.especialidad, prof?.nombre, admin ? ctx.sedes.get(sedeDe(b))?.nombre : ""].filter(Boolean).join(" · "),
           href: admin ? "/admin/cupo?idCita=" + x.id : detalleReserva(x.id),
-          badge: V.badge(est),
+          badge: vistas.badge(est),
         };
       };
       const citasHoy = hoyC.slice(0, admin ? 10 : 12).map(aCita);
@@ -345,52 +346,52 @@ function crearOperacionController(c) {
       const porSede = admin
         ? ctx.listaSedes.map((s) => {
             const deSede = (b) => sedeDe(b) === s.id;
-            const cs = cuposSemana.filter(deSede);
+            const cuposDeLaSede = cuposSemana.filter(deSede);
             return {
               id: s.id,
               nombre: s.nombre,
               hoy: hoyC.filter(({ b }) => deSede(b)).length,
               porConfirmar: sinConfirmar.filter(({ b }) => deSede(b)).length,
               espera: esperaV.filter((e) => e.idPoliclinico === s.id).length,
-              ocupacion: pct(cs.filter((b) => reservados.has(b.id)).length, cs.length),
+              ocupacion: pct(cuposDeLaSede.filter((b) => reservados.has(b.id)).length, cuposDeLaSede.length),
             };
           })
         : null;
       return {
-        html: R.resumen({ usuario: u, admin, sede: ctx.sedes.get(+u.idPoliclinico), kpis, alertas, detalleAlerta, citasHoy, porSede, capacidad, indicadores, hora, consulta }),
+        html: vistaResumen.resumen({ usuario: u, admin, sede: ctx.sedes.get(+u.idPoliclinico), kpis, alertas, detalleAlerta, citasHoy, porSede, capacidad, indicadores, hora, consulta }),
       };
     },
     adminAgenda: (r) => getAgenda(r, true),
     tensAgenda: (r) => getAgenda(r, false),
     bloqueNuevo: async ({ usuario: u }) => ({
-      html: V.bloqueNuevo({ u, ctx: await contexto() }),
+      html: vistas.bloqueNuevo({ u, ctx: await contexto() }),
     }),
     bloqueRevisar: safe(
       "/admin/bloque/nuevo",
       async ({ usuario: u, cuerpo: d }) => ({
-        html: V.bloqueNuevo({
+        html: vistas.bloqueNuevo({
           u,
           ctx: await contexto(),
           d,
-          plan: await op.plan(d),
+          plan: await servicioOperacion.plan(d),
         }),
       }),
     ),
     bloqueGuardar: safe(
       "/admin/bloque/nuevo",
       async ({ usuario: u, cuerpo: d, token }) => {
-        await op.crearSerie(d, u);
+        await servicioOperacion.crearSerie(d, u);
         const destino = RUTA_AGENDA_ADMIN + "?" + new URLSearchParams({
           fecha: d.desde,
           sede: d.idPoliclinico,
           prof: d.idProfesional,
         });
-        c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El bloque horario se guardó." });
+        aplicacion.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "Cupo guardado." });
         return redirect(destino);
       },
     ),
     equipo: async ({ usuario: u, consulta: q }) => ({
-      html: V.equipo({ u, ctx: await contexto(), op, q }),
+      html: vistas.equipo({ u, ctx: await contexto(), op: servicioOperacion, q }),
     }),
     equipoRevisar: safe(
       "/admin/profesionales",
@@ -417,13 +418,13 @@ function crearOperacionController(c) {
         }
         delete d.fotografia;
         return {
-          html: V.equipo({
+          html: vistas.equipo({
             u,
             ctx: await contexto(),
-            op,
+            op: servicioOperacion,
             q: new URLSearchParams(),
             d,
-            revision: await op.equipo(d, u),
+            revision: await servicioOperacion.equipo(d, u),
           }),
         };
       },
@@ -431,7 +432,7 @@ function crearOperacionController(c) {
     equipoGuardar: safe(
       "/admin/profesionales",
       async ({ usuario: u, cuerpo: d }) => {
-        const r = await op.equipo(d, u, true);
+        const r = await servicioOperacion.equipo(d, u, true);
         if (!r.guardado)
           throw new Error(
             "Reprograma las reservas afectadas antes de cambiar la asignación.",
@@ -442,12 +443,12 @@ function crearOperacionController(c) {
     equipoEstado: safe(
       "/admin/profesionales",
       async ({ usuario: u, cuerpo: d }) => {
-        const p = await catalogo.profesional(d.idProfesional);
-        if (!p) throw new Error("Profesional no encontrado.");
+        const profesional = await catalogo.profesional(d.idProfesional);
+        if (!profesional) throw new Error("Profesional no encontrado.");
         if (d.activo !== "1") {
           const suyos = new Set(
             (await catalogo.bloques())
-              .filter((b) => b.idProfesional === p.id && b.fecha >= hoy())
+              .filter((b) => b.idProfesional === profesional.id && b.fecha >= hoy())
               .map((b) => b.id),
           );
           const vigentes = (await citaRepo.listar()).filter(
@@ -455,19 +456,19 @@ function crearOperacionController(c) {
           ).length;
           if (vigentes)
             throw new Error(
-              `${p.nombre} tiene ${vigentes} reserva(s) vigente(s). Reprográmalas o cancélalas (Cambios de agenda o Cancelaciones) antes de desactivarlo.`,
+              `${profesional.nombre} tiene ${vigentes} reserva(s) vigente(s). Reprográmalas o cancélalas (Cambios de agenda o Cancelaciones) antes de desactivarlo.`,
             );
         }
-        await catalogo.setProfesionalActivo(p.id, d.activo === "1");
-        op.aud(u, "Estado del integrante actualizado", "Equipo", p.id, p, {
-          ...p,
+        await catalogo.setProfesionalActivo(profesional.id, d.activo === "1");
+        servicioOperacion.aud(u, "Estado del integrante actualizado", "Equipo", profesional.id, profesional, {
+          ...profesional,
           activo: d.activo === "1",
         });
         return redirect("/admin/profesionales");
       },
     ),
     lugares: async ({ usuario: u, consulta: q }) => ({
-      html: V.lugares({ u, ctx: await contexto(), op, q }),
+      html: vistas.lugares({ u, ctx: await contexto(), op: servicioOperacion, q }),
     }),
     lugarGuardar: safe(
       "/admin/policlinicos",
@@ -485,20 +486,20 @@ function crearOperacionController(c) {
           activo: d.activo === "1",
           telemedicina: d.telemedicina === "1",
         });
-        op.meta.sedes[n.id] = {
+        servicioOperacion.meta.sedes[n.id] = {
           nombre: d.nombre,
           direccion: d.direccion,
           especialidades,
           color: d.color,
           activo: d.activo === "1",
         };
-        op.aud(
+        servicioOperacion.aud(
           u,
           "Lugar actualizado",
           "Policlínicos",
           n.id,
           previo,
-          op.meta.sedes[n.id],
+          servicioOperacion.meta.sedes[n.id],
           n.id,
         );
         return redirect("/admin/policlinicos");
@@ -509,35 +510,36 @@ function crearOperacionController(c) {
       async ({ usuario: u, cuerpo: d }) => {
         if (!d.nombre?.trim() || !/^#[\da-f]{6}$/i.test(d.color || ""))
           throw new Error("Revisa especialidad y color.");
-        const antes = op.meta.especialidades[d.nombre];
+        const antes = servicioOperacion.meta.especialidades[d.nombre];
         await catalogo.guardarEspecialidad({
           nombre: d.nombre.trim(),
           activo: d.activo === "1",
         });
-        op.meta.especialidades[d.nombre] = {
+        servicioOperacion.meta.especialidades[d.nombre] = {
           color: d.color,
           activo: d.activo === "1",
+          listaEspera: d.listaEspera === "1",
         };
-        op.aud(
+        servicioOperacion.aud(
           u,
           "Especialidad actualizada",
           "Especialidades",
           d.nombre,
           antes,
-          op.meta.especialidades[d.nombre],
+          servicioOperacion.meta.especialidades[d.nombre],
         );
         return redirect("/admin/policlinicos?tab=especialidades");
       },
     ),
     colores: async ({ usuario: u }) => ({
-      html: V.page(
+      html: vistas.page(
         u,
         "Colores de agenda",
-        V.cab(
+        vistas.cab(
           "Los cupos de toda la red muestran el color del lugar. Al elegir una sede, muestran el color de la especialidad.",
         ) +
-          V.btn("Colores por lugar", "/admin/policlinicos", true) +
-          V.btn(
+          vistas.btn("Colores por lugar", "/admin/policlinicos", true) +
+          vistas.btn(
             "Colores por especialidad",
             "/admin/policlinicos?tab=especialidades",
             true,
@@ -572,20 +574,20 @@ function crearOperacionController(c) {
         for (const x of citas) {
           await agendamiento.cancelar(x.id, "INSTITUCIONAL");
           if (d.destino === "Bloqueado") {
-            const b = await catalogo.bloque(x.idBloque);
+            const bloque = await catalogo.bloque(x.idBloque);
             await catalogo.cambiarPublicacion({
-              idProfesional: b.idProfesional,
-              desde: b.fecha,
-              hasta: b.fecha,
-              idBloque: b.id,
+              idProfesional: bloque.idProfesional,
+              desde: bloque.fecha,
+              hasta: bloque.fecha,
+              idBloque: bloque.id,
               publicar: false,
             });
-            (op.meta.bloques[b.id] ||= {}).estado = "Bloqueado";
+            (servicioOperacion.meta.bloques[bloque.id] ||= {}).estado = "Bloqueado";
           }
         }
       }
       if (d.tipo === "AUSENCIA") {
-        await c.cambios.ausencia({
+        await aplicacion.cambios.ausencia({
           idProfesional: plan.p.id,
           fecha: d.fecha,
           motivo: d.motivo,
@@ -593,11 +595,11 @@ function crearOperacionController(c) {
         });
         for (const b of plan.bloques)
           if (!plan.afectadas.some((x) => x.idBloque === b.id))
-            (op.meta.bloques[b.id] ||= {}).estado = "Bloqueado";
+            (servicioOperacion.meta.bloques[b.id] ||= {}).estado = "Bloqueado";
       }
       if (d.tipo === "LUGAR" || d.tipo === "HORARIO")
         for (const b of plan.bloques) {
-          const m = (op.meta.bloques[b.id] ||= {});
+          const m = (servicioOperacion.meta.bloques[b.id] ||= {});
           if (d.tipo === "LUGAR") {
             await catalogo.actualizarBloque(b.id, {
               idPoliclinico: +d.idPoliclinico,
@@ -607,11 +609,11 @@ function crearOperacionController(c) {
         }
       for (const x of citas) {
         if (d.whatsapp === "1")
-          await op.comunicar(u, x, "WhatsApp", "Cambio institucional");
+          await servicioOperacion.comunicar(u, x, "WhatsApp", "Cambio institucional");
         if (d.correo === "1")
-          await op.comunicar(u, x, "Correo", "Cambio institucional");
+          await servicioOperacion.comunicar(u, x, "Correo", "Cambio institucional");
       }
-      const sede = op.sedeBloque(plan.bloques[0], plan.p);
+      const sede = servicioOperacion.sedeBloque(plan.bloques[0], plan.p);
       extras.agregar("notificaciones", {
         tipo: "CAMBIO_AGENDA",
         fecha: textoLocal(),
@@ -626,7 +628,7 @@ function crearOperacionController(c) {
         citasAfectadas: citas.length,
         responsable: u.nombre,
       });
-      op.aud(
+      servicioOperacion.aud(
         u,
         "Cambio de agenda aplicado",
         "Agendas",
@@ -638,54 +640,54 @@ function crearOperacionController(c) {
       return redirect("/admin/cambios");
     }),
     cupo: async ({ usuario: u, consulta: q, token }) => {
-      let x = q.get("idCita")
-          ? await op.exigirCita(u, q.get("idCita"))
+      let cita = q.get("idCita")
+          ? await servicioOperacion.exigirCita(u, q.get("idCita"))
           : null,
-        b = await catalogo.bloque(x?.idBloque || q.get("idBloque"));
-      if (!b) throw new Error("CITA_NO_ENCONTRADA");
-      if (!x) {
-        const activa = await citaRepo.buscarActivaPorBloque(b.id);
-        if (activa) x = await op.exigirCita(u, activa.id);
+        bloque = await catalogo.bloque(cita?.idBloque || q.get("idBloque"));
+      if (!bloque) throw new Error("CITA_NO_ENCONTRADA");
+      if (!cita) {
+        const activa = await citaRepo.buscarActivaPorBloque(bloque.id);
+        if (activa) cita = await servicioOperacion.exigirCita(u, activa.id);
       }
       const ctx = await contexto();
-      if (x?.estadoReserva === "ACTIVA") {
+      if (cita?.estadoReserva === "ACTIVA") {
         ctx.disponibles = await agendamiento.bloquesDisponibles({
-          especialidad: b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad,
+          especialidad: bloque.especialidad || ctx.profs.get(bloque.idProfesional)?.especialidad,
         });
       }
       return {
-        html: V.reserva({
-          u, ctx, c: x, b, op, admin: true,
+        html: vistas.reserva({
+          u, ctx, c: cita, b: bloque, op: servicioOperacion, admin: true,
           volverAgenda: urlAgendaAdmin(q.get("volverAgenda")),
-          mensaje: x && c.sesiones.tomarAviso(token, detalleReserva(x.id, q.get("volverAgenda"), true)),
+          mensaje: cita && aplicacion.sesiones.tomarAviso(token, detalleReserva(cita.id, q.get("volverAgenda"), true)),
         }),
       };
     },
     cupoEstado: safe(volverAgendaAdmin, async ({ usuario: u, cuerpo: d, token }) => {
-      const b = await catalogo.bloque(d.idBloque);
-      if (!b || !["Disponible", "Bloqueado", "Sin publicar"].includes(d.estado))
+      const bloque = await catalogo.bloque(d.idBloque);
+      if (!bloque || !["Disponible", "Bloqueado", "Sin publicar"].includes(d.estado))
         throw new Error("Cupo o estado inválido.");
-      if (await citaRepo.buscarActivaPorBloque(b.id))
+      if (await citaRepo.buscarActivaPorBloque(bloque.id))
         throw new Error("El cupo tiene una reserva activa.");
       await catalogo.cambiarPublicacion({
-        idProfesional: b.idProfesional,
-        desde: b.fecha,
-        hasta: b.fecha,
-        idBloque: b.id,
+        idProfesional: bloque.idProfesional,
+        desde: bloque.fecha,
+        hasta: bloque.fecha,
+        idBloque: bloque.id,
         publicar: d.estado === "Disponible",
       });
-      (op.meta.bloques[b.id] ||= {}).estado = d.estado;
-      op.aud(u, "Estado del cupo actualizado", "Agendas", b.id, b, {
+      (servicioOperacion.meta.bloques[bloque.id] ||= {}).estado = d.estado;
+      servicioOperacion.aud(u, "Estado del cupo actualizado", "Agendas", bloque.id, bloque, {
         estado: d.estado,
       });
-      const destino = urlAgendaAdmin(d.volverAgenda) || RUTA_AGENDA_ADMIN + "?fecha=" + b.fecha;
-      c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El estado del cupo se guardó." });
+      const destino = urlAgendaAdmin(d.volverAgenda) || RUTA_AGENDA_ADMIN + "?fecha=" + bloque.fecha;
+      aplicacion.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "Estado del cupo actualizado." });
       return redirect(destino);
     }),
     pacientes: async ({ usuario: u, consulta: q }) => {
       if (q.get("nuevo"))
         return {
-          html: require("../views/tens").pacientes({
+          html: require("../views/atencionDelDia").pacientes({
             usuario: u,
             lista: [],
             comunas: await catalogo.comunas(),
@@ -693,97 +695,97 @@ function crearOperacionController(c) {
         };
       const lista = [];
       for (const p of await catalogo.pacientes())
-        if (await op.acceso(u, p.rut)) lista.push(p);
-      return { html: V.pacientes({ u, lista, ctx: await contexto(), citas: await visible(u), q }) };
+        if (await servicioOperacion.acceso(u, p.rut)) lista.push(p);
+      return { html: vistas.pacientes({ u, lista, ctx: await contexto(), citas: await visible(u), q }) };
     },
     ficha: async ({ usuario: u, consulta: q }) => {
-      const p = await pacienteVisible(u, q.get("rut"));
-      op.aud(u, "Ficha consultada", "Pacientes", p.rut, null, null);
+      const paciente = await pacienteVisible(u, q.get("rut"));
+      servicioOperacion.aud(u, "Ficha consultada", "Pacientes", paciente.rut, null, null);
       return {
-        html: V.ficha({
+        html: vistas.ficha({
           u,
-          p,
+          p: paciente,
           q,
           ctx: await contexto(),
-          citas: (await visible(u)).filter((x) => x.rut === p.rut),
-          documentos: c.documentos
+          citas: (await visible(u)).filter((x) => x.rut === paciente.rut),
+          documentos: aplicacion.documentos
             .listar()
             .filter(
               (d) =>
-                d.rut === p.rut &&
+                d.rut === paciente.rut &&
                 (!d.idPoliclinico || d.idPoliclinico === +u.idPoliclinico),
             ),
           mensajes: extras
             .listar("comunicaciones")
             .filter(
-              (m) => m.rut === p.rut && m.idPoliclinico === +u.idPoliclinico,
+              (m) => m.rut === paciente.rut && m.idPoliclinico === +u.idPoliclinico,
             ),
-          op,
+          op: servicioOperacion,
         }),
       };
     },
     preferencias: safe("/tens/pacientes", async ({ usuario: u, cuerpo: d }) => {
-      const p = await pacienteVisible(u, d.rut),
-        antes = structuredClone(op.meta.pacientes[p.rut] || {});
-      Object.assign((op.meta.pacientes[p.rut] ||= {}), {
+      const paciente = await pacienteVisible(u, d.rut),
+        antes = structuredClone(servicioOperacion.meta.pacientes[paciente.rut] || {});
+      Object.assign((servicioOperacion.meta.pacientes[paciente.rut] ||= {}), {
         contactoPreferido: d.contactoPreferido,
         consentimientoComunicaciones: d.consentimientoComunicaciones === "1",
       });
-      op.aud(
+      servicioOperacion.aud(
         u,
         "Preferencias actualizadas",
         "Pacientes",
-        p.rut,
+        paciente.rut,
         antes,
-        op.meta.pacientes[p.rut],
+        servicioOperacion.meta.pacientes[paciente.rut],
       );
-      return redirect("/tens/ficha?rut=" + p.rut);
+      return redirect("/tens/ficha?rut=" + paciente.rut);
     }),
     desactivar: safe("/tens/pacientes", async ({ usuario: u, cuerpo: d }) => {
-      const p = await pacienteVisible(u, d.rut);
-      (op.meta.pacientes[p.rut] ||= {}).activo = p.activo === false;
-      op.aud(
+      const paciente = await pacienteVisible(u, d.rut);
+      (servicioOperacion.meta.pacientes[paciente.rut] ||= {}).activo = paciente.activo === false;
+      servicioOperacion.aud(
         u,
         "Estado paciente actualizado",
         "Pacientes",
-        p.rut,
-        { activo: p.activo !== false },
-        { activo: p.activo === false },
+        paciente.rut,
+        { activo: paciente.activo !== false },
+        { activo: paciente.activo === false },
       );
       return redirect("/tens/pacientes");
     }),
     reserva: async ({ usuario: u, consulta: q, token }) => {
-      let x = q.get("idCita")
-          ? await op.exigirCita(u, q.get("idCita"))
+      let cita = q.get("idCita")
+          ? await servicioOperacion.exigirCita(u, q.get("idCita"))
           : null,
-        b = await catalogo.bloque(x?.idBloque || q.get("idBloque")),
+        bloque = await catalogo.bloque(cita?.idBloque || q.get("idBloque")),
         ctx = await contexto();
       if (
-        !b ||
-        op.sedeBloque(b, ctx.profs.get(b.idProfesional)) !== +u.idPoliclinico
+        !bloque ||
+        servicioOperacion.sedeBloque(bloque, ctx.profs.get(bloque.idProfesional)) !== +u.idPoliclinico
       )
         throw new Error("FUERA_DE_SEDE");
-      if (!x) {
-        const activa = await citaRepo.buscarActivaPorBloque(b.id);
-        if (activa) x = await op.exigirCita(u, activa.id);
+      if (!cita) {
+        const activa = await citaRepo.buscarActivaPorBloque(bloque.id);
+        if (activa) cita = await servicioOperacion.exigirCita(u, activa.id);
       }
-      if (x?.estadoReserva === "ACTIVA") {
+      if (cita?.estadoReserva === "ACTIVA") {
         ctx.disponibles = await agendamiento.bloquesDisponibles({
           idPoliclinico: u.idPoliclinico,
-          especialidad: b.especialidad || ctx.profs.get(b.idProfesional)?.especialidad,
+          especialidad: bloque.especialidad || ctx.profs.get(bloque.idProfesional)?.especialidad,
         });
       }
       return {
-        html: V.reserva({
-          u, ctx, c: x, b, op,
+        html: vistas.reserva({
+          u, ctx, c: cita, b: bloque, op: servicioOperacion,
           volverAgenda: urlAgendaPersonal(q.get("volverAgenda")),
-          mensaje: x && c.sesiones.tomarAviso(token, detalleReserva(x.id, q.get("volverAgenda"))),
+          mensaje: cita && aplicacion.sesiones.tomarAviso(token, detalleReserva(cita.id, q.get("volverAgenda"))),
         }),
       };
     },
     flujo: safe(volverAgenda, async (r) => {
       const { usuario: u, cuerpo: d, token } = r;
-      const x = await op.exigirCita(u, d.idCita);
+      const x = await servicioOperacion.exigirCita(u, d.idCita);
       if (x.estadoReserva !== "ACTIVA")
         throw new Error("La reserva está cancelada.");
       const permitidos =
@@ -800,16 +802,18 @@ function crearOperacionController(c) {
         throw new Error("No tienes permiso para terminar la atención.");
       if (d.estado === "Confirmada")
         await citaRepo.actualizar({ ...x, estadoConfirmacion: "CONFIRMADA" });
-      if (["Atendida", "No asistió", "No se conectó"].includes(d.estado))
-        await agendamiento.registrarAsistencia(x.id, d.estado === "Atendida");
-      (op.meta.citas[x.id] ||= {}).flujo = d.estado;
-      op.aud(u, "Flujo de atención actualizado", "Atención", x.id, x, {
+      if (["Atendida", "No asistió", "No se conectó"].includes(d.estado)) {
+        const cita = await agendamiento.registrarAsistencia(x.id, d.estado === "Atendida");
+        await notificarEncuestaAtencion(aplicacion, cita, u).catch((e) => console.error("No se pudo registrar la encuesta:", e.message));
+      }
+      (servicioOperacion.meta.citas[x.id] ||= {}).flujo = d.estado;
+      servicioOperacion.aud(u, "Flujo de atención actualizado", "Atención", x.id, x, {
         estado: d.estado,
       });
       const destino = volverAgenda(r);
-      c.sesiones.guardarAviso(token, destino, {
+      aplicacion.sesiones.guardarAviso(token, destino, {
         tipo: "exito",
-        texto: "El estado de la reserva se guardó.",
+        texto: "Estado de la reserva actualizado.",
       });
       return redirect(destino);
     }),
@@ -817,20 +821,21 @@ function crearOperacionController(c) {
       camposCancelacion(d);
       if (!["WhatsApp", "Llamada", "Presencial"].includes(d.canal))
         throw new Error("Canal de solicitud inválido.");
-      const x = await op.exigirCita(u, d.idCita);
-      await agendamiento.cancelar(x.id, "ASISTIDA");
-      const b = await catalogo.bloque(x.idBloque);
+      const cita = await servicioOperacion.exigirCita(u, d.idCita);
+      await agendamiento.cancelar(cita.id, "ASISTIDA");
+      const bloque = await catalogo.bloque(cita.idBloque);
       if (d.destino === "Bloqueado") {
         await catalogo.cambiarPublicacion({
-          idProfesional: b.idProfesional,
-          desde: b.fecha,
-          hasta: b.fecha,
-          idBloque: b.id,
+          idProfesional: bloque.idProfesional,
+          desde: bloque.fecha,
+          hasta: bloque.fecha,
+          idBloque: bloque.id,
           publicar: false,
         });
-        (op.meta.bloques[b.id] ||= {}).estado = "Bloqueado";
+        (servicioOperacion.meta.bloques[bloque.id] ||= {}).estado = "Bloqueado";
+        delete servicioOperacion.meta.bloques[bloque.id].retenidoEspera;
       }
-      op.aud(u, "Cancelación solicitada por paciente", "Reservas", x.id, x, {
+      servicioOperacion.aud(u, "Cancelación solicitada por paciente", "Reservas", cita.id, cita, {
         motivo: d.motivo,
         canal: d.canal,
         destino: d.destino,
@@ -841,58 +846,60 @@ function crearOperacionController(c) {
       (r) => r.usuario.rol === "ADMINISTRACION" ? volverAgendaAdmin(r) : volverAgenda(r),
       async ({ usuario: u, cuerpo: d, token }) => {
         const admin = u.rol === "ADMINISTRACION";
-        const x = await op.exigirCita(u, d.idCita),
-          b = await catalogo.bloque(d.idBloque),
-          p = b && (await catalogo.profesional(b.idProfesional));
-        if (!b || (!admin && op.sedeBloque(b, p) !== +u.idPoliclinico))
+        const cita = await servicioOperacion.exigirCita(u, d.idCita),
+          bloque = await catalogo.bloque(d.idBloque),
+          p = bloque && (await catalogo.profesional(bloque.idProfesional));
+        if (!bloque || (!admin && servicioOperacion.sedeBloque(bloque, p) !== +u.idPoliclinico))
           throw new Error("FUERA_DE_SEDE");
         if (!d.motivo?.trim()) throw new Error("Indica un motivo.");
         const nueva = await agendamiento.agendar({
-          rut: x.rut,
-          idBloque: b.id,
+          rut: cita.rut,
+          idBloque: bloque.id,
           idUsuario: u.id,
         });
         try {
-          await agendamiento.cancelar(x.id, "ASISTIDA");
+          await agendamiento.cancelar(cita.id, "ASISTIDA");
         } catch (e) {
           await agendamiento.cancelar(nueva.id, "ASISTIDA");
           throw e;
         }
-        op.aud(u, "Reserva reprogramada", "Reservas", x.id, x, {
+        servicioOperacion.aud(u, "Reserva reprogramada", "Reservas", cita.id, cita, {
           nuevaReserva: nueva.id,
           motivo: d.motivo,
         });
-        if (admin) await op.comunicar(u, nueva, "Correo", "Reprogramación institucional");
+        if (admin) await servicioOperacion.comunicar(u, nueva, "Correo", "Reprogramación institucional");
         const destino = detalleReserva(nueva.id, d.volverAgenda, admin);
-        c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "La reserva se reprogramó." });
+        aplicacion.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "Reserva reprogramada." });
         return redirect(destino);
       },
     ),
     espera: async ({ usuario: u, consulta: q, token }) => ({
-      html: V.espera({
+      html: vistas.espera({
         u,
         q,
-        mensaje: c.sesiones.tomarAviso(token, "/tens/espera"),
-        avisos: c.extras.listar("notificaciones").filter((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idPoliclinico === +u.idPoliclinico),
+        mensaje: aplicacion.sesiones.tomarAviso(token, "/tens/espera"),
+        avisos: aplicacion.extras.listar("notificaciones").filter((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idPoliclinico === +u.idPoliclinico),
         ctx: {
           ...(await contexto()),
-          listaProfs:(await catalogo.profesionales()).filter(p=>op.lugares(p).includes(+u.idPoliclinico)),
+          listaProfs:(await catalogo.profesionales()).filter(p=>servicioOperacion.lugares(p).includes(+u.idPoliclinico)),
           especialidades:
-            op.meta.sedes[u.idPoliclinico]?.especialidades ||
+            servicioOperacion.meta.sedes[u.idPoliclinico]?.especialidades ||
             infoSede(u.idPoliclinico)?.especialidades ||
             [],
         },
         lista: (await espera.vigentes()).filter(
           (x) => x.idPoliclinico === +u.idPoliclinico,
         ),
+        retenidos: await espera.retenidos(u.idPoliclinico),
       }),
     }),
     supervision: async ({ usuario: u, consulta: q }) => ({
-      html: V.espera({
+      html: vistas.espera({
         u,
         q,
         ctx: await contexto(),
         lista: await espera.vigentes(),
+        retenidos: await espera.retenidos(),
         admin: true,
       }),
     }),
@@ -902,22 +909,22 @@ function crearOperacionController(c) {
         throw new Error("FUERA_DE_SEDE");
       if (!["Contactado", "Hora ofrecida", "No responde"].includes(d.estado))
         throw new Error("Estado inválido.");
-      const m = (op.meta.espera[e.id] ||= {});
-      m.estadoOperativo = d.estado;
-      m.contactos ||= [];
-      m.contactos.push({
+      const metaEspera = (servicioOperacion.meta.espera[e.id] ||= {});
+      metaEspera.estadoOperativo = d.estado;
+      metaEspera.contactos ||= [];
+      metaEspera.contactos.push({
         fecha: textoLocal(),
         canal: d.canal,
         resultado: d.estado,
         responsable: u.nombre,
       });
-      op.aud(
+      servicioOperacion.aud(
         u,
         "Contacto de lista de espera registrado",
         "Lista de espera",
         e.id,
         e,
-        m,
+        metaEspera,
       );
       return redirect("/tens/espera");
     }),
@@ -929,15 +936,15 @@ function crearOperacionController(c) {
           .listar("comunicaciones")
           .filter((m) => (admin || m.idPoliclinico === +u.idPoliclinico) && (!errores || m.estado === "Error"));
       return {
-        html: V.page(
+        html: vistas.page(
           u,
           "Comunicaciones",
-          V.cab(
-            "Confirmaciones, recordatorios y contacto administrativo. Los envíos permanecen pendientes hasta conectar un proveedor.",
-            (errores ? V.btn("Ver todos los mensajes", ruta, true) : "") +
-              (!admin ? V.btn("Confirmaciones / llamadas", "/tens/confirmaciones", true) : ""),
+          vistas.cab(
+            "Estado de los mensajes que el sistema envía solo: comprobantes, recordatorios y encuestas. El personal no los envía; para quienes no responden, usa «Confirmaciones / llamadas».",
+            (errores ? vistas.btn("Ver todos los mensajes", ruta, true) : "") +
+              (!admin ? vistas.btn("Confirmaciones / llamadas", "/tens/confirmaciones", true) : ""),
           ) +
-            V.panel(
+            vistas.panel(
               errores ? "Mensajes con error de envío" : "Bandeja operativa",
               tabla(
                 [
@@ -958,54 +965,36 @@ function crearOperacionController(c) {
                   m.fecha,
                   m.responsable,
                   m.detalle,
-                  raw(
-                    V.post(
-                      admin?"/admin/comunicacion":"/tens/comunicacion",
-                      { idCita: m.idCita, canal: m.canal, tipo: m.tipo },
-                      m.tipo === "Enlace de atención" ? "Solicitar envío" : "Reenviar",
-                      true,
-                    ),
-                  ),
+                  m.tipo === "Enlace de atención"
+                    ? raw(vistas.post(admin ? "/admin/comunicacion" : "/tens/comunicacion", { idCita: m.idCita, canal: m.canal, tipo: m.tipo }, "Solicitar envío", true))
+                    : "Automático",
                 ]),
                 errores ? "No hay mensajes con error de envío." : undefined,
               ),
-            ) +
-            (!admin
-              ? V.panel(
-                  "Crear recordatorio",
-                  `<form class="form-grid" method="post" action="/tens/comunicacion">${V.select(
-                    "idCita",
-                    "Reserva",
-                    (await visible(u)).filter(
-                      (x) => x.estadoReserva === "ACTIVA",
-                    ),
-                    "",
-                    (x) => x.id,
-                    (x) => `${x.rut} · Reserva ${x.id}`,
-                  )}${V.select("canal", "Canal", V.opcionesTexto(["WhatsApp", "Correo"]))}<button type="submit">Preparar recordatorio</button></form>`,
-                )
-              : ""),
+            ),
         ),
       };
     },
     comunicacion: safe(
       "/tens/comunicaciones",
       async ({ usuario: u, cuerpo: d }) => {
-        const x = await op.exigirCita(u, d.idCita);
+        const cita = await servicioOperacion.exigirCita(u, d.idCita);
         if (!["WhatsApp", "Correo"].includes(d.canal))
           throw new Error("Canal inválido.");
         const tipo = d.tipo || "Recordatorio";
-        if (tipo === "Enlace de atención" && !["TELEMEDICINA", "ADMINISTRACION"].includes(u.rol))
+        if (tipo !== "Enlace de atención")
+          throw new Error("Los mensajes los envía el sistema automáticamente.");
+        if (!["TELEMEDICINA", "ADMINISTRACION"].includes(u.rol))
           throw new Error("FUERA_DE_SEDE");
-        await op.comunicar(u, x, d.canal, tipo);
+        await servicioOperacion.comunicar(u, cita, d.canal, tipo);
         if (tipo === "Enlace de atención" && d.origen === "reserva" && u.rol === "TELEMEDICINA")
-          return redirect(detalleReserva(x.id, d.volverAgenda));
+          return redirect(detalleReserva(cita.id, d.volverAgenda));
         return redirect(u.rol === "ADMINISTRACION" ? "/admin/comunicaciones" : "/tens/comunicaciones");
       },
     ),
     enlace: safe(volverAgenda, async ({ usuario: u, cuerpo: d, token }) => {
       if (u.rol !== "TELEMEDICINA") throw new Error("FUERA_DE_SEDE");
-      const x = await op.exigirCita(u, d.idCita);
+      const cita = await servicioOperacion.exigirCita(u, d.idCita);
       let url;
       try {
         url = new URL(d.enlace);
@@ -1013,12 +1002,12 @@ function crearOperacionController(c) {
         throw new Error("Enlace inválido.");
       }
       if (url.protocol !== "https:") throw new Error("Usa un enlace HTTPS.");
-      (op.meta.citas[x.id] ||= {}).enlace = url.href;
-      op.aud(u, "Enlace de Telemedicina actualizado", "Telemedicina", x.id, x, {
+      (servicioOperacion.meta.citas[cita.id] ||= {}).enlace = url.href;
+      servicioOperacion.aud(u, "Enlace de Telemedicina actualizado", "Telemedicina", cita.id, cita, {
         enlace: url.href,
       });
-      const destino = detalleReserva(x.id, d.volverAgenda);
-      c.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "El enlace de atención se guardó." });
+      const destino = detalleReserva(cita.id, d.volverAgenda);
+      aplicacion.sesiones.guardarAviso(token, destino, { tipo: "exito", texto: "Enlace de atención guardado." });
       return redirect(destino);
     }),
     documentoArchivar: safe(
@@ -1030,7 +1019,7 @@ function crearOperacionController(c) {
           archivado: true,
           archivadoPor: u.nombre,
         });
-        op.aud(u, "Documento archivado", "Documentos", doc.id, antes, {
+        servicioOperacion.aud(u, "Documento archivado", "Documentos", doc.id, antes, {
           archivado: true,
         });
         return redirect("/tens/ficha?tab=documentos&rut=" + doc.rut);
@@ -1041,12 +1030,12 @@ function crearOperacionController(c) {
         lista = await catalogo.usuarios(),
         v = lista.find((x) => x.id === q.get("editar")) || {};
       return {
-        html: V.page(
+        html: vistas.page(
           u,
           "Usuarios y permisos",
-          V.cab(
+          vistas.cab(
             "Configuración administrativa de accesos y lugares.",
-            V.btn("Auditoría", "/admin/auditoria", true),
+            vistas.btn("Auditoría", "/admin/auditoria", true),
           ) +
             tabla(
               [
@@ -1069,8 +1058,8 @@ function crearOperacionController(c) {
                 x.activo ? "Activo" : "Inactivo",
                 x.ultimoAcceso || "Sin acceso registrado",
                 raw(
-                  V.btn("Editar", "/admin/usuarios?editar=" + x.id, true) +
-                    V.post(
+                  vistas.btn("Editar", "/admin/usuarios?editar=" + x.id, true) +
+                    vistas.post(
                       "/admin/usuario/enlace",
                       { id: x.id },
                       "Enlace seguro",
@@ -1079,9 +1068,9 @@ function crearOperacionController(c) {
                 ),
               ]),
             ) +
-            V.panel(
+            vistas.panel(
               v.id ? "Editar acceso" : "Crear acceso",
-              `<form class="form-grid" method="post" action="/admin/usuario">${V.hidden({ id: v.id || "" })}${V.input("nombre", "Nombre", v.nombre || "", "text", "required")}${V.input("correo", "Correo", v.correo || "", "email", "required")}${V.select(
+              `<form class="form-grid" method="post" action="/admin/usuario">${vistas.hidden({ id: v.id || "" })}${vistas.input("nombre", "Nombre", v.nombre || "", "text", "required")}${vistas.input("correo", "Correo", v.correo || "", "email", "required")}${vistas.select(
                 "rol",
                 "Rol",
                 [
@@ -1090,7 +1079,7 @@ function crearOperacionController(c) {
                   { id: "TELEMEDICINA", nombre: "Gestión de Telemedicina" },
                 ],
                 v.rol,
-              )}${V.select("idIntegrante", "Vincular a integrante", [{ id: "", nombre: "Usuario administrativo" }, ...ctx.listaProfs], v.idIntegrante)}<fieldset class="full"><legend>Lugares asignados</legend>${ctx.listaSedes.map((s) => `<label class="check"><input type="checkbox" data-list="lugares" value="${s.id}" ${(v.lugares || [v.idPoliclinico]).includes(s.id) ? "checked" : ""}>${esc(s.nombre)}</label>`).join("")}${V.hidden({ lugares: (v.lugares || [v.idPoliclinico]).filter(Boolean).join(",") })}</fieldset>${V.select(
+              )}${vistas.select("idIntegrante", "Vincular a integrante", [{ id: "", nombre: "Usuario administrativo" }, ...ctx.listaProfs], v.idIntegrante)}<fieldset class="full"><legend>Lugares asignados</legend>${ctx.listaSedes.map((s) => `<label class="check"><input type="checkbox" data-list="lugares" value="${s.id}" ${(v.lugares || [v.idPoliclinico]).includes(s.id) ? "checked" : ""}>${esc(s.nombre)}</label>`).join("")}${vistas.hidden({ lugares: (v.lugares || [v.idPoliclinico]).filter(Boolean).join(",") })}</fieldset>${vistas.select(
                 "activo",
                 "Estado",
                 [
@@ -1098,7 +1087,7 @@ function crearOperacionController(c) {
                   { id: 0, nombre: "Inactivo" },
                 ],
                 v.activo === false ? 0 : 1,
-              )}${V.select("sedePrincipal","Lugar principal al ingresar",[{id:"",nombre:"Primer lugar asignado"},...ctx.listaSedes],v.idPoliclinico||"")}${V.select("puedeTerminarAtencion","Finalizar flujo administrativo de atención",[{id:"1",nombre:"Permitido"},{id:"0",nombre:"Restringido"}],v.puedeTerminarAtencion===false?"0":"1")}<button type="submit">Guardar acceso</button></form>`,
+              )}${vistas.select("sedePrincipal","Lugar principal al ingresar",[{id:"",nombre:"Primer lugar asignado"},...ctx.listaSedes],v.idPoliclinico||"")}${vistas.select("puedeTerminarAtencion","Finalizar flujo administrativo de atención",[{id:"1",nombre:"Permitido"},{id:"0",nombre:"Restringido"}],v.puedeTerminarAtencion===false?"0":"1")}<button type="submit">Guardar acceso</button></form>`,
             ),
         ),
       };
@@ -1106,19 +1095,19 @@ function crearOperacionController(c) {
     usuarioGuardar: safe(
       "/admin/usuarios",
       async ({ usuario: u, cuerpo: d }) => {
-        await op.usuario(d, u);
+        await servicioOperacion.usuario(d, u);
         return redirect("/admin/usuarios");
       },
     ),
     usuarioEnlace: safe(
       "/admin/usuarios",
       async ({ usuario: u, cuerpo: d }) => {
-        const enlace = await op.enlaceClave(d.id, u);
+        const enlace = await servicioOperacion.enlaceClave(d.id, u);
         return {
-          html: V.page(
+          html: vistas.page(
             u,
             "Enlace seguro",
-            V.panel(
+            vistas.panel(
               "Restablecer contraseña",
               `<p>Enlace de un solo uso, válido por 30 minutos. Entrégalo al titular mediante un canal autorizado.</p><a href="${esc(enlace)}">Abrir enlace de restablecimiento</a><input aria-label="Enlace de restablecimiento" value="${esc(enlace)}" readonly>`,
             ),
@@ -1127,17 +1116,17 @@ function crearOperacionController(c) {
       },
     ),
     restablecer: ({ consulta: q }) => ({
-      html: V.page(
+      html: vistas.page(
         null,
         "Restablecer contraseña",
-        V.panel(
+        vistas.panel(
           "Crear contraseña",
-          `<form method="post" action="/restablecer">${V.hidden({ token: q.get("token") || "" })}${V.input("clave", "Nueva contraseña (mínimo 10 caracteres)", "", "password", 'minlength="10" required')}<button type="submit">Guardar contraseña</button></form>`,
+          `<form method="post" action="/restablecer">${vistas.hidden({ token: q.get("token") || "" })}${vistas.input("clave", "Nueva contraseña (mínimo 10 caracteres)", "", "password", 'minlength="10" required')}<button type="submit">Guardar contraseña</button></form>`,
         ),
       ),
     }),
     guardarClave: safe("/login", async ({ cuerpo: d }) => {
-      await op.restablecer(d.token, d.clave);
+      await servicioOperacion.restablecer(d.token, d.clave);
       return redirect("/login");
     }),
     auditoria: async ({ usuario: u, consulta: q }) => {
@@ -1161,13 +1150,13 @@ function crearOperacionController(c) {
                 .includes(q.get("q").toLowerCase())),
         );
       return {
-        html: V.page(
+        html: vistas.page(
           u,
           "Auditoría",
-          V.cab(
+          vistas.cab(
             "Registro de accesos y operaciones sensibles, con valores anteriores y posteriores.",
           ) +
-            `<form class="filters">${V.input("desde", "Desde", q.get("desde") || "", "date")}${V.input("hasta", "Hasta", q.get("hasta") || "", "date")}${V.input("usuario", "Usuario", q.get("usuario") || "")}${V.input("accion", "Acción", q.get("accion") || "")}${V.select("sede", "Lugar", [{ id: "", nombre: "Seleccionar lugar…" }, ...(await catalogo.policlinicos())], q.get("sede") || "")}${V.select("resultado", "Resultado", [{ id: "", nombre: "Seleccionar resultado…" }, { id: "EXITOSO", nombre: "Exitoso" }, { id: "RECHAZADO", nombre: "Rechazado" }, { id: "ERROR", nombre: "Error" }], q.get("resultado") || "")}<button type="submit">Filtrar</button></form>` +
+            `<form class="filters">${vistas.input("desde", "Desde", q.get("desde") || "", "date")}${vistas.input("hasta", "Hasta", q.get("hasta") || "", "date")}${vistas.input("usuario", "Usuario", q.get("usuario") || "")}${vistas.input("accion", "Acción", q.get("accion") || "")}${vistas.select("sede", "Lugar", [{ id: "", nombre: "Seleccionar lugar…" }, ...(await catalogo.policlinicos())], q.get("sede") || "")}${vistas.select("resultado", "Resultado", [{ id: "", nombre: "Seleccionar resultado…" }, { id: "EXITOSO", nombre: "Exitoso" }, { id: "RECHAZADO", nombre: "Rechazado" }, { id: "ERROR", nombre: "Error" }], q.get("resultado") || "")}<button type="submit">Filtrar</button></form>` +
             tabla(
               [
                 "Fecha",
@@ -1183,7 +1172,7 @@ function crearOperacionController(c) {
                   x.fecha,
                   x.usuario,
                   x.accion,
-                  raw(V.badge({ EXITOSO: "Exitoso", RECHAZADO: "Rechazado", ERROR: "Error" }[x.resultado] || "Exitoso")),
+                  raw(vistas.badge({ EXITOSO: "Exitoso", RECHAZADO: "Rechazado", ERROR: "Error" }[x.resultado] || "Exitoso")),
                   x.resultado === "RECHAZADO" ? `${x.modulo || ""} ${x.registro || ""} · ${x.detalle}` : `${x.modulo || ""} ${x.registro || x.detalle}`,
                   raw(
                     `<details><summary>Ver valores</summary><pre>${esc(JSON.stringify({ antes: x.antes, despues: x.despues }, null, 2))}</pre></details>`,
@@ -1195,4 +1184,4 @@ function crearOperacionController(c) {
     },
   };
 }
-module.exports = { crearOperacionController };
+module.exports = { crearControladorOperacion };

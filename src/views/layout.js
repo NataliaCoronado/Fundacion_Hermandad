@@ -1,8 +1,8 @@
 "use strict";
-const { esc } = require("./util");
+const { esc } = require("./componentesComunes");
 const { permitido, rutaInicio } = require("../auth/permisos");
-const css = require("./estilos");
-const pulido = require("./pulido.css");
+const css = require("./estilosBase.css");
+const pulido = require("./estilosDeAcabado.css");
 const personalCss = require("./personal.css");
 const personalScript = require("./personal.script");
 
@@ -24,6 +24,7 @@ const MENU = [
       ["/admin/profesionales", "Equipo de salud", "medico"],
       ["/admin/policlinicos", "Policlínicos y especialidades", "edificio"],
       ["/admin/reportes", "Reportes", "grafico"],
+      ["/admin/comunicaciones", "Comunicaciones", "chat"],
     ],
   },
   {
@@ -36,7 +37,7 @@ const MENU = [
       ["/tens/espera", "Lista de espera", "lista"],
       ["/tens/pacientes", "Pacientes", "usuarios"],
       ["/tens/documentos?pendiente=1", "Documentos", "documento"],
-      ["/tens/comunicaciones", "Comunicaciones", "chat"],
+      ["/tens/confirmaciones", "Confirmaciones", "telefono"],
     ],
   },
 ];
@@ -53,6 +54,11 @@ const ROLES = {
   TENS_TONS: "TENS/TONS",
   TELEMEDICINA: "Gestión de Telemedicina",
 };
+const volverBtn = (href, texto = "Volver", clase = "") =>
+  `<a class="volver-btn${clase ? " " + clase : ""}" href="${esc(href)}" data-volver>${ico("chevIzq")}<span>${esc(texto)}</span></a>`;
+const scriptVolver = `<script>(function(){var mismoOrigen=false;try{mismoOrigen=!!document.referrer&&new URL(document.referrer).origin===location.origin}catch(e){}
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('[data-volver]');if(!a||e.defaultPrevented||e.ctrlKey||e.metaKey||e.shiftKey||e.button)return;if(mismoOrigen&&history.length>1){e.preventDefault();history.back()}});
+if(history.length<=1)[].forEach.call(document.querySelectorAll('[data-raiz]'),function(a){a.hidden=true})})();</script>`;
 const marca =
   '<a class="marca" href="/" aria-label="Instituto de Caridad Hermandad de Dolores, inicio"><img class="logo" src="/img/logo.png" alt="Instituto de Caridad Hermandad de Dolores · +200 Años al servicio de Chile" width="170" height="46"></a>';
 const script = `<script>(function(){
@@ -77,13 +83,13 @@ const iniciales = (n) =>
     .join("")
     .toUpperCase() || "·";
 const hoyLargo = () => {
-  const t = new Date().toLocaleDateString("es-CL", {
+  const fechaTexto = new Date().toLocaleDateString("es-CL", {
     timeZone: "America/Santiago",
     weekday: "long",
     day: "numeric",
     month: "long",
   });
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  return fechaTexto.charAt(0).toUpperCase() + fechaTexto.slice(1);
 };
 
 function pagina({
@@ -98,6 +104,7 @@ function pagina({
   ingreso = false,
   portada = null,
   volver = null,
+  volverA = null,
 }) {
   const msg = mensaje
     ? `<p class="aviso ${mensaje.tipo === "error" ? "err" : "okk"}" role="status">${esc(mensaje.texto)}</p>`
@@ -116,21 +123,23 @@ function pagina({
     let banda = portada;
     let resto = contenido;
     if (!banda && encabezado) {
-      const m = contenido.match(/^\s*<p class="lead">([\s\S]*?)<\/p>/);
-      banda = { titulo: esc(titulo), lead: m ? m[1] : "" };
-      if (m) resto = contenido.slice(m[0].length);
+      const coincidencia = contenido.match(/^\s*<p class="lead">([\s\S]*?)<\/p>/);
+      banda = { titulo: esc(titulo), lead: coincidencia ? coincidencia[1] : "" };
+      if (coincidencia) resto = contenido.slice(coincidencia[0].length);
     }
-    const v = volver === false ? null : volver || { href: "/", texto: "Volver al inicio" };
-    const volverHtml = v ? `<a class="volver" href="${esc(v.href)}">${ico("chevIzq")}<span>${esc(v.texto)}</span></a>` : "";
+    const raiz = volver === false;
+    const v = raiz ? { href: "/", texto: "Volver" } : volver || { href: "/", texto: "Volver al inicio" };
+    const inteligente = raiz || !volver;
+    const volverHtml = `<a class="volver" href="${esc(v.href)}"${inteligente ? " data-volver" : ""}${raiz ? " data-raiz" : ""}>${ico("chevIzq")}<span>${esc(v.texto)}</span></a>`;
     const bandaHtml = banda
       ? `<section class="portada"><img class="portada-sello" src="/img/sello.png" alt="" width="460" height="460"><div class="portada-txt">${volverHtml}${banda.pre || ""}<h1>${banda.titulo}</h1>${banda.lead ? `<p class="lead">${banda.lead}</p>` : ""}</div>${banda.extra || ""}</section>`
       : "";
     const [sedeDir, calle] = DIRECCION.split(": ");
-    cuerpo = `<aside class="side" id="menu-portal" aria-label="Menú principal"><a class="side-marca" href="/"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>Portal de pacientes</small></span></a>
-<nav aria-label="Principal"><h3>AGENDAMIENTO DE HORAS</h3>${nav}</nav><div class="pie-s"><a href="https://wa.me/${WHATSAPP.replace(/\D/g, "")}" target="_blank" rel="noopener">${ico("telefono")}<span>WhatsApp ${WHATSAPP}</span></a><a href="/privacidad">${ico("escudo")}<span>Política de privacidad</span></a></div></aside>
+    cuerpo = `<aside class="side" id="menu-portal" aria-label="Menú principal"><a class="side-marca" href="/"><img src="/img/sello.png" alt="" width="38" height="38"><span><b>Hermandad de Dolores</b><small>Te ayudamos a pedir tu hora</small></span></a>
+<nav aria-label="Principal"><h3>Qué necesitas hacer</h3>${nav}</nav><div class="pie-s"><p class="pie-s-t">Estamos para ayudarte</p><a class="ayuda-wa" href="https://wa.me/${WHATSAPP.replace(/\D/g, "")}" target="_blank" rel="noopener">${ico("telefono")}<span>WhatsApp ${WHATSAPP}</span></a><a href="/privacidad">${ico("escudo")}<span>Política de privacidad</span></a></div></aside>
 <div class="velo" aria-hidden="true"></div>
 <div class="app"><header class="sup"><div class="cab">${marca}${botonMenu("menu-portal")}</div></header>
-<main id="contenido">${bandaHtml}${msg}${resto}</main>
+<main id="contenido">${bandaHtml || `<div class="volver-solo">${volverHtml}</div>`}${msg}${resto}</main>
 <footer class="pie"><div class="pie-in"><span class="pie-marca"><img src="/img/sello.png" alt="" width="48" height="48"><span>Instituto de Caridad<br>Hermandad de Dolores</span></span>
 <dl class="pie-datos"><div><dt>${esc(sedeDir)}</dt><dd>${esc(calle)}</dd></div><div><dt>WhatsApp</dt><dd><a href="https://wa.me/${WHATSAPP.replace(/\D/g, "")}">${WHATSAPP}</a></dd></div><div><dt>Correo</dt><dd><a href="mailto:${CORREO}">${CORREO}</a></dd></div></dl>
 <p class="pie-legal">Más de 200 años al servicio de Chile. <a href="/privacidad">Política de privacidad</a></p></div></footer></div>`;
@@ -143,12 +152,11 @@ function pagina({
 <main class="ing-der" id="contenido"><div class="ing-caja">${msg}${contenido}</div></main>`;
   } else if (usuario) {
     clase = "pers";
-    const botActivo = process.env.BOT_WHATSAPP === "1";
     const grupos = MENU.filter((g) => permitido(usuario.rol, g.area))
       .map(
         (g) =>
           `<h3>${g.titulo}</h3>${g.items
-            .filter(([href]) => (botActivo || href !== "/tens/bot") && (usuario.rol !== "TELEMEDICINA" || href !== "/tens/recepcion"))
+            .filter(([href]) => usuario.rol !== "TELEMEDICINA" || href !== "/tens/recepcion")
             .map(
               ([href, t, i]) =>
                 `<a href="${href}">${ico(i)}<span>${esc(t)}</span></a>`,
@@ -158,16 +166,16 @@ function pagina({
       .join("");
     const sedeUsuario = usuario.rol === "ADMINISTRACION"
       ? "Red institucional"
-      : require("../models/sedesInfo").infoSede(usuario.idPoliclinico)?.nombre || ROLES[usuario.rol] || "Lugar asignado";
+      : require("../models/informacionDeSedes").infoSede(usuario.idPoliclinico)?.nombre || ROLES[usuario.rol] || "Lugar asignado";
     const aviso = mensaje ? `<div class="personal-aviso"><p class="aviso ${mensaje.tipo === "error" ? "err" : "okk"}" role="${mensaje.tipo === "error" ? "alert" : "status"}">${ico(mensaje.tipo === "error" ? "campana" : "check")}<span>${esc(mensaje.texto)}</span></p></div>` : "";
     cuerpo = `<aside class="side" id="menu-personal" aria-label="Menú del personal"><div class="side-head"><a class="side-marca" href="${rutaInicio(usuario.rol)}"><img src="/img/sello.png" alt="" width="36" height="36"><span><b>Hermandad de Dolores</b><small>${esc(ROLES[usuario.rol] || usuario.rol)}</small></span></a><button class="side-close" type="button" aria-label="Cerrar menú">${ico("cerrar")}</button></div>
 <nav aria-label="Principal">${grupos}</nav><div class="pie-s"><a href="${esc(URL_PORTAL())}" target="_blank" rel="noopener">${ico("externo")}<span>Portal de pacientes</span></a>${usuario.rol === "ADMINISTRACION" ? `<a href="/admin/usuarios">${ico("llave")}<span>Configuración / perfil</span></a>` : ""}<div class="side-user"><span class="side-avatar" aria-hidden="true">${esc(iniciales(usuario.nombre))}</span><span><b>${esc(usuario.nombre)}</b><small>${esc(sedeUsuario)}</small></span></div><form method="post" action="/logout"><button class="side-logout" type="submit">${ico("puerta")} Cerrar sesión</button></form></div></aside>
 <div class="velo" aria-hidden="true"></div>
-<div class="app"><header class="top"><div class="top-izq">${botonMenu("menu-personal")}<h1>${esc(titulo)}</h1></div><div class="der"><span class="fecha-hoy">${ico("calendario")}${esc(hoyLargo())}</span></div></header>
+<div class="app"><header class="top"><div class="top-izq">${botonMenu("menu-personal")}${volverBtn(volverA?.href || rutaInicio(usuario.rol), volverA?.texto || "Volver", "top-volver")}<h1>${esc(titulo)}</h1></div><div class="der"><span class="fecha-hoy">${ico("calendario")}${esc(hoyLargo())}</span></div></header>
 <main id="contenido" tabindex="-1">${aviso}${lienzo ? contenido : `<div class="cont">${contenido}</div>`}</main></div><div class="personal-actividad" role="status" aria-live="polite" aria-atomic="true"></div>`;
   } else {
     cuerpo = `<header><div class="cab">${marca}<nav class="nav"><a class="cta" href="/">Ir al inicio</a></nav></div></header>
-<main id="contenido"><div class="cont solo"><h1>${esc(titulo)}</h1>${msg}${contenido}</div></main>`;
+<main id="contenido"><div class="cont solo">${volverBtn(volverA?.href || "/", volverA?.texto || "Volver")}<h1>${esc(titulo)}</h1>${msg}${contenido}</div></main>`;
   }
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -177,6 +185,6 @@ function pagina({
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>${css}${clase === "pers" ? require("./operacion.css") : ""}${pulido}${clase === "pers" ? personalCss : ""}${portal ? require("./portal.css") : ""}</style></head>
-<body${clase ? ` class="${clase}"` : ""}><a class="saltar" href="#contenido">Saltar al contenido</a>${cuerpo}${script}${String(contenido).includes('data-ec=') ? require("./graficos.script") : ""}${clase === "pers" ? personalScript + require("./operacion.script") : ""}</body></html>`;
+<body${clase ? ` class="${clase}"` : ""}><a class="saltar" href="#contenido">Saltar al contenido</a>${cuerpo}${script}${scriptVolver}${String(contenido).includes('data-ec=') ? require("./graficos.script") : ""}${clase === "pers" ? personalScript + require("./operacion.script") : ""}</body></html>`;
 }
 module.exports = { pagina, WHATSAPP, CORREO, DIRECCION, iniciales };

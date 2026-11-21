@@ -7,19 +7,18 @@ const path = require('node:path');
 test('PostgreSQL: el consentimiento de un paciente nuevo se guarda por la web y de forma asistida', async () => {
   const { PGlite } = require('@electric-sql/pglite');
   const pg = new PGlite();
-  for (const f of ['hermandad_postgresql.sql', 'datos_ejemplo.sql', '03_credencial.sql']) {
-    await pg.exec(fs.readFileSync(path.join(__dirname, '../db', f), 'utf8'));
+  for (const f of ['01_estructura.sql', '02_datos_ejemplo.sql', '03_credenciales.sql']) {
+    await pg.exec(fs.readFileSync(path.join(__dirname, '../base-de-datos', f), 'utf8'));
   }
   const db = {
     query: async (sql, params) => (await pg.query(sql, params)).rows,
     tx: async (fn) => pg.transaction((tx) => fn(async (sql, params) => (await tx.query(sql, params)).rows)),
   };
-  const c = require('../src/contenedor').crearContenedor({ db });
+  const c = require('../src/armarAplicacion').crearContenedor({ db });
   await c.inicializar();
   const ficha = { nombres: 'Ana', apellidos: 'Prueba', fechaNacimiento: '1990-01-01', genero: 'FEMENINO', nacionalidad: 'Chilena',
     telefono: '+56911112222', tieneWhatsapp: '1', correo: '', direccion: 'Calle 1', idComuna: '1', consentimiento: true };
   await c.pacientes.crear({ ...ficha, rut: '12345678-5' });
-  // Registro asistido por TENS/TONS.
   const tens = (await c.catalogo.usuarios()).find((u) => u.rol === 'TENS_TONS');
   await c.pacientes.crear({ ...ficha, rut: '44444444-4', idUsuario: tens.id });
 

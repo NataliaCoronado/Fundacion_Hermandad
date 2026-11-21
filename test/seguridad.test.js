@@ -2,9 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
-const { crearContenedor } = require('../src/contenedor');
+const { crearContenedor } = require('../src/armarAplicacion');
 const { crearServidor } = require('../src/server');
-const { MAX_FALLOS } = require('../src/services/CuentaPacienteService');
+const { MAX_FALLOS } = require('../src/services/CuentaPacienteServicio');
 
 async function levantar() {
   const c = crearContenedor();
@@ -88,7 +88,7 @@ test('seguridad: las sesiones vencidas y los intentos viejos se limpian', () => 
   se.limpiar();
   assert.deepStrictEqual([...se.mapa.keys()], [viva]);
 
-  const { crearLimitador } = require('../src/util/limitador');
+  const { crearLimitador } = require('../src/herramientas/limitador');
   const real = Date.now;
   let ahora = real();
   Date.now = () => ahora;

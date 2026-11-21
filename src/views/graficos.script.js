@@ -1,6 +1,5 @@
 'use strict';
 
-// Dibuja los gráficos [data-ec] con ECharts (servido desde /vendor/echarts.min.js, sin CDN).
 module.exports = `<script src="/vendor/echarts.min.js"></script><script>
 (function(){
   if(!window.echarts)return;

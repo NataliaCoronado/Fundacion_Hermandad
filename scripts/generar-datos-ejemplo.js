@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { SEDES, ESPECIALIDADES, profesionalesDeMuestra } = require('../src/models/sedesInfo');
+const { SEDES, ESPECIALIDADES, profesionalesDeMuestra } = require('../src/models/informacionDeSedes');
 
 const q = (v) => (v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`);
 const dv = (n) => { let s = 0; let m = 2; for (const c of String(n).split('').reverse()) { s += Number(c) * m; m = m === 7 ? 2 : m + 1; } const r = 11 - (s % 11); return r === 10 ? 'K' : r === 11 ? '0' : String(r); };
@@ -39,7 +39,7 @@ ${profs.flatMap((p) => ['2026-11-23', '2026-11-24'].flatMap((f) => horas.map(([a
 
 `;
 
-const archivo = path.join(__dirname, '..', 'db', 'datos_ejemplo.sql');
+const archivo = path.join(__dirname, '..', 'base-de-datos', '02_datos_ejemplo.sql');
 let sql = fs.readFileSync(archivo, 'utf8');
 const corta = (desde, hasta, nuevo) => {
   const i = sql.indexOf(desde); const j = sql.indexOf(hasta, i);
@@ -51,4 +51,4 @@ corta('INSERT INTO profesional (', 'INSERT INTO paciente', seccion2);
 sql = sql.replace(/INSERT INTO solicitud_espera \(id_paciente, id_policlinico, id_especialidad, registrado_por\) VALUES\n \(3,2,3,/,
   `INSERT INTO solicitud_espera (id_paciente, id_policlinico, id_especialidad, registrado_por) VALUES\n (3,2,${idEsp('Kinesiología')},`);
 fs.writeFileSync(archivo, sql);
-console.log(`datos_ejemplo.sql actualizado: ${profs.length} profesionales, ${profs.length * 8} bloques.`);
+console.log(`02_datos_ejemplo.sql actualizado: ${profs.length} profesionales, ${profs.length * 8} bloques.`);

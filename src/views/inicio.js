@@ -1,8 +1,8 @@
 'use strict';
 const { pagina, WHATSAPP } = require('./layout');
 const { ico } = require('./iconos');
-const { esc } = require('./util');
-const { SEDES } = require('../models/sedesInfo');
+const { esc } = require('./componentesComunes');
+const { SEDES } = require('../models/informacionDeSedes');
 
 const FOTOS = { 1: 'san-isidro', 2: 'sagrada-familia', 3: 'maria-ayuda', 4: 'santa-teresa', 5: 'padre-hurtado', 6: 'oratorio-mariano', 7: 'telemedicina' };
 

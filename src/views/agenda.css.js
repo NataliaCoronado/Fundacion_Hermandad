@@ -101,6 +101,9 @@ module.exports = `
 }
 .multi-filter .check input { flex: none; margin: 0; }
 .agenda-filter-actions, .agenda-date-control, .agenda-view-control { display: flex; align-items: center; gap: 6px; }
+.agenda-paging { display: flex; align-items: center; gap: 6px; }
+.agenda-paging .btn { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; height: var(--control); min-height: var(--control); margin: 0; padding: 0 14px; line-height: 1; white-space: nowrap; }
+.agenda-paging .agenda-nav-icon { width: var(--control); padding: 0; }
 .agenda-filter-actions { justify-self: end; }
 .agenda-filter-actions .btn { white-space: nowrap; }
 .agenda-page .calendar-toolbar {
@@ -418,15 +421,10 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 }
 .agenda-resumen a b { font-size: 1.0625rem; font-variant-numeric: tabular-nums; color: var(--navy); }
 .agenda-resumen a:hover { box-shadow: 0 1px 0 var(--status-line, #81949c); }
-.agenda-resumen a:focus-visible { outline: 3px solid #f2b705; outline-offset: 1px; }
+.agenda-resumen a:focus-visible { outline: 3px solid var(--navy); box-shadow: 0 0 0 2px var(--foco); outline-offset: 1px; }
 .agenda-resumen a[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--status-line, #81949c); font-weight: 700; }
 .agenda-resumen a[data-estado="bloqueado"] { background: repeating-linear-gradient(135deg, #f0f4f5, #f0f4f5 6px, #e3e9ec 6px, #e3e9ec 12px); }
 .agenda-resumen a[data-estado="sin-publicar"] { border-style: dashed; border-left-style: solid; background: #fff; }
-.agenda-ajustes {
-  display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
-  margin: 14px 0 0; padding: 10px 2px 0; border-top: 1px solid var(--borde); font-size: .875rem; color: var(--muted);
-}
-.agenda-ajustes a { color: var(--navy); font-weight: 600; }
 .matriz-semana { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }
 .matriz-semana thead th {
   position: sticky; top: 0; z-index: 3; padding: 9px 8px; border-bottom: 1px solid var(--borde-2);
@@ -447,7 +445,7 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .matriz-semana .mx-vacio { color: #a7b5bb; text-align: center; background: #fafcfc; }
 .mx-celda { display: grid; gap: 6px; padding: 7px 8px; border-radius: 6px; color: var(--navy); text-decoration: none; }
 .mx-celda:hover { background: #eef3f5; }
-.mx-celda:focus-visible { outline: 3px solid #f2b705; outline-offset: -2px; }
+.mx-celda:focus-visible { outline: 3px solid var(--navy); box-shadow: 0 0 0 2px var(--foco); outline-offset: -2px; }
 .mx-n { font-size: .8125rem; line-height: 1.2; color: #405766; }
 .mx-n b { font-size: 1rem; color: var(--navy); font-variant-numeric: tabular-nums; }
 .mx-barra { display: flex; height: 9px; overflow: hidden; border-radius: 5px; background: #e6ecee; }
