@@ -23,6 +23,9 @@ function crearControladorAuth({ auth, sesiones }) {
           : rutaInicio(usuario.rol);
         return { redirigir: destino, cookie: token };
       } catch (e) {
+        // Solo las credenciales y el límite de intentos se informan al usuario;
+        // una falla de la base u otro error inesperado sube como 500.
+        if (!["CREDENCIALES_INVALIDAS", "DEMASIADOS_INTENTOS"].includes(e.message)) throw e;
         const estado = e.message === "DEMASIADOS_INTENTOS" ? 429 : 401;
         return {
           estado,

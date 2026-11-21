@@ -11,6 +11,7 @@
     "start:json": "node src/server.js",
     "humo": "node scripts/verificar-paginas.js",
     "datos:demo": "node scripts/datos-demo.js",
+    "crear-admin": "node scripts/crearAdministrador.js",
     "respaldo": "node scripts/ejecutarRespaldo.js",
     "restaurar": "node scripts/ejecutarRespaldo.js restaurar"
   },

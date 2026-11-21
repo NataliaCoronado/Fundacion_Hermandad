@@ -1,4 +1,7 @@
 "use strict";
+// Aísla la suite del .env y del shell del desarrollador: debe fijarse ANTES de cargar src/server.js.
+for (const k of ["NODE_ENV", "COOKIE_SECURE", "TRUST_PROXY", "DATOS_DEMO", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"]) delete process.env[k];
+process.env.CLAVE_DEMO = "demo1234";
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("node:fs");
@@ -44,8 +47,10 @@ test("producción: el contenedor se niega a arrancar con CLAVE_DEMO y no siembra
 test("docker-compose: sin claves por defecto y la base solo escucha en localhost", () => {
   const compose = fs.readFileSync(path.join(__dirname, "..", "docker-compose.yml"), "utf8");
   assert.ok(!/cambiar_en_local/.test(compose), "clave de Postgres escrita en el compose");
-  assert.ok(!/CLAVE_DEMO:\s*demo1234/.test(compose), "clave demo fija en el compose");
-  assert.match(compose, /"127\.0\.0\.1:5432:5432"/);
+  assert.ok(!/CLAVE_DEMO:\s*["']?demo1234/.test(compose), "clave demo fija en el compose");
+  const publicadosBd = [...compose.matchAll(/-\s*["']?([^"'\s]*:5432)["']?\s*$/gm)].map((m) => m[1]);
+  assert.ok(publicadosBd.length > 0 && publicadosBd.every((x) => x.startsWith("127.0.0.1:")), `5432 publicado: ${publicadosBd}`);
+  assert.match(compose, /POSTGRES_PASSWORD:\s*\$\{POSTGRES_PASSWORD:\?/);
   assert.ok(fs.existsSync(path.join(__dirname, "..", ".env.example")));
 });
 
@@ -76,23 +81,50 @@ test("cabeceras: CSP siempre; Secure y HSTS cuando la cookie es segura", async (
 });
 
 // ---- #5 fotos privadas ----
-test("fotos de profesionales: respuesta privada, no cacheable por proxies", async () => {
-  const dir = path.join(__dirname, "..", "datos", "fotos");
-  const archivo = path.join(dir, "profesional-prueba-seguridad.jpg");
-  fs.mkdirSync(dir, { recursive: true });
+const DIR_FOTOS = path.join(__dirname, "..", "datos", "fotos");
+const conFoto = async (fn) => {
+  const nombre = `profesional-prueba-${process.pid}.jpg`;
+  const archivo = path.join(DIR_FOTOS, nombre);
+  fs.mkdirSync(DIR_FOTOS, { recursive: true });
   fs.writeFileSync(archivo, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
-  const s = await levantar();
-  try {
-    const prof = (await s.c.catalogo.profesionales())[0];
-    await s.c.catalogo.guardarEquipo?.({ ...prof, foto: "/img/profesional-prueba-seguridad.jpg" });
-    prof.foto = "/img/profesional-prueba-seguridad.jpg";
-    const login = await fetch(`${s.base}/login`, { method: "POST", redirect: "manual", body: new URLSearchParams({ correo: "admin@ejemplo.cl", clave: "demo1234" }) });
-    const cookie = login.headers.get("set-cookie").split(";")[0];
-    const r = await fetch(`${s.base}/img/profesional-prueba-seguridad.jpg`, { headers: { Cookie: cookie } });
-    assert.strictEqual(r.status, 200);
-    assert.match(r.headers.get("cache-control"), /private/);
-    assert.ok(!/public/.test(r.headers.get("cache-control")));
-  } finally { await s.cerrar(); fs.rmSync(archivo, { force: true }); }
+  try { return await fn(`/img/${nombre}`); } finally { fs.rmSync(archivo, { force: true }); }
+};
+const ponerFoto = (c, prof, ruta) => { c.operacion.meta.equipo[prof.id] = { ...(c.operacion.meta.equipo[prof.id] || {}), foto: ruta }; };
+const entrar = async (base, correo) => {
+  const r = await fetch(`${base}/login`, { method: "POST", redirect: "manual", body: new URLSearchParams({ correo, clave: "demo1234" }) });
+  return r.headers.get("set-cookie").split(";")[0];
+};
+
+test("fotos de profesionales: privadas, solo con sesión y de la propia sede", async () => {
+  await conFoto(async (ruta) => {
+    const s = await levantar();
+    try {
+      const tens = (await s.c.catalogo.usuarios()).find((u) => u.correo === "tens@ejemplo.cl");
+      const sede = Number(tens.idPoliclinico);
+      const profs = await s.c.catalogo.profesionales();
+      const propio = profs.find((p) => s.c.operacion.lugares(p).includes(sede));
+      ponerFoto(s.c, propio, ruta);
+      const admin = await entrar(s.base, "admin@ejemplo.cl");
+      const personal = await entrar(s.base, "tens@ejemplo.cl");
+
+      assert.strictEqual((await fetch(`${s.base}${ruta}`)).status, 403, "sin sesión");
+      const r = await fetch(`${s.base}${ruta}`, { headers: { Cookie: admin } });
+      assert.strictEqual(r.status, 200);
+      assert.match(r.headers.get("cache-control"), /private/);
+      assert.ok(!/public/.test(r.headers.get("cache-control")));
+      assert.strictEqual((await fetch(`${s.base}${ruta}`, { headers: { Cookie: personal } })).status, 200, "misma sede");
+
+      ponerFoto(s.c, propio, "");
+      const ajeno = profs.find((p) => !s.c.operacion.lugares(p).includes(sede));
+      ponerFoto(s.c, ajeno, ruta);
+      assert.strictEqual((await fetch(`${s.base}${ruta}`, { headers: { Cookie: personal } })).status, 403, "otra sede");
+
+      const publica = await fetch(`${s.base}/img/logo.png`);
+      assert.strictEqual(publica.status, 200);
+      assert.match(publica.headers.get("cache-control"), /public/);
+      assert.strictEqual((await fetch(`${s.base}/img/..%2f..%2fpackage.json`)).status, 404);
+    } finally { await s.cerrar(); }
+  });
 });
 
 // ---- #3 límite de login por IP ----

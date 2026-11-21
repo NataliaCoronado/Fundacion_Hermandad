@@ -2,12 +2,14 @@
 const { hashClave, verificarClave } = require("../auth/clave");
 
 const VENTANA_MS = 15 * 60 * 1000;
-// Una IP puede fallar 5 veces con una misma cuenta y 20 en total; una cuenta
-// tolera 25 fallos sumando todas las IPs (frena ataques repartidos sin dejar
-// que un solo atacante bloquee la cuenta a las demás personas).
+// Una IP puede fallar 5 veces con una misma cuenta y 20 en total. Una cuenta
+// tolera 25 fallos sumando todas las IPs: así un atacante con una sola IP no
+// bloquea la cuenta a los demás, pero un ataque repartido en muchas IPs sí
+// puede bloquearla temporalmente (a cambio de frenar el adivinado de claves).
 const MAX_POR_IP_Y_CUENTA = 5;
 const MAX_POR_IP = 20;
 const MAX_POR_CUENTA = 25;
+const MAX_CORREO = 254;
 
 class AuthServicio {
   constructor({ catalogo, sesiones, auditoria }) {
@@ -21,6 +23,10 @@ class AuthServicio {
     if (lista.length) this.intentos.set(clave, lista);
     else this.intentos.delete(clave);
     return lista;
+  }
+
+  limpiar() {
+    for (const clave of [...this.intentos.keys()]) this.recientes(clave);
   }
 
   claves(correo, ip) {
@@ -45,7 +51,8 @@ class AuthServicio {
   async iniciarSesion(correo, clave, ip = "sin-ip") {
     const correoNormalizado = String(correo || "")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .slice(0, MAX_CORREO + 1);
     if (this.excedido(correoNormalizado, ip)) throw new Error("DEMASIADOS_INTENTOS");
     const usuario = await this.catalogo.usuarioPorCorreo(correoNormalizado);
     const guardado = usuario ? await this.catalogo.credencial(usuario.id) : null;

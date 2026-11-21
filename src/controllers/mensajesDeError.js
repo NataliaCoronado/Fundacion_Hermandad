@@ -47,7 +47,9 @@ const MENSAJES = {
   DEMASIADOS_INTENTOS: 'Hiciste demasiados intentos. Espera unos minutos y vuelve a probar.',
   WHATSAPP_NO_CONFIGURADO: 'WhatsApp real aún no está configurado.',
 };
-const legible = (m) => /\s/.test(String(m || '')) && !/^\w+Error\b|is not|undefined|Cannot /.test(m);
+const CODIGO_DE_SISTEMA = /\bE[A-Z]{4,}\b/; // ECONNREFUSED, ETIMEDOUT... (solo mayúsculas: no confundir con «entre»)
+const ERROR_INTERNO = /^\w+Error\b|is not|undefined|Cannot |authentication failed|does not exist|syntax error|violates|duplicate key|terminated|connection|socket|SQLSTATE|password/i;
+const legible = (m) => /\s/.test(String(m || '')) && !ERROR_INTERNO.test(m) && !CODIGO_DE_SISTEMA.test(m);
 const error = (e) => {
   require('../herramientas/contextoSolicitud').actual()?.registrarRechazo?.(e);
   if (MENSAJES[e.message]) return { tipo: 'error', texto: MENSAJES[e.message] };

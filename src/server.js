@@ -71,6 +71,16 @@ const leerCuerpo = (req) =>
     req.on("error", () => resolver({ __excedido: true }));
   });
 
+// Un archivo que desaparece o no se puede leer no debe tumbar el proceso.
+function enviarArchivoSeguro(lectura, res) {
+  lectura.on("error", (e) => {
+    console.error("No se pudo leer el archivo:", e.code || e.message);
+    res.destroy();
+  });
+  res.on("close", () => lectura.destroy());
+  return lectura.pipe(res);
+}
+
 function ipCliente(req) {
   if (process.env.TRUST_PROXY === "1") {
     const lista = String(req.headers["x-forwarded-for"] || "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -101,6 +111,7 @@ function crearServidor(aplicacion, modo = "todo") {
     aplicacion.limpieza = setInterval(() => {
       aplicacion.sesiones?.limpiar?.();
       aplicacion.sesionesPaciente?.limpiar?.();
+      aplicacion.auth?.limpiar?.();
     }, 10 * 60_000);
     aplicacion.limpieza.unref();
   }
@@ -197,7 +208,7 @@ function crearServidor(aplicacion, modo = "todo") {
         DEMASIADOS_INTENTOS: "Límite de intentos superado",
         FUERA_DE_SEDE: "Acceso rechazado",
       }[e.message];
-      rechazar(nombre || "Operación rechazada", String(e.message).slice(0, 200));
+      rechazar(nombre || "Operación rechazada", `${String(e.message).slice(0, 200)} · ip ${ipCliente(req)}`);
     };
     const est = req.method === "GET" && archivoEstatico(url.pathname);
     if (est) {
@@ -211,7 +222,7 @@ function crearServidor(aplicacion, modo = "todo") {
         "Cache-Control": fotoPrivada ? "private, max-age=3600" : "public, max-age=86400",
         "X-Content-Type-Options": "nosniff",
       });
-      return fs.createReadStream(est.ruta).pipe(res);
+      return enviarArchivoSeguro(fs.createReadStream(est.ruta), res);
     }
     if (modo === "personal" && req.method === "GET" && url.pathname === "/") {
       const destino = usuario ? rutaInicio(usuario.rol) : "/login";
@@ -291,8 +302,8 @@ function crearServidor(aplicacion, modo = "todo") {
           tokenPaciente,
         }),
       );
-      if (respuesta.estado === 401) rechazar("Inicio de sesión rechazado", `${req.method} ${url.pathname}`);
-      else if (respuesta.estado === 429) rechazar("Límite de intentos superado", `${req.method} ${url.pathname}`);
+      if (respuesta.estado === 401) rechazar("Inicio de sesión rechazado", `${req.method} ${url.pathname} · ip ${ipCliente(req)}`);
+      else if (respuesta.estado === 429) rechazar("Límite de intentos superado", `${req.method} ${url.pathname} · ip ${ipCliente(req)}`);
       else if (respuesta.estado === 403) rechazar("Acceso rechazado", `${req.method} ${url.pathname}`);
       else if (respuesta.estado === 400 && respuesta.rechazo) solicitud.registrarRechazo({ message: respuesta.rechazo });
       aplicacion.guardar?.();
@@ -323,7 +334,7 @@ function crearServidor(aplicacion, modo = "todo") {
           "Cache-Control": "private, no-store",
           ...cabeceras,
         });
-        return fs.createReadStream(respuesta.archivo.ruta).pipe(res);
+        return enviarArchivoSeguro(fs.createReadStream(respuesta.archivo.ruta), res);
       }
       if (respuesta.csv !== undefined) {
         res.writeHead(200, {

@@ -2,6 +2,8 @@
 const PARAMETROS_REVISADOS = new Set(["id", "idCita", "idSolicitud", "idBloque", "idPoliclinico", "idProfesional", "rut", "idComuna"]);
 const PARECE_IDENTIFICADOR = /^(id[A-Z0-9_]\w*|rut\w*)$/;
 
+const ENTERO_POSITIVO = /^[1-9]\d{0,9}$/;
+
 async function validarAccesoPorSede(aplicacion, usuario, rutaPedida, parametrosUrl, datosEnviados) {
   if (!usuario.idPoliclinico) throw new Error("FUERA_DE_SEDE");
   const sedeDelUsuario = Number(usuario.idPoliclinico);
@@ -18,6 +20,7 @@ async function validarAccesoPorSede(aplicacion, usuario, rutaPedida, parametrosU
 
   const idBloque = datosEnviados.idBloque || parametrosUrl.get("idBloque");
   // /tens/agendar responde con su propio mensaje claro cuando el bloque es de otra sede.
+  if (idBloque && !ENTERO_POSITIVO.test(String(idBloque))) throw new Error("FUERA_DE_SEDE");
   if (idBloque && rutaPedida !== "/tens/agendar") {
     const bloque = await aplicacion.catalogo.bloque(idBloque);
     const profesional = bloque && (await aplicacion.catalogo.profesional(bloque.idProfesional));
@@ -26,6 +29,7 @@ async function validarAccesoPorSede(aplicacion, usuario, rutaPedida, parametrosU
   }
 
   const idProfesional = datosEnviados.idProfesional || parametrosUrl.get("idProfesional");
+  if (idProfesional && !ENTERO_POSITIVO.test(String(idProfesional))) throw new Error("FUERA_DE_SEDE");
   if (idProfesional) {
     const profesional = await aplicacion.catalogo.profesional(idProfesional);
     if (!profesional || !servicioOperacion.lugares(profesional).includes(sedeDelUsuario))
