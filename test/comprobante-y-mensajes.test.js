@@ -5,6 +5,8 @@ const { crearContenedor } = require("../src/armarAplicacion");
 const { crearServidor } = require("../src/server");
 const { BOTONES } = require("../src/services/BotWhatsAppServicio");
 
+require("./helpers/reloj");
+
 const A = "11111111-1";
 const USUARIO = { id: "u2", nombre: "TENS", rol: "TENS_TONS", idPoliclinico: 1 };
 
