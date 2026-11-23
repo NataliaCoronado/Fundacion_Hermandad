@@ -29,7 +29,7 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   assert.strictEqual(c.modo, 'postgresql');
 
   assert.strictEqual((await c.catalogo.policlinicos()).length, 7);
-  assert.strictEqual((await c.catalogo.profesionales()).length, 47);
+  assert.strictEqual((await c.catalogo.profesionales()).length, 48);
   assert.strictEqual((await c.auth.iniciarSesion('admin@ejemplo.cl', 'demo1234')).usuario.rol, 'ADMINISTRACION');
   await assert.rejects(() => c.auth.iniciarSesion('admin@ejemplo.cl', 'mala'), /CREDENCIALES_INVALIDAS/);
 
@@ -69,7 +69,7 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   const carac = await c.reportes.caracterizacion();
   assert.ok(carac.ninos >= 1 && carac.mayores >= 1);
   assert.ok(carac.nacionalidades.some((x) => x.nombre === 'Venezolana'));
-  assert.ok((await c.reportes.porProfesional()).length >= 47);
+  assert.ok((await c.reportes.porProfesional()).length >= 48);
 
   const libres24 = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: MARTES })).filter((b) => b.idProfesional === 1).length;
   assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: MARTES, hasta: MARTES, publicar: false }), libres24);

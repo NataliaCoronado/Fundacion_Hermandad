@@ -24,7 +24,7 @@ const SEDES = [
   { id: 6, nombre: 'Oratorio Mariano', comuna: 'Maipú', telemedicina: false, direccion: 'Av. Libertador Bernardo O’Higgins #909, Maipú', correo: 'oratoriomariano@hermandad.cl', whatsapp: '+56927255750', extras: [],
     especialidades: ['Fonoaudiología', 'Kinesiología', 'Medicina General', 'Nutrición', 'Podología', 'Psicología'] },
   { id: 7, nombre: 'Telemedicina', comuna: 'Modalidad remota', telemedicina: true, direccion: null, correo: 'telemedicina@hermandad.cl', whatsapp: '+56948619713', extras: [],
-    especialidades: ['Medicina General', 'Psicología adultos', 'Fonoaudiología'] },
+    especialidades: ['Medicina General', 'Psicología adultos', 'Fonoaudiología', 'Pediatría'] },
 ];
 
 function profesionalesDeMuestra() {

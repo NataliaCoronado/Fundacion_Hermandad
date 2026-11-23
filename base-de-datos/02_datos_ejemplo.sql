@@ -124,7 +124,8 @@ INSERT INTO policlinico_especialidad (id_policlinico, id_especialidad) VALUES
  (6,2),
  (7,1),
  (7,11),
- (7,6);
+ (7,6),
+ (7,9);
 
 INSERT INTO usuario (id_usuario, nombres, apellidos, correo, id_rol, id_policlinico) VALUES
  ('00000000-0000-0000-0000-000000000001','Usuario de prueba','Administración','admin@ejemplo.cl',(SELECT id_rol FROM rol WHERE codigo='ADMINISTRACION'),NULL),
@@ -178,7 +179,8 @@ INSERT INTO profesional (rut, nombres, apellidos, correo_institucional) VALUES
  ('18000044-5','Profesional','44','profesional44@ejemplo.cl'),
  ('18000045-3','Profesional','45','profesional45@ejemplo.cl'),
  ('18000046-1','Profesional','46','profesional46@ejemplo.cl'),
- ('18000047-K','Profesional','47','profesional47@ejemplo.cl');
+ ('18000047-K','Profesional','47','profesional47@ejemplo.cl'),
+ ('18000048-8','Profesional','48','profesional48@ejemplo.cl');
 
 INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especialidad) VALUES
  (1,1,1),
@@ -227,7 +229,8 @@ INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especiali
  (44,6,4),
  (45,6,10),
  (46,6,2),
- (47,7,6);
+ (47,7,6),
+ (48,7,9);
 
 INSERT INTO agenda (id_profesional, id_policlinico, id_especialidad, vigente_desde, vigente_hasta, hora_inicio, hora_termino, duracion_min, estado_publicacion, creado_por) VALUES
  (1,1,1,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
@@ -276,7 +279,8 @@ INSERT INTO agenda (id_profesional, id_policlinico, id_especialidad, vigente_des
  (44,6,4,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
  (45,6,10,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
  (46,6,2,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
- (47,7,6,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001');
+ (47,7,6,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001'),
+ (48,7,9,(CURRENT_DATE - 30),(CURRENT_DATE + 60),'09:00','11:00',30,'PUBLICADA','00000000-0000-0000-0000-000000000001');
 
 INSERT INTO agenda_dia (id_agenda, dia_semana) VALUES
  (1,1),
@@ -372,7 +376,9 @@ INSERT INTO agenda_dia (id_agenda, dia_semana) VALUES
  (46,1),
  (46,2),
  (47,1),
- (47,2);
+ (47,2),
+ (48,1),
+ (48,2);
 
 INSERT INTO bloque_horario (id_agenda, fecha, hora_inicio, hora_termino, estado) VALUES
  (1,(date_trunc('week', CURRENT_DATE)::date + 7),'09:00','09:30','DISPONIBLE'),
@@ -750,7 +756,15 @@ INSERT INTO bloque_horario (id_agenda, fecha, hora_inicio, hora_termino, estado)
  (47,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'09:00','09:30','DISPONIBLE'),
  (47,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'09:30','10:00','DISPONIBLE'),
  (47,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'10:00','10:30','DISPONIBLE'),
- (47,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'10:30','11:00','DISPONIBLE');
+ (47,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'10:30','11:00','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7),'09:00','09:30','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7),'09:30','10:00','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7),'10:00','10:30','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7),'10:30','11:00','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'09:00','09:30','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'09:30','10:00','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'10:00','10:30','DISPONIBLE'),
+ (48,(date_trunc('week', CURRENT_DATE)::date + 7) + 1,'10:30','11:00','DISPONIBLE');
 
 INSERT INTO paciente (tipo_documento, numero_documento, nombres, apellidos, fecha_nacimiento, genero, nacionalidad, telefono_celular, tiene_whatsapp, direccion, id_comuna) VALUES
  ('RUT','11111111-1','Paciente','A','1980-01-01','FEMENINO','Chilena','+56911111111',TRUE,'Dirección 1',1),

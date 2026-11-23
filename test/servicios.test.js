@@ -169,7 +169,7 @@ test('reportes: caracterización de pacientes y demanda por profesional, sin dat
   assert.strictEqual(k.edades.reduce((s, x) => s + x.n, 0), 1);
   assert.deepStrictEqual(k.generos[0], { nombre: 'Femenino', n: 1 });
   const pp = await c.reportes.porProfesional();
-  assert.strictEqual(pp.length, 47);
+  assert.strictEqual(pp.length, 48);
   assert.deepStrictEqual([pp[0].citas, pp[0].asistio, pp[0].cupos], [3, 1, 8]);
   for (const texto of [await c.reportes.csvProfesionales(), await c.reportes.csvResumen()]) assert.ok(!/11111111|\bPaciente [A-C0-9]+\b/.test(texto));
 });

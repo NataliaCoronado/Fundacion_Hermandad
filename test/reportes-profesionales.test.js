@@ -17,11 +17,11 @@ async function sitio() {
 const sinEscapes = (t) => t.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'");
 const graficos = (html) => [...html.matchAll(/<section class="work-panel graf-r" data-chart="([^"]+)"[\s\S]*?data-ec="([^"]*)"/g)].map((m) => ({ id: m[1], spec: JSON.parse(sinEscapes(m[2])) }));
 
-test("Reportes: el gráfico muestra los 10 con más valor y «Ver datos» conserva a los 47 profesionales", async () => {
+test("Reportes: el gráfico muestra los 10 con más valor y «Ver datos» conserva a los 48 profesionales", async () => {
   const s = await sitio();
   try {
     const total = (await s.c.catalogo.profesionales()).length;
-    assert.equal(total, 47);
+    assert.equal(total, 48);
     const h = await (await s.get("/admin/reportes?seccion=demanda")).text();
     const g = graficos(h);
     for (const id of ["demanda", "ocupacion"]) {
@@ -36,12 +36,12 @@ test("Reportes: el gráfico muestra los 10 con más valor y «Ver datos» conser
   } finally { await s.cerrar(); }
 });
 
-test("Reportes: pantalla, PDF y PNG listan los mismos 47 profesionales", async () => {
+test("Reportes: pantalla, PDF y PNG listan los mismos 48 profesionales", async () => {
   const s = await sitio();
   try {
     const pdf = Buffer.from(await (await s.get("/admin/reportes/exportar?grafico=demanda&formato=pdf")).arrayBuffer()).toString("latin1");
     const filasPdf = (pdf.match(/BT \/F1 9 Tf 40 \d+ Td \(/g) || []).filter((_, i) => true).length;
-    assert.ok(filasPdf >= 47, `el PDF trae al menos 47 filas, trae ${filasPdf}`);
+    assert.ok(filasPdf >= 48, `el PDF trae al menos 48 filas, trae ${filasPdf}`);
     const r = await s.get("/admin/reportes/exportar?grafico=demanda&formato=png");
     assert.equal(r.status, 200);
     assert.equal(r.headers.get("content-type"), "image/png");
