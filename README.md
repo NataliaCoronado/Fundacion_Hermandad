@@ -121,13 +121,15 @@ El respaldo copia toda la carpeta `datos/` (estado, metadatos, documentos y foto
 Al restaurar, el sistema primero comprueba el respaldo, luego respalda automáticamente lo que hay ahora (carpeta `..._antes-de-restaurar`, para poder deshacer) y recién entonces reemplaza `datos/` completa: lo posterior al respaldo no se mezcla. Se niega a restaurar si la aplicación está en marcha, porque la volvería a sobrescribir con lo que tiene en memoria.
 
 - Los respaldos contienen **datos personales**: `respaldos/` está fuera del repositorio y de la imagen Docker. Guarda una copia fuera del computador; si el equipo se pierde, el respaldo se pierde con él.
-- **Probado** en el modo sin base de datos (caso CP-42). El volcado de PostgreSQL necesita `pg_dump` y `pg_restore` instalados y no se ha ejecutado contra un servidor real. La imagen Docker aún no incluye el script.
+- **Probado** en el modo sin base de datos (caso CP-42). El volcado de PostgreSQL necesita `pg_dump` y `pg_restore` instalados y no se ha ejecutado contra un servidor real. La imagen Docker incluye el script, pero no las herramientas de PostgreSQL (`pg_dump` y `pg_restore`): para respaldar una base PostgreSQL hay que agregarlas a la imagen.
 
 ### Docker / PostgreSQL
 
 ```bash
 docker compose up --build
 ```
+
+Antes del primer arranque copia `.env.example` a `.env`: `POSTGRES_PASSWORD` es obligatoria y el compose ya no trae claves escritas. La base solo escucha en `127.0.0.1:5432`. El compose arranca en modo `development`; la imagen por sí sola es de producción (`NODE_ENV=production`) y corre como el usuario `node`, con un `HEALTHCHECK` sobre el portal.
 
 Conserva el volumen de datos y adjuntos. Para PostgreSQL propio, ejecuta `base-de-datos/01_estructura.sql`, `base-de-datos/02_datos_ejemplo.sql` y `base-de-datos/03_credenciales.sql`, en ese orden. Luego:
 
@@ -136,6 +138,32 @@ DATABASE_URL=postgres://usuario:clave@localhost:5432/hermandad CLAVE_DEMO=demo12
 ```
 
 La prueba nativa PostgreSQL conserva el comando original con `PSQL_TEST_ARGS`; crea una base de prueba dedicada.
+
+### Producción
+
+Con `NODE_ENV=production` el sistema se endurece solo:
+
+- **No arranca si existe `CLAVE_DEMO`**, no siembra la clave `demo1234` y los datos de demostración solo se activan con `DATOS_DEMO=1`.
+- La cookie de sesión lleva `Secure` (se apaga solo con `COOKIE_SECURE=0`, por ejemplo en una red interna sin HTTPS) y se envían `Strict-Transport-Security` y `Content-Security-Policy`.
+- Usa `POSTGRES_PASSWORD` y una `DATABASE_URL` propias; no reutilices los valores de `.env.example`.
+- Ejecuta **una sola instancia**: sesiones, límite de intentos de ingreso y cola de operaciones viven en memoria.
+- Con un proxy delante, define `TRUST_PROXY=1` para que el límite de intentos use la IP real del cliente (toma la última IP de `X-Forwarded-For`). Sin proxy no lo actives: el cliente podría falsificarla.
+
+**Primer administrador.** En producción no hay cuentas con clave. Créala con:
+
+```bash
+npm run crear-admin -- correo@dominio.cl "Nombre Apellido"
+```
+
+Imprime un enlace de un solo uso, válido 30 minutos, para que esa persona elija su contraseña (mínimo 10 caracteres). Si defines `URL_PERSONAL`, el enlace sale con ese dominio.
+
+**Ejecútalo con la aplicación detenida**, y vuelve a iniciarla después: una aplicación en marcha guarda su propio estado en memoria y borraría el enlace (el script se niega si detecta los puertos ocupados). Con Docker:
+
+```bash
+docker compose stop app
+docker compose run --rm --no-deps app npm run crear-admin -- correo@dominio.cl "Nombre"
+docker compose up -d app
+```
 
 ### Variables opcionales
 
@@ -146,7 +174,11 @@ La prueba nativa PostgreSQL conserva el comando original con `PSQL_TEST_ARGS`; c
 | ARCHIVO_DATOS | Ruta privada de estado JSON o metadatos adicionales |
 | DIR_DOCUMENTOS | Carpeta privada de adjuntos |
 | MAX_DOCUMENTO_MB | Máximo por documento, 1–20 MB; predeterminado 5 |
-| COOKIE_SECURE=1 | Cookie Secure para un despliegue con HTTPS |
+| COOKIE_SECURE | `1` fuerza la cookie Secure; en producción es automática y `0` la apaga |
+| NODE_ENV=production | Modo producción (ver arriba) |
+| DATOS_DEMO | `0` desactiva los datos de demostración; en producción solo se activan con `1` |
+| TRUST_PROXY=1 | Toma la IP del cliente desde `X-Forwarded-For` (un solo proxy) |
+| URL_PERSONAL | Dominio del sitio del personal para el enlace de `crear-admin` |
 | MENSAJES_AUTOMATICOS=0 | Apaga el envío automático de mensajes |
 | BOT_WHATSAPP=1 | Activa el bot de recordatorios y sus pantallas |
 | WHATSAPP_MODO | `simulado` (predeterminado) o `meta` |
