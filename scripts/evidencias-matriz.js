@@ -159,10 +159,9 @@ const CASOS = {
     } finally { await s.cerrar(); }
   } },
 
-  "CP-06": { req: "RF06", titulo: "Lista de espera sin asignación automática", async run(k) {
+  "CP-06": { req: "RF06", titulo: "Lista de espera con asignación automática y ajuste manual", async run(k) {
     const s = await sitio();
     try {
-      const antes = (await s.c.citaRepo.buscarPorRut(A)).length;
       k.paso("TENS/TONS registra a 11.111.111-1 en lista de espera de Psicología, San Isidro.");
       await s.c.espera.registrar({ rut: A, idPoliclinico: 1, especialidad: "Psicología", idUsuario: "u2" });
       const sol = (await s.c.espera.vigentes()).find((e) => e.rut === A);
@@ -171,8 +170,17 @@ const CASOS = {
       const r = await s.req("/tens/espera/gestion", s.t, { idSolicitud: String(sol.id), estado: "No responde", canal: "Llamada" });
       k.dato("Respuesta HTTP", r.status);
       k.chk((await s.c.espera.vigentes()).some((e) => e.id === sol.id), "«No responde» conserva la solicitud.");
-      k.chk((await s.c.citaRepo.buscarPorRut(A)).length === antes, "No se creó ninguna cita automáticamente.");
-      return k.ok ? `La solicitud ${sol.id} quedó vigente en la lista; tras registrar «No responde» se conservó y no se asignó ninguna cita automáticamente.` : null;
+      k.paso("Otro paciente cancela su hora de Psicología en San Isidro (bloque 9).");
+      const otra = await s.c.agendamiento.agendar({ rut: B, idBloque: 9, idUsuario: "u2" });
+      await s.c.agendamiento.cancelar(otra.id, "ASISTIDA");
+      const asignada = await s.c.citaRepo.buscarActivaPorBloque(9);
+      k.dato("Cita creada automáticamente", asignada ? `${asignada.id} · ${asignada.rut}` : "ninguna");
+      k.chk(asignada?.rut === A, "El sistema asigna la hora sola al primer paciente de la lista.");
+      k.chk(s.c.extras.listar("notificaciones").some((n) => n.tipo === "CUPO_ASIGNADO_ESPERA"), "TENS/TONS recibe el aviso de la asignación automática.");
+      k.paso("TENS/TONS ajusta a mano: cancela la cita asignada en forma asistida.");
+      await s.c.agendamiento.cancelar(asignada.id, "INSTITUCIONAL");
+      k.chk(!(await s.c.citaRepo.buscarActivaPorBloque(9)), "La asignación automática se puede modificar manualmente.");
+      return k.ok ? `La solicitud ${sol.id} se conservó tras «No responde»; al liberarse el bloque 9 el sistema creó la cita ${asignada.id} para ${A}, avisó a TENS/TONS y la cita se pudo modificar a mano.` : null;
     } finally { await s.cerrar(); }
   } },
 
@@ -572,13 +580,13 @@ const CASOS = {
       const acceso = await s.form("/login", { correo: "telemedicina.usuario@ejemplo.cl", clave: "demo1234" });
       k.chk(acceso.status === 302 && acceso.headers.get("location") === "/tens/resumen", "Telemedicina abre su Resumen (dashboard) al iniciar sesión.");
       const h = await (await s.req("/tens/agenda", s.tm)).text();
-      for (const m of ["Agendas y reservas", "Lista de espera", "Pacientes", "Comunicaciones"]) k.chk(h.includes(m), `El menú de Telemedicina incluye «${m}».`);
+      for (const m of ["Agendas y reservas", "Lista de espera", "Pacientes", "Confirmaciones"]) k.chk(h.includes(m), `El menú de Telemedicina incluye «${m}».`);
       k.chk(!h.includes('href="/tens/panel"'), "El menú omite el acceso al panel anterior.");
       const st = {};
-      for (const r of ["/tens/agenda", "/tens/espera", "/tens/confirmaciones", "/tens/comunicaciones", "/tens/pacientes"]) st[r] = (await s.req(r, s.tm)).status;
+      for (const r of ["/tens/agenda", "/tens/espera", "/tens/confirmaciones", "/tens/pacientes"]) st[r] = (await s.req(r, s.tm)).status;
       k.dato("Códigos HTTP", st);
-      k.chk(Object.values(st).every((x) => x === 200), "Agenda, lista de espera, confirmaciones, comunicaciones y pacientes funcionan para Telemedicina.");
-      return k.ok ? "Telemedicina abre su Resumen al iniciar sesión y la Agenda queda en el menú. Las pantallas de lista de espera, confirmaciones, comunicaciones y pacientes también respondieron correctamente." : null;
+      k.chk(Object.values(st).every((x) => x === 200), "Agenda, lista de espera, confirmaciones y pacientes funcionan para Telemedicina.");
+      return k.ok ? "Telemedicina abre su Resumen al iniciar sesión y la Agenda queda en el menú. Las pantallas de lista de espera, confirmaciones y pacientes también respondieron correctamente." : null;
     } finally { await s.cerrar(); }
   } },
 

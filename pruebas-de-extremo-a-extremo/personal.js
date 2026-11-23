@@ -195,7 +195,7 @@ module.exports = async function personal({ browser, c }) {
   for (const r of ['/admin/usuarios', '/admin/reportes', '/admin/auditoria', '/admin/bloque/nuevo']) {
     await paso(F, `Sin acceso a ${r}`, page, async () => { const resp = await page.goto(r); afirmar(resp.status() === 403, `HTTP ${resp.status()} (esperado 403)`); });
   }
-  for (const r of ['/tens/resumen', '/tens/agenda', '/tens/pacientes', '/tens/confirmaciones', '/tens/espera', '/tens/recepcion', '/tens/agendar', '/tens/comunicaciones', '/tens/documentos']) {
+  for (const r of ['/tens/resumen', '/tens/agenda', '/tens/pacientes', '/tens/confirmaciones', '/tens/espera', '/tens/recepcion', '/tens/agendar', '/tens/documentos']) {
     await paso(F, `Abrir ${r} sin errores`, page, async () => { const resp = await ir(page, r); afirmar(resp.status() === 200, `HTTP ${resp.status()}`); afirmar(!/Ocurrió un error inesperado/.test(await texto(page)), 'error inesperado'); });
   }
   noVerificado(F, 'Bot de WhatsApp (/tens/bot)', 'La ruta está desactivada por configuración (se habilita con BOT_WHATSAPP=1); responde 404 a propósito.');
@@ -270,14 +270,6 @@ module.exports = async function personal({ browser, c }) {
     const visto = /Paciente B|22222222/.test(await texto(pa)); await cerrarContexto(xa, 'tens-02c-espera-admin');
     afirmar(visto, 'Administración no ve la solicitud');
   });
-  await paso(F, 'Comunicaciones: preparar recordatorio queda registrado sin envío real', page, async () => {
-    await ir(page, '/tens/comunicaciones');
-    const antes = c.extras.listar('comunicaciones').length;
-    const f = page.locator('form[action="/tens/comunicacion"]').first();
-    await f.locator('select[name=idCita]').selectOption({ index: 1 }); await f.locator('button:has-text("Preparar recordatorio")').click(); await page.waitForLoadState('networkidle');
-    afirmar(c.extras.listar('comunicaciones').length === antes + 1, 'no se registró el mensaje');
-    afirmar(!c.extras.listar('comunicaciones').some((m) => m.estado === 'Enviado'), 'hay un mensaje marcado como enviado de verdad');
-  });
   await paso(F, 'Pacientes: búsqueda por RUT y por nombre', page, async () => {
     await ir(page, '/tens/pacientes'); await page.fill('input[name=q]', '22222222-2'); await page.click('button:has-text("Buscar")'); await page.waitForLoadState('networkidle');
     afirmar(/Paciente B/.test(await texto(page)), 'no encontró por RUT');
@@ -292,7 +284,7 @@ module.exports = async function personal({ browser, c }) {
   await paso(F, 'Login de Telemedicina y Resumen propio', page, async () => { await ingresar(page, 'telemedicina.usuario@ejemplo.cl'); afirmar(/tens\/resumen/.test(page.url()), page.url()); afirmar(/Telemedicina/.test(await texto(page)), 'no muestra su policlínico'); });
   await paso(F, 'Sin acceso a Administración', page, async () => { afirmar((await page.goto('/admin/usuarios')).status() === 403, 'no devolvió 403'); });
   await paso(F, 'Agenda muestra solo horas de Telemedicina', page, async () => { await ir(page, '/tens/agenda'); const t = await texto(page); afirmar(!/Santa Teresa|Padre Hurtado|Oratorio Mariano|Sagrada Familia/.test(t), 'muestra otros policlínicos'); });
-  await paso(F, 'Abrir pacientes, espera, comunicaciones y recepción', page, async () => { for (const r of ['/tens/pacientes', '/tens/espera', '/tens/comunicaciones', '/tens/recepcion']) { afirmar((await ir(page, r)).status() === 200, r); } });
+  await paso(F, 'Abrir pacientes, espera, confirmaciones y recepción', page, async () => { for (const r of ['/tens/pacientes', '/tens/espera', '/tens/confirmaciones', '/tens/recepcion']) { afirmar((await ir(page, r)).status() === 200, r); } });
   noVerificado(F, 'Enlace de videollamada: envío al paciente y estados de atención', 'Requiere el proveedor real de mensajería; en modo de prueba solo se verifica el registro.');
   await cerrarContexto(x, 'telemedicina-01');
 

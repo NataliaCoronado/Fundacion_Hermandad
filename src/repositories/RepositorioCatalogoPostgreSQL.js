@@ -57,7 +57,8 @@ const PROFESIONAL = `SELECT pr.id_profesional::int AS id, pr.nombres || ' ' || p
   FROM profesional pr JOIN profesional_asignacion a ON a.id_profesional = pr.id_profesional
   JOIN especialidad e ON e.id_especialidad = a.id_especialidad`;
 const ESPERA = `SELECT s.id_solicitud::int AS id, p.numero_documento AS rut, s.id_policlinico::int AS "idPoliclinico",
-  e.nombre AS especialidad, to_char(s.ingresada_en, 'YYYY-MM-DD') AS "registradaEn", s.estado
+  e.nombre AS especialidad, to_char(s.ingresada_en, 'YYYY-MM-DD') AS "registradaEn", s.estado,
+  s.registrado_por::text AS "registradaPor"
   FROM solicitud_espera s JOIN paciente p ON p.id_paciente = s.id_paciente JOIN especialidad e ON e.id_especialidad = s.id_especialidad`;
 
 const RESULTADO_A_BD = {

@@ -23,6 +23,8 @@ const { DocumentoServicio } = require("./services/DocumentoServicio");
 const { AuditoriaServicio } = require("./services/AuditoriaServicio");
 const { AuthServicio } = require("./services/AuthServicio");
 const { esProduccion } = require("./herramientas/entorno");
+const { enviarComprobanteDeReserva } = require("./services/ComunicacionesPaciente");
+const { textoLocal } = require("./herramientas/tiempo");
 const { ReporteServicio } = require("./services/ReporteServicio");
 const { WebhookWhatsApp } = require("./services/WebhookWhatsApp");
 const {
@@ -81,7 +83,46 @@ function crearContenedor({
   );
   const pacientes = new PacienteServicio(catalogo);
   const espera = new EsperaServicio(catalogo, agendamiento, extras);
-  agendamiento.alCancelar = (cita, origen) => espera.retenerSiCorresponde(cita, origen);
+  agendamiento.alCancelar = async (cita, origen) => {
+    if (!(await espera.retenerSiCorresponde(cita, origen))) return;
+    const resultado = await espera.asignarAutomaticamente(cita.idBloque, cita.idUsuario);
+    if (resultado) await avisarAsignacionAutomatica(resultado);
+  };
+  async function avisarAsignacionAutomatica({ cita, solicitud, bloque }) {
+    const sistema = { id: null, nombre: "Lista de espera (automático)" };
+    const paciente = await catalogo.paciente(cita.rut);
+    const prof = await catalogo.profesional(bloque.idProfesional);
+    const idPoliclinico = bloque.idPoliclinico || prof?.idPoliclinico;
+    for (const aviso of extras.listar("notificaciones"))
+      if (aviso.tipo === "CUPO_LIBERADO" && !aviso.leida && aviso.idBloque === bloque.id)
+        extras.actualizar("notificaciones", aviso.id, { leida: true });
+    let estadoComprobante;
+    try {
+      const comprobante = await enviarComprobanteDeReserva({ operacion, catalogo, despachador }, cita, sistema);
+      estadoComprobante = comprobante?.estado;
+    } catch {
+      estadoComprobante = "Error";
+    }
+    const mensajesDeComprobante = {
+      Enviado: "Se le envió el comprobante.",
+      Simulado: "El comprobante quedó en la bandeja de simulación.",
+      Pendiente: "El envío del comprobante está pendiente. Puedes llamar para avisarle.",
+      Error: "Falló el envío del comprobante. Llámalo para avisarle.",
+    };
+    const contacto = mensajesDeComprobante[estadoComprobante]
+      || "El paciente no tiene un canal de mensajería habilitado. Llámalo para avisarle.";
+    await extras.agregar("notificaciones", {
+      tipo: "CUPO_ASIGNADO_ESPERA",
+      fecha: textoLocal(),
+      idPoliclinico,
+      leida: false,
+      idBloque: bloque.id,
+      idCita: cita.id,
+      especialidad: solicitud.especialidad,
+      texto: `Hora del ${bloque.fecha} ${bloque.hora} (${solicitud.especialidad}) asignada automáticamente a ${paciente?.nombre || cita.rut}, primero en la lista de espera. ${contacto} Si hay que cambiarla, puedes hacerlo desde la agenda.`,
+    });
+    auditoria.registrar(sistema, "Cupo asignado automáticamente desde lista de espera", `cita ${cita.id}`);
+  }
   const bot = new BotWhatsAppServicio({
     citaRepo,
     catalogo,

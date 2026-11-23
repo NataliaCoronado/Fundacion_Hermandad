@@ -1,5 +1,4 @@
 "use strict";
-// Aísla la suite del .env y del shell del desarrollador: debe fijarse ANTES de cargar src/server.js.
 for (const k of ["NODE_ENV", "COOKIE_SECURE", "TRUST_PROXY", "DATOS_DEMO", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"]) delete process.env[k];
 process.env.CLAVE_DEMO = "demo1234";
 const test = require("node:test");
@@ -24,7 +23,6 @@ const conEntorno = async (vars, fn) => {
   try { return await fn(); } finally { for (const k of Object.keys(vars)) { if (previo[k] === undefined) delete process.env[k]; else process.env[k] = previo[k]; } }
 };
 
-// ---- #1 valores por defecto inseguros ----
 test("entorno: en producción los datos demo y la clave demo no se activan solos", () => {
   assert.strictEqual(esProduccion({ NODE_ENV: "production" }), true);
   assert.strictEqual(datosDemoActivos({}), true);
@@ -54,7 +52,6 @@ test("docker-compose: sin claves por defecto y la base solo escucha en localhost
   assert.ok(fs.existsSync(path.join(__dirname, "..", ".env.example")));
 });
 
-// ---- #2 cookie Secure, HSTS y CSP ----
 test("cookieSegura: por defecto en producción, apagable solo con COOKIE_SECURE=0", () => {
   assert.strictEqual(cookieSegura({}), false);
   assert.strictEqual(cookieSegura({ COOKIE_SECURE: "1" }), true);
@@ -80,7 +77,6 @@ test("cabeceras: CSP siempre; Secure y HSTS cuando la cookie es segura", async (
   });
 });
 
-// ---- #5 fotos privadas ----
 const DIR_FOTOS = path.join(__dirname, "..", "datos", "fotos");
 const conFoto = async (fn) => {
   const nombre = `profesional-prueba-${process.pid}.jpg`;
@@ -127,7 +123,6 @@ test("fotos de profesionales: privadas, solo con sesión y de la propia sede", a
   });
 });
 
-// ---- #3 límite de login por IP ----
 test("login: los fallos desde una IP no bloquean a esa cuenta para otra IP", async () => {
   const c = crearContenedor();
   await c.inicializar();
@@ -151,7 +146,6 @@ test("login: muchos fallos repartidos en IPs distintas igual frenan la cuenta (t
   await assert.rejects(() => c.auth.iniciarSesion("admin@ejemplo.cl", "demo1234", "10.1.1.1"), /DEMASIADOS_INTENTOS/);
 });
 
-// ---- #4 control de sede por defecto negado ----
 async function escenarioSedes() {
   const c = crearContenedor();
   await c.inicializar();

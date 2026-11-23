@@ -1,234 +1,220 @@
-# Hermandad de Dolores — Gestión de citas, versión 1.1
+# Hermandad de Dolores · Gestión de citas
 
-Aplicación administrativa para seis policlínicos y Telemedicina. Incluye portal de pacientes, Administración y operación TENS/TONS separada por lugar. Los datos de muestra son ficticios. No es una ficha clínica.
+Versión **1.1.0**. Aplicación para reservar citas y gestionar la atención administrativa de seis policlínicos y Telemedicina. Incluye un portal para pacientes y un sitio para el personal. Los datos de demostración son ficticios. El alcance del sistema es administrativo.
 
-## Iniciar
+[Inicio rápido](#inicio-rápido) · [Funciones](#funciones) · [Verificación](#verificación) · [Datos y respaldos](#datos-y-respaldos) · [Configuración](#configuración) · [Estructura](#estructura-del-proyecto)
 
-Necesita **Node.js 20 o superior** (macOS, Linux o Windows). Desde esta carpeta:
+## Inicio rápido
+
+`npm start` requiere npm y **Node.js 20.19 o posterior dentro de la rama 20**, o **Node.js 22.9 en adelante**. El proyecto se puede ejecutar en macOS, Linux y Windows. [Documentación de Node.js 20](https://nodejs.org/download/release/v20.19.0/docs/api/cli.html#--env-file-if-existsconfig) · [Documentación de Node.js 22](https://nodejs.org/download/release/v22.9.0/docs/api/cli.html#--env-file-if-existsconfig)
+
+Ejecuta estos comandos desde la raíz del proyecto.
 
 ```bash
 npm ci
 npm start
 ```
 
-- Personal: http://localhost:3001
-- Portal de pacientes: http://localhost:3000
+| Acceso | Dirección |
+| --- | --- |
+| Portal de pacientes | [localhost:3000](http://localhost:3000) |
+| Sitio del personal | [localhost:3001](http://localhost:3001) |
+| WhatsApp y correo simulados | [localhost:3000/demo/mensajes](http://localhost:3000/demo/mensajes) |
 
-Administración entra directamente a **Agendas y cupos**. 
-TENS/TONS y Gestión de Telemedicina entran a **Atención del día**. 
-La aplicación usa la zona horaria `America/Santiago`.
+La demostración funciona con la configuración predeterminada y guarda los datos en `datos/estado.json`. Los mensajes aparecen en la bandeja de simulación. La zona horaria es `America/Santiago`. El despliegue público en la nube está pendiente.
 
 ### Cuentas de demostración
 
-Vista Administración: admin@ejemplo.cl 
-Vista TENS/TONS perteneciente a Casa Central (San Isidro): tens@ejemplo.cl 
-Vista de Telemedicina: telemedicina.usuario@ejemplo.cl
+| Perfil | Correo |
+| --- | --- |
+| Administración | `admin@ejemplo.cl` |
+| TENS/TONS de Casa Central (San Isidro) | `tens@ejemplo.cl` |
+| Telemedicina | `telemedicina.usuario@ejemplo.cl` |
 
-Contraseña de las tres cuentas: `demo1234`. 
+Las tres cuentas usan la contraseña `demo1234` en la demostración local. Con PostgreSQL en desarrollo, define `CLAVE_DEMO=demo1234` para habilitarla. Las cuentas que crea Administración establecen su contraseña mediante un enlace de un solo uso, válido durante 30 minutos.
 
-Las cuentas creadas desde Administración no reciben esta contraseña; se habilitan mediante el enlace seguro de un solo uso. En PostgreSQL, `CLAVE_DEMO=demo1234` habilita las claves de las tres cuentas de ejemplo.
+## Funciones
 
-## Modalidad de entrega: demostración local reproducible
+### Portal de pacientes
 
-El sistema se ejecuta **localmente**; no hay URL pública de despliegue (se desplegará en la nube en la etapa siguiente).
+Permite reservar horas y responder las encuestas de agendamiento y de atención. Cada encuesta tiene sus propios resultados en **Reportes**.
 
-- **Requisitos:** Node.js 20 o superior y npm, en Windows, macOS o Linux. No necesita base de datos externa ni cuenta en ningún servicio: sin `DATABASE_URL` guarda sus datos en `datos/estado.json`.
-- **Instalación:** `npm ci`
-- **Configuración:** ninguna para la demostración.
-- **Ejecución:** `npm start` y abrir el portal de pacientes (http://localhost:3000) o el sitio del personal (http://localhost:3001).
-- **Datos:** todos los datos son **ficticios**. La mensajería funciona en modo simulado y no envía nada real. Para ver los mensajes como los vería el paciente (WhatsApp y correo), abre http://localhost:3000/demo/mensajes.
-- **Verificación:** `npm test`.
+| Encuesta | Cuándo se responde |
+| --- | --- |
+| Agendamiento (RF36) | Al confirmar una reserva en el portal. Es voluntaria y permite una respuesta por reserva mediante su token. La hora queda reservada aunque se omita la encuesta. |
+| Atención (RF30) | En [la encuesta de atención](http://localhost:3000/paciente/encuesta), después de que se registre la asistencia. |
 
-## Administración
+### Administración
 
-Los cuatro módulos principales son Agendas y cupos, Equipo de salud, Policlínicos y especialidades, y Reportes. Usuarios y Auditoría se encuentran en **Configuración / perfil**.
+| Módulo | Funciones |
+| --- | --- |
+| **Agendas y cupos** | Consulta la agenda diaria por profesional o la semanal. Filtra por fecha, lugar, especialidad, profesionales y estado. El color identifica el lugar en **Toda la red** y la especialidad dentro de una sede. Cada reserva se abre en un panel flotante. |
+| **Equipo de salud** | Busca y filtra integrantes en tarjetas o tabla. Gestiona profesión, fotografía (JPG o PNG) y asignaciones vigentes a varias especialidades y lugares. Reprograma las reservas futuras afectadas antes de retirar una asignación. Los integrantes desactivados conservan su historial. |
+| **Policlínicos y especialidades** | Crea y edita lugares y especialidades, con sus estados y colores. Incluye los seis policlínicos y Telemedicina. |
+| **Reportes** | Filtra por período, lugar, especialidad y profesional. Consulta pacientes únicos atendidos, sexo registrado, consultas, ausencias y registros pendientes. La sección de encuestas muestra las respuestas, el promedio y la distribución de notas de 1 a 5 de cada encuesta por separado. Descarga gráficos en PDF, Excel (`.xlsx`) o PNG y el reporte completo en PDF o Excel, con el período y los filtros aplicados (RF22). |
 
-- **Agendas y cupos:** día por profesional y semana, Hoy, fecha, filtros de lugar, especialidad, uno/varios/todos los profesionales y estado. El color representa el lugar en Toda la red y la especialidad al elegir un lugar. Las reservas abren un panel flotante.
-- **Crear bloque horario:** franja completa con fecha única o repetición semanal, duración, rango y días. La revisión calcula días, cupos y conflictos en todos los lugares del profesional. Permite guardar sin publicar o publicar. La publicación, el bloqueo y la disponibilidad pueden cambiarse por cupo.
-- **Cambios de agenda:** ausencia, reemplazo, lugar, fecha/horario o cancelación institucional. Presenta situación actual, propuesta y reservas afectadas. Revalida el impacto al guardar. Permite seleccionar las citas que se cancelarán y elegir si el horario vuelve a estar disponible o queda bloqueado. La reprogramación se realiza desde el detalle de reserva; los cambios generan instrucciones para la sede y una bitácora.
-- **Equipo de salud:** tarjetas o tabla, búsqueda, filtros, alta, edición, fotografía JPG/PNG, tipo de integrante, profesión, varias especialidades y varios lugares. Las asignaciones tienen fecha de vigencia. No se retiran lugares con reservas futuras afectadas; primero se reprograman. Los integrantes se desactivan y conservan su historial.
-- **Policlínicos y especialidades:** pestañas, alta y edición, estado y colores. Incluye las 6 y telemedicina.
-- **Reportes:** filtros por lugar, especialidad, profesional y período; cuatro secciones (la cuarta, las dos encuestas por separado), siluetas de sexo registrado, pacientes únicos atendidos, consultas, ausencias y registros pendientes separados. Cada gráfico tiene datos consultables y descargas PDF, Excel real (`.xlsx`) y PNG. PDF y Excel admiten reporte completo. Las descargas incluyen período y filtros.
-- **Usuarios:** crear/editar, vincular integrante, lugares asignados, lugar principal de ingreso, permiso para finalizar atención administrativa, estado y último acceso. El cambio de permisos revoca las sesiones existentes. Los enlaces para establecer contraseña caducan a los 30 minutos y solo sirven una vez.
-- **Auditoría:** usuario, fecha, acción y valores de las operaciones nuevas; filtros por fecha, usuario, acción y lugar. También se conserva la auditoría histórica original.
+En **Agendas y cupos** puedes crear bloques para una fecha o repetirlos cada semana. Define el rango horario, la duración por cupo y los días. Antes de guardar, revisa el número de cupos y los conflictos del profesional en toda la red. Puedes guardar un bloque como borrador o publicarlo y ajustar la disponibilidad de cada cupo.
 
-## TENS/TONS y Telemedicina
+Para gestionar ausencias, reemplazos, cambios de lugar u horario y cancelaciones institucionales, revisa primero las reservas afectadas. El sistema revalida el impacto al guardar. Puedes elegir qué citas cancelar y si los cupos quedan disponibles o bloqueados. Reprograma desde el detalle de la reserva. Los cambios generan instrucciones para la sede y un registro en la bitácora.
 
-La sesión se limita al lugar principal asignado por Administración. Una cuenta puede tener varios lugares autorizados, pero el operador no cambia libremente de sede: Administración define cuál abre al ingresar. Se rechazan solicitudes directas para citas, fichas, documentos o espera de otros lugares.
+En **Configuración / perfil** se encuentran **Usuarios** y **Auditoría**. En Usuarios puedes vincular integrantes, asignar sedes, definir la sede de inicio, autorizar el término administrativo de una atención y consultar el último acceso. Los cambios de permisos revocan las sesiones activas. En Auditoría puedes filtrar por fecha, usuario, acción y lugar. Se conservan el historial anterior y los valores registrados en las operaciones nuevas.
 
-- **Atención del día:** fecha, búsqueda por nombre/RUT, resumen compacto, tabla de atenciones y tareas de la sede. Permite registrar llegada, sala, confirmación, término administrativo y ausencia. No incluye acciones clínicas.
-- **Agendas y reservas:** día y semana, próximas horas libres, detalles, nueva reserva, reprogramación y cancelación solicitada por el paciente con motivo y canal. La cancelación puede liberar o bloquear el horario.
-- **Lista de espera:** filtros, antigüedad, prioridades, preferencias de mañana/tarde y cupos compatibles. Se registran fecha, canal y resultado de contactos; No responde conserva la solicitud. La asignación siempre la realiza el operador.
-- **Pacientes:** lista; búsqueda por nombre, RUT o teléfono; registro y edición con validación del dígito verificador del RUT. La ficha tiene Resumen, Reservas, Documentos, Responsable o tutor y Comunicaciones. Permite desactivar sin eliminar historial. Los datos se recuperan por RUT para futuras reservas.
-- **Tutor:** los menores de 18 años deben tener un adulto responsable, con relación, RUT y teléfono.
-- **Documentos:** PDF, JPG y PNG, tipo, especialidad y vigencia; validación, descarga/visualización, reemplazo y archivo conservando los originales. Solo los usuarios de la sede autorizada acceden al archivo privado.
-- **Comunicaciones:** bandeja por sede, canal, reserva, estado, fecha, responsable y reintentos. Las llamadas se registran en Confirmaciones. El silencio no cancela una reserva ni elimina una solicitud de espera.
-- **Telemedicina:** operación separada, Reserva de Telemedicina, enlace HTTPS de atención y estados remotos (Enlace pendiente, Enlace enviado, Confirmada, Conectado, Atendida, No se conectó). Se conserva la misma restricción de sede.
+### TENS/TONS y Telemedicina
 
-## Encuestas
+Cada sesión queda limitada a la sede principal que asigna Administración, incluso cuando la cuenta tiene varias sedes autorizadas. El acceso a citas, fichas, documentos y lista de espera se controla por sede.
 
-Son **dos encuestas distintas**, guardadas por separado para que sus promedios no se mezclen:
+| Módulo | Funciones |
+| --- | --- |
+| **Atención del día** | Consulta atenciones y tareas de la sede por fecha, nombre o RUT. Registra llegada, sala, confirmación, término administrativo y ausencia. |
+| **Agendas y reservas** | Consulta las agendas diaria y semanal, las próximas horas libres y el detalle de la cita. Crea, reprograma o cancela reservas. En las cancelaciones solicitadas por el paciente se registra el motivo y el canal, y se decide si el cupo se libera o se bloquea. |
+| **Lista de espera** | Filtra por antigüedad y prioridad, y revisa los cupos compatibles con las preferencias de horario. Registra fecha, canal y resultado del contacto. El estado **No responde** mantiene activa la solicitud. |
+| **Pacientes** | Busca por nombre, RUT o teléfono. Registra y edita fichas con validación del dígito verificador. La ficha reúne resumen, reservas, documentos, tutor y comunicaciones. Las fichas desactivadas conservan el historial y los datos se recuperan por RUT en futuras reservas. Para pacientes menores de 18 años se registra un adulto responsable, su relación, RUT y teléfono. |
+| **Documentos** | Adjunta PDF, JPG y PNG con tipo, especialidad y vigencia. Permite revisar, visualizar, descargar, reemplazar y archivar documentos conservando los originales. El acceso a los archivos privados se limita a la sede autorizada. |
+| **Confirmaciones** | Registra llamadas y sus resultados. Si falla un envío automático, **Resumen** muestra un aviso y enlaza a **Confirmaciones**. Administración revisa el estado de los mensajes en **Comunicaciones**. |
 
-- **Del agendamiento (RF36):** al confirmar una reserva en el portal se ofrece responder cómo fue reservar. Es voluntaria, se responde con el token de esa reserva (no pide el RUT, así conocer un RUT no permite responder por otra persona), una sola vez por reserva, y no afecta la hora ya reservada.
-- **De la atención (RF30):** en `/paciente/encuesta`, solo si hay una asistencia registrada.
+Cuando una cancelación asistida o por WhatsApp libera un cupo, el sistema busca una solicitud compatible y lo asigna por prioridad (**Alta**, **Media**, **Normal**) y luego por antigüedad. Avisa a TENS/TONS e intenta enviar el comprobante si el paciente autorizó las comunicaciones y tiene un canal habilitado. El personal puede ajustar la asignación manualmente. Si hay lista de espera y ninguna solicitud calza con el horario, el cupo queda retenido para asignarlo o liberarlo a la agenda pública.
 
-En **Reportes** (Administración), la sección *Encuestas* muestra las dos por separado, nunca sumadas: respuestas, promedio y distribución de notas de 1 a 5, según el mismo período, lugar, especialidad y profesional del resto del reporte. Se descargan en PDF, Excel y PNG, solas o en el reporte completo (RF22).
+**Telemedicina** opera como sede independiente. Usa **Reserva de Telemedicina**, un enlace HTTPS y los estados **Enlace pendiente**, **Enlace enviado**, **Confirmada**, **Conectado**, **Atendida** y **No se conectó**.
 
-## Mensajes automáticos
+## Verificación
 
-Cada minuto el sistema procesa la bandeja de **Comunicaciones** (comprobante de reserva, avisos de cambio, cancelación o reprogramación y enlaces de Telemedicina). Con `BOT_WHATSAPP=1` también ejecuta los recordatorios del bot: una semana antes, la víspera a las 10:00 y un reintento a las 14:00. `MENSAJES_AUTOMATICOS=0` lo apaga.
+| Comando | Qué comprueba |
+| --- | --- |
+| `npm test` | Suite de pruebas automáticas. |
+| `npm run humo` | Páginas y enlaces del portal y de los tres perfiles del personal. |
+| `npm run test:postgres-embebido` | Repositorios SQL y flujos de integración con PGlite. |
+| `PSQL_TEST_ARGS` con `npm test` | Habilita la prueba con un servidor PostgreSQL externo y crea una base de prueba dedicada. |
 
-Reglas: solo se envía con el **consentimiento** de comunicaciones del paciente; el silencio nunca cancela ni confirma una cita; si el proveedor falla se reintenta hasta 3 veces (esperas de 5 y 10 minutos) y luego queda en Error, con aviso a TENS/TONS para llamar.
+### Resultados de verificación
 
-Estados que escribe el sistema, y solo estos: **Simulado** (modo demostración: no salió ningún mensaje real), **Enviado** (el proveedor real aceptó el mensaje), **Pendiente** (en reintento o sin proveedor para ese canal) y **Error**. *Entregado* lo escribe solo el webhook, cuando Meta confirma que el mensaje llegó al teléfono (o que se leyó).
+- El **23 de noviembre de 2026**, `npm test` registró 286 pruebas aprobadas y 1 omitida, que requería un servidor PostgreSQL externo. Con PGlite se verificaron catálogos, credenciales, bloques, doble reserva, asignaciones a varias sedes y la asignación automática de la lista de espera.
+- La **matriz de casos** del 22 de noviembre registró 38 aprobados, 1 bloqueado y 7 pendientes de ejecución. CP-06 verifica la asignación automática y el ajuste manual de la lista de espera. CP-28 requiere un envío real por WhatsApp.
+- El **18 de noviembre**, en navegador se revisaron el ingreso por rol, la agenda y el panel flotante, reportes, pacientes, el registro de llegada y Telemedicina a 1440 y 1280 píxeles. También se comprobó la estructura del Excel, la firma del PNG y la renderización del PDF.
 
-| Modo (`WHATSAPP_MODO`) | Comportamiento |
-|---|---|
-| `simulado` (predeterminado) | Demostración. Los mensajes quedan en una bandeja interna rotulados como simulados. El correo solo existe en este modo. |
-| `meta` | API oficial de WhatsApp Cloud (Meta). Requiere `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` y `WHATSAPP_PLANTILLA` (plantilla aprobada por Meta, con una variable de cuerpo). |
+## Datos y respaldos
 
-### Webhook de WhatsApp
+| Modo | Dónde se guardan los datos |
+| --- | --- |
+| **JSON** (predeterminado) | `datos/estado.json` se guarda con permisos privados y se actualiza mediante reemplazo de archivo. En un primer arranque, `DATOS_DEMO=0` crea el conjunto mínimo sin historial de demostración. El estado existente se conserva. |
+| **PostgreSQL** (`DATABASE_URL`) | Los catálogos, pacientes, bloques, citas, usuarios y contactos se guardan en la base. Las tablas `auditoria`, `documento` y `cita_historial` guardan el resultado de las operaciones, las revisiones de documentos y el historial de citas. Las instrucciones, comunicaciones y otros metadatos se guardan en `datos/extras.json`. |
 
-`/webhook/whatsapp` recibe de Meta las respuestas de los pacientes y los estados de entrega. Se activa definiendo `WHATSAPP_APP_SECRET` (secreto de la app en Meta) y `WHATSAPP_VERIFY_TOKEN` (texto que eliges tú y escribes también en el panel de Meta); sin ambos, la ruta no existe.
-
-- Solo acepta avisos con firma válida (`X-Hub-Signature-256`) y procesa cada aviso una sola vez, aunque Meta lo repita.
-- Los botones del recordatorio confirman o cancelan la cita (con origen WhatsApp). Para eso, la plantilla aprobada en Meta debe tener botones de respuesta rápida con las etiquetas exactas **Confirmar** y **Cancelar mi hora**.
-- La respuesta se asocia a la cita por el mensaje que el paciente respondió. Si no viene esa referencia, se usa el teléfono solo cuando hay **una única** hora consultada; con dos o más no se adivina y queda un aviso para TENS/TONS.
-- Si un recordatorio no se pudo entregar, el personal recibe un aviso para llamar. La cita nunca se cancela por eso.
-- El webhook debe ser accesible por HTTPS desde internet; en local se necesita un túnel o el despliegue en la nube.
-
-**Estado real:** el envío (modo `meta`) y el webhook están implementados según la documentación oficial de Meta y probados con avisos firmados en el formato de Meta, no contra una cuenta real. No hay proveedor de correo conectado. Crea `.env` a partir de `.env.example`; nunca subas el `.env`.
-
-## Almacenamiento
-
-**Sin DATABASE_URL:** el estado se guarda en `datos/estado.json`, con escritura mediante reemplazo de archivo y permisos privados. No se pierde al reiniciar. `DATOS_DEMO=0` inicia con el conjunto mínimo de ejemplo si aún no existe el archivo; no borra un estado guardado.
-
-**Con PostgreSQL:** los catálogos, pacientes, bloques, citas, usuarios y contactos usan los repositorios SQL. La auditoría (con resultado: exitoso o rechazado), los documentos (estado de revisión, revisor y fecha) y el historial de cada cita se guardan en las tablas `auditoria`, `documento` y `cita_historial`; al iniciar, lo que hubiera en `datos/extras.json` se migra una sola vez. Los metadatos adicionales, instrucciones y comunicaciones se conservan en `datos/extras.json`; las bases creadas antes de este cambio se actualizan con `base-de-datos/04_migracion_auditoria_documentos.sql`; los adjuntos están en `datos/documentos/` y las fotos privadas del equipo en `datos/fotos/`.
-
-Esta arquitectura requiere **una instancia de la aplicación** y conservar esos directorios junto con la base de datos. Los metadatos adicionales no están migrados a tablas normalizadas. Las sesiones son temporales: reiniciar solicita un nuevo inicio de sesión. La sesión caduca tras 30 minutos de inactividad y como máximo a las 8 horas.
+En ambos modos, los adjuntos se guardan en `datos/documentos/` y las fotos privadas en `datos/fotos/`. Con PostgreSQL, conserva esas carpetas y `datos/extras.json` junto con la base. La auditoría, los documentos y el historial que se guardaban en `extras.json` se migran una vez. Las bases anteriores se actualizan con [la migración 04](base-de-datos/04_migracion_auditoria_documentos.sql).
 
 ### Respaldo y restauración
 
+Para crear, listar y verificar respaldos, usa estos comandos. Reemplaza `NOMBRE_DE_LA_CARPETA` por el nombre que muestra la lista.
+
 ```bash
-npm run respaldo                          # crea un respaldo en respaldos/
-npm run respaldo -- listar                # muestra los respaldos disponibles
-npm run respaldo -- verificar respaldos/<carpeta>
-npm run restaurar -- respaldos/<carpeta>  # restaura (detén antes la aplicación)
+npm run respaldo
+npm run respaldo -- listar
+npm run respaldo -- verificar respaldos/NOMBRE_DE_LA_CARPETA
 ```
 
-El respaldo copia toda la carpeta `datos/` (estado, metadatos, documentos y fotos privadas) y, si `DATABASE_URL` está definida, un volcado de PostgreSQL hecho con `pg_dump`. Cada respaldo trae un `manifiesto.json` con el tamaño y la huella SHA-256 de cada archivo, y `verificar` comprueba que nada se haya dañado.
+El respaldo copia `datos/` y, si está definida `DATABASE_URL`, incluye un volcado de PostgreSQL. El archivo `manifiesto.json` registra el tamaño y la huella SHA-256 de cada archivo para verificar su integridad.
 
-Al restaurar, el sistema primero comprueba el respaldo, luego respalda automáticamente lo que hay ahora (carpeta `..._antes-de-restaurar`, para poder deshacer) y recién entonces reemplaza `datos/` completa: lo posterior al respaldo no se mezcla. Se niega a restaurar si la aplicación está en marcha, porque la volvería a sobrescribir con lo que tiene en memoria.
+Detén la aplicación y ejecuta el comando de restauración con el respaldo elegido.
 
-- Los respaldos contienen **datos personales**: `respaldos/` está fuera del repositorio y de la imagen Docker. Guarda una copia fuera del computador; si el equipo se pierde, el respaldo se pierde con él.
-- **Probado** en el modo sin base de datos (caso CP-42). El volcado de PostgreSQL necesita `pg_dump` y `pg_restore` instalados y no se ha ejecutado contra un servidor real. La imagen Docker incluye el script, pero no las herramientas de PostgreSQL (`pg_dump` y `pg_restore`): para respaldar una base PostgreSQL hay que agregarlas a la imagen.
+```bash
+npm run restaurar -- respaldos/NOMBRE_DE_LA_CARPETA
+```
 
-### Docker / PostgreSQL
+El script verifica el respaldo, crea una copia del estado actual con el sufijo `_antes-de-restaurar` y reemplaza por completo la carpeta `datos/`. Los respaldos contienen datos personales. Guarda una copia privada fuera del equipo. La carpeta `respaldos/` está excluida del control de versiones y de la imagen Docker.
+
+El caso CP-42 se validó en modo JSON. El respaldo con PostgreSQL está pendiente de validación en un servidor real. Requiere `pg_dump` y `pg_restore`, que deben instalarse también en cualquier imagen Docker desde la que se ejecuten.
+
+## Configuración
+
+### Docker y PostgreSQL
+
+Copia `.env.example` a `.env`, define `POSTGRES_PASSWORD` y ejecuta el siguiente comando. [Archivo de ejemplo](.env.example)
 
 ```bash
 docker compose up --build
 ```
 
-Antes del primer arranque copia `.env.example` a `.env`: `POSTGRES_PASSWORD` es obligatoria y el compose ya no trae claves escritas. La base solo escucha en `127.0.0.1:5432`. El compose arranca en modo `development`; la imagen por sí sola es de producción (`NODE_ENV=production`) y corre como el usuario `node`, con un `HEALTHCHECK` sobre el portal.
+Docker Compose usa el modo `development` por defecto. PostgreSQL queda disponible desde el equipo en `127.0.0.1:5432`. Conserva los volúmenes `dbdata` y `adjuntos`. La imagen por sí sola usa `NODE_ENV=production`, ejecuta la aplicación con el usuario `node` y comprueba que el portal responda mediante un `HEALTHCHECK`.
 
-Conserva el volumen de datos y adjuntos. Para PostgreSQL propio, ejecuta `base-de-datos/01_estructura.sql`, `base-de-datos/02_datos_ejemplo.sql` y `base-de-datos/03_credenciales.sql`, en ese orden. Luego:
+Para usar un servidor PostgreSQL propio, aplica los scripts de estructura, datos de ejemplo y credenciales en ese orden. [01_estructura.sql](base-de-datos/01_estructura.sql) · [02_datos_ejemplo.sql](base-de-datos/02_datos_ejemplo.sql) · [03_credenciales.sql](base-de-datos/03_credenciales.sql)
 
-```bash
-DATABASE_URL=postgres://usuario:clave@localhost:5432/hermandad CLAVE_DEMO=demo1234 npm start
+Para una demostración con PostgreSQL, agrega estas variables a `.env` y vuelve a ejecutar `npm start`.
+
+```dotenv
+DATABASE_URL=postgres://usuario:clave@localhost:5432/hermandad
+CLAVE_DEMO=demo1234
 ```
-
-La prueba nativa PostgreSQL conserva el comando original con `PSQL_TEST_ARGS`; crea una base de prueba dedicada.
 
 ### Producción
 
-Con `NODE_ENV=production` el sistema se endurece solo:
+- Define `NODE_ENV=production` y elimina `CLAVE_DEMO`, ya que una clave de demostración impide el arranque. Activa los datos de muestra solo si necesitas demostrar el sistema con `DATOS_DEMO=1`.
+- Usa valores propios para `POSTGRES_PASSWORD` y `DATABASE_URL`. Mantén `.env` fuera del repositorio.
+- En producción se habilita la cookie de sesión `Secure` y se envían las cabeceras `Strict-Transport-Security` y `Content-Security-Policy`. La variable `COOKIE_SECURE=0` desactiva el atributo de la cookie si se usa HTTP.
+- Activa `TRUST_PROXY=1` únicamente cuando haya un proxy delante de la aplicación. El límite de intentos toma la última IP de `X-Forwarded-For` en ese modo.
+- Ejecuta una sola instancia. Las sesiones, el límite de intentos y la cola de operaciones viven en memoria. Las sesiones caducan tras 30 minutos de inactividad o un máximo de 8 horas. Tras reiniciar hay que iniciar sesión de nuevo.
 
-- **No arranca si existe `CLAVE_DEMO`**, no siembra la clave `demo1234` y los datos de demostración solo se activan con `DATOS_DEMO=1`.
-- La cookie de sesión lleva `Secure` (se apaga solo con `COOKIE_SECURE=0`, por ejemplo en una red interna sin HTTPS) y se envían `Strict-Transport-Security` y `Content-Security-Policy`.
-- Usa `POSTGRES_PASSWORD` y una `DATABASE_URL` propias; no reutilices los valores de `.env.example`.
-- Ejecuta **una sola instancia**: sesiones, límite de intentos de ingreso y cola de operaciones viven en memoria.
-- Con un proxy delante, define `TRUST_PROXY=1` para que el límite de intentos use la IP real del cliente (toma la última IP de `X-Forwarded-For`). Sin proxy no lo actives: el cliente podría falsificarla.
+#### Primer administrador
 
-**Primer administrador.** En producción no hay cuentas con clave. Créala con:
+Genera el enlace de acceso inicial con la aplicación detenida.
 
 ```bash
 npm run crear-admin -- correo@dominio.cl "Nombre Apellido"
 ```
 
-Imprime un enlace de un solo uso, válido 30 minutos, para que esa persona elija su contraseña (mínimo 10 caracteres). Si defines `URL_PERSONAL`, el enlace sale con ese dominio.
+El comando imprime un enlace de un solo uso, válido durante 30 minutos, para elegir una contraseña de al menos 10 caracteres. Define `URL_PERSONAL` para que use el dominio del sitio del personal. Vuelve a iniciar la aplicación después de ejecutar el comando.
 
-**Ejecútalo con la aplicación detenida**, y vuelve a iniciarla después: una aplicación en marcha guarda su propio estado en memoria y borraría el enlace (el script se niega si detecta los puertos ocupados). Con Docker:
+Si usas Docker Compose, conserva PostgreSQL en ejecución mientras detienes y vuelves a iniciar `app`.
 
 ```bash
 docker compose stop app
-docker compose run --rm --no-deps app npm run crear-admin -- correo@dominio.cl "Nombre"
+docker compose run --rm --no-deps app npm run crear-admin -- correo@dominio.cl "Nombre Apellido"
 docker compose up -d app
 ```
 
-### Variables opcionales
+### Mensajes automáticos y WhatsApp
+
+Cada minuto se procesa la bandeja de **Comunicaciones**, que incluye comprobantes, cambios, cancelaciones, reprogramaciones y enlaces de Telemedicina. Con `BOT_WHATSAPP=1`, el bot también envía recordatorios una semana antes y la víspera a las 10:00, con un reintento a las 14:00. `MENSAJES_AUTOMATICOS=0` detiene el procesamiento automático.
+
+Los envíos requieren el consentimiento del paciente. El silencio mantiene el estado de la cita y la solicitud de espera. Si el proveedor falla, se realizan hasta tres intentos, con esperas de 5 y 10 minutos. Después, el mensaje queda en **Error** y se avisa al personal para que llame.
+
+| `WHATSAPP_MODO` | Comportamiento |
+| --- | --- |
+| `simulado` (predeterminado) | WhatsApp y correo se registran en la bandeja interna con estado **Simulado**. |
+| `meta` | Envía WhatsApp mediante la API de Meta. Requiere `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` y `WHATSAPP_PLANTILLA`. La plantilla debe estar aprobada y tener una variable en el cuerpo. El idioma predeterminado es `es` y se puede cambiar con `WHATSAPP_IDIOMA`. |
+
+**Enviado** indica que el proveedor aceptó el mensaje. **Pendiente** indica que espera un reintento o que el canal carece de proveedor. El webhook registra **Entregado** cuando Meta confirma que el mensaje llegó o se leyó.
+
+#### Webhook de WhatsApp
+
+Define `WHATSAPP_APP_SECRET` y `WHATSAPP_VERIFY_TOKEN` para habilitar `/webhook/whatsapp`. Usa en Meta el mismo token de verificación y expón la ruta por HTTPS, mediante un túnel en local o un despliegue público.
+
+- El webhook comprueba la firma `X-Hub-Signature-256` y procesa cada aviso una sola vez.
+- Para confirmar o cancelar citas desde un recordatorio, la plantilla debe incluir los botones de respuesta rápida **Confirmar** y **Cancelar mi hora**. La operación queda registrada con origen WhatsApp.
+- La respuesta se vincula con el mensaje original. Si falta esa referencia, el teléfono solo se usa cuando identifica una única hora consultada. Cuando hay varias, se avisa al personal.
+- Si falla la entrega de un recordatorio, el personal recibe una tarea para llamar y la cita sigue vigente.
+
+La integración con Meta se verificó con avisos firmados de prueba. La validación con una cuenta real sigue pendiente. El correo funciona únicamente en la simulación.
+
+### Otras variables de entorno
 
 | Variable | Uso |
-|---|---|
-| PORT / PORT_PERSONAL | Puertos de pacientes y personal; predeterminados 3000 y 3001 |
-| URL_PORTAL | Enlace al portal desde el sitio del personal |
-| ARCHIVO_DATOS | Ruta privada de estado JSON o metadatos adicionales |
-| DIR_DOCUMENTOS | Carpeta privada de adjuntos |
-| MAX_DOCUMENTO_MB | Máximo por documento, 1–20 MB; predeterminado 5 |
-| COOKIE_SECURE | `1` fuerza la cookie Secure; en producción es automática y `0` la apaga |
-| NODE_ENV=production | Modo producción (ver arriba) |
-| DATOS_DEMO | `0` desactiva los datos de demostración; en producción solo se activan con `1` |
-| TRUST_PROXY=1 | Toma la IP del cliente desde `X-Forwarded-For` (un solo proxy) |
-| URL_PERSONAL | Dominio del sitio del personal para el enlace de `crear-admin` |
-| MENSAJES_AUTOMATICOS=0 | Apaga el envío automático de mensajes |
-| BOT_WHATSAPP=1 | Activa el bot de recordatorios y sus pantallas |
-| WHATSAPP_MODO | `simulado` (predeterminado) o `meta` |
-| WHATSAPP_TOKEN / WHATSAPP_PHONE_ID / WHATSAPP_PLANTILLA / WHATSAPP_IDIOMA | Solo con `WHATSAPP_MODO=meta` |
-| DATOS_DEMO=0 | No generar historial de demostración al crear un estado nuevo |
+| --- | --- |
+| `PORT` / `PORT_PERSONAL` | Puertos del portal y del sitio del personal. Por defecto, `3000` y `3001`. |
+| `URL_PORTAL` | Enlace al portal desde el sitio del personal. |
+| `ARCHIVO_DATOS` | Ruta privada al archivo de estado JSON o a los metadatos adicionales. |
+| `DIR_DOCUMENTOS` | Carpeta privada de adjuntos. |
+| `MAX_DOCUMENTO_MB` | Máximo por documento, de 1 a 20 MB. Por defecto, 5 MB. |
 
-## Verificar
+## Estructura del proyecto
 
-```bash
-npm test                      # pruebas automáticas
-npm run humo                  # recorre toda la página con cada rol y avisa si alguna se cae
-npm run test:postgres-embebido
-```
+La aplicación usa MVC y repositorios para separar las vistas, las reglas de negocio y el almacenamiento. Los controladores de operación y reportes están en `src/controllers/`, con sus servicios en `src/services/` y las vistas operativas en `src/views/`.
 
-Validación local del 18 de noviembre de 2026 en macOS. **97 pruebas aprobadas, 0 fallidas y 1 omitida** (requiere servidor PostgreSQL externo). La comprobación adicional usa PostgreSQL embebido PGlite y valida los repositorios SQL, credenciales, bloques, duración, doble reserva, usuarios, lugares, especialidades, equipo multisedes y modificación de bloques. No sustituye la validación de despliegue con un servidor PostgreSQL externo.
-
-La matriz quedó con **37 casos aprobados, 1 fallido (CP-28) y 8 pendientes de ejecución**. CP-23 aprobó las exportaciones y CP-36 aprobó la encuesta voluntaria de agendamiento.
-
-También se revisaron en navegador el ingreso por rol, calendario y panel flotante, reportes, pacientes, registro de llegada y variante Telemedicina, en escritorio a 1440 y 1280 píxeles. Se validó la estructura de Excel, la firma PNG y la renderización de PDF.
-
-## Despliegue en la nube
-
-Pendiente para la etapa siguiente.
-
-## Mapa de carpetas
-
-Cada carpeta y archivo tiene un nombre que dice qué hace.
-
-| Carpeta | Qué contiene |
-|---|---|
-| `src/server.js`, `src/rutas.js` | Servidor web y tabla de rutas (qué dirección atiende qué función) |
-| `src/armarAplicacion.js`, `src/tareasProgramadas.js` | Conexión de todas las piezas y tareas que se repiten solas (recordatorios) |
-| `src/controllers/` | Controladores: reciben cada petición y deciden qué responder |
-| `src/services/` | Servicios: las reglas del negocio (reservas, cancelaciones, reportes, mensajes) |
-| `src/repositories/` | Repositorios: guardan y leen datos, en memoria, en archivo JSON o en PostgreSQL |
-| `src/views/` | Vistas: las páginas HTML, sus estilos (`.css.js`) y su código de navegador (`.script.js`) |
-| `src/models/` | Datos iniciales, información de sedes y comunas |
-| `src/auth/` | Sesiones, contraseñas y permisos por rol |
-| `src/mensajeria/` | Envío de mensajes por WhatsApp (real o simulado) |
-| `src/herramientas/` | Funciones de apoyo: RUT, fechas, respaldos, límite de intentos |
-| `src/db/` | Conexión a PostgreSQL |
-| `base-de-datos/` | Scripts SQL, numerados en el orden en que se ejecutan |
-| `datos/` | Datos que guarda el sistema al funcionar sin PostgreSQL (no se sube al repositorio) |
-| `scripts/` | Programas de apoyo: respaldos, datos de demostración y revisión de páginas |
-| `test/` | Pruebas automáticas (`npm test`) |
-| `pruebas-de-extremo-a-extremo/` | Pruebas que recorren el sistema con un navegador real |
-| `public/` | Imágenes del sitio |
-
-Convenciones de nombres: `Servicio` = reglas del negocio; `Repositorio…EnMemoria` y `Repositorio…PostgreSQL` = dónde se guardan los datos; TENS/TONS (técnicos de enfermería y de nivel superior) corresponde a la pantalla **Atención del día**.
-
-## Estructura y compatibilidad
-
-Se conserva la arquitectura MVC y Repositorio del proyecto original, sus pruebas y el portal de pacientes. Las extensiones están en `src/controllers/operacion.js`, `src/controllers/reportes.js`, `src/services/OperacionServicio.js`, `src/services/ExportacionServicio.js` y las vistas `operacion*`. No se eliminaron rutas ni servicios anteriores; las rutas principales usan las vistas nuevas y las rutas operativas tienen control central de alcance por sede.
+| Ruta | Contenido |
+| --- | --- |
+| `src/server.js`, `src/rutas.js` | Servidor HTTP y tabla de rutas. |
+| `src/armarAplicacion.js`, `src/tareasProgramadas.js` | Configuración de dependencias y tareas automáticas. |
+| `src/controllers/`, `src/services/`, `src/views/` | Controladores, reglas de negocio y vistas HTML. |
+| `src/repositories/`, `src/db/` | Repositorios en memoria y PostgreSQL, persistencia en JSON y conexión a la base. |
+| `src/models/`, `src/auth/` | Datos iniciales, sedes y comunas, sesiones, contraseñas y permisos. |
+| `src/mensajeria/`, `src/herramientas/` | Proveedores de WhatsApp y utilidades de RUT, fechas, respaldos y límite de intentos. |
+| `base-de-datos/`, `datos/` | Scripts SQL y archivos locales generados durante el uso. |
+| `scripts/`, `test/`, `pruebas-de-extremo-a-extremo/` | Comandos de mantenimiento, pruebas automáticas y pruebas de navegador. |
+| `public/` | Imágenes del sitio. |

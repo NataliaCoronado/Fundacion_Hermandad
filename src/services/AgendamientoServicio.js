@@ -64,7 +64,7 @@ class AgendamientoServicio {
     });
   }
 
-  async cancelar(idCita, origen) {
+  async cancelar(idCita, origen, { liberarCupo = true } = {}) {
     if (!["WHATSAPP", "ASISTIDA", "INSTITUCIONAL"].includes(origen))
       throw new Error("ORIGEN_INVALIDO");
     const cita = await this.citaRepo.buscarPorId(idCita);
@@ -76,8 +76,10 @@ class AgendamientoServicio {
       estadoReserva: "CANCELADA",
       origenCancelacion: origen,
     });
-    await this.avisarCupoLiberado(cita);
-    await this.alCancelar?.(cita, origen);
+    if (liberarCupo) {
+      await this.avisarCupoLiberado(cita);
+      await this.alCancelar?.(cita, origen);
+    }
     return actualizada;
   }
 

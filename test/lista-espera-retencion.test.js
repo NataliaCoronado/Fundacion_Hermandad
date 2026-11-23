@@ -58,21 +58,88 @@ test("Lista de espera: por defecto solo Psicología y Kinesiología; las demás 
   );
 });
 
-test("Hora cancelada con alguien esperando: queda retenida y no sale a la agenda pública", async () => {
+const B = "22222222-2";
+
+// Hace que la solicitud no calce con la hora de las 09:00 (prefiere la tarde):
+// así la hora queda retenida y se decide a mano.
+const prefiereTarde = (c, solicitud) => ((c.espera.meta.espera[solicitud.id] ||= {}).preferencia = "Tarde");
+
+test("Hora cancelada con alguien esperando: se asigna sola al primero de la lista", async () => {
   const c = await aplicacion();
-  await esperaEnPsicologia(c);
+  const e = await esperaEnPsicologia(c);
   await cancelarBloque(c, BLOQUE_PSICOLOGIA);
-  assert.equal(await estaLibre(c, BLOQUE_PSICOLOGIA, "Psicología"), false);
-  assert.deepEqual((await c.espera.retenidos(1)).map((b) => b.id), [BLOQUE_PSICOLOGIA]);
-  const fila = (await c.espera.vigentes()).find((e) => e.especialidad === "Psicología");
-  assert.ok(fila.cupos.some((b) => b.id === BLOQUE_PSICOLOGIA && b.retenido === true), "el cupo retenido aparece como compatible");
+  const cita = await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA);
+  assert.equal(cita?.rut, C, "la hora quedó reservada para quien esperaba");
+  assert.equal(cita.estadoConfirmacion, "PENDIENTE");
+  assert.equal(await estaLibre(c, BLOQUE_PSICOLOGIA, "Psicología"), false, "no sale a la agenda pública");
+  assert.equal((await c.espera.retenidos(1)).length, 0);
+  assert.equal((await c.catalogo.espera()).find((x) => x.id === e.id).estado, "ASIGNADA");
+  const aviso = c.extras.listar("notificaciones").find((n) => n.tipo === "CUPO_ASIGNADO_ESPERA");
+  assert.match(aviso.texto, /asignada automáticamente a Paciente C/);
+  assert.match(aviso.texto, /llámalo/i, "sin WhatsApp ni correo, la TENS/TONS debe llamarlo");
+  assert.ok(
+    !c.extras.listar("notificaciones").some((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idBloque === BLOQUE_PSICOLOGIA),
+    "el aviso de cupo liberado queda leído",
+  );
+  assert.ok(c.auditoria.listar().some((a) => a.accion === "Cupo asignado automáticamente desde lista de espera"));
 });
 
-test("Hora cancelada por el paciente (WhatsApp) también queda retenida", async () => {
+test("Hora cancelada por el paciente (WhatsApp) también se asigna sola", async () => {
   const c = await aplicacion();
   await esperaEnPsicologia(c);
   await cancelarBloque(c, BLOQUE_PSICOLOGIA, "WHATSAPP");
-  assert.equal((await c.espera.retenidos(1)).length, 1);
+  assert.equal((await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA))?.rut, C);
+});
+
+test("Asignación automática: primero la prioridad y después quien lleva más tiempo esperando", async () => {
+  const c = await aplicacion();
+  await esperaEnPsicologia(c, C);
+  const urgente = await esperaEnPsicologia(c, B);
+  c.espera.meta.espera[urgente.id] = { prioridad: "Alta" };
+  await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  assert.equal((await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA))?.rut, B);
+});
+
+test("Asignación automática: con WhatsApp y consentimiento se simula el comprobante", async () => {
+  const c = await aplicacion();
+  c.operacion.meta.pacientes[B] = { ...(c.operacion.meta.pacientes[B] || {}), consentimientoComunicaciones: true };
+  await esperaEnPsicologia(c, B);
+  await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  const cita = await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA);
+  assert.ok(
+    c.extras.listar("comunicaciones").some((m) => m.idCita === cita.id && m.tipo === "Comprobante de reserva" && m.canal === "WhatsApp" && m.estado === "Simulado"),
+  );
+  assert.match(c.extras.listar("notificaciones").find((n) => n.tipo === "CUPO_ASIGNADO_ESPERA").texto, /bandeja de simulación/);
+});
+
+test("Asignación automática: el aviso indica que el comprobante sigue pendiente si falta el proveedor", async () => {
+  const c = await aplicacion();
+  c.operacion.meta.pacientes[B] = { consentimientoComunicaciones: true };
+  delete c.despachador.transportes.WhatsApp;
+  await esperaEnPsicologia(c, B);
+  await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  const aviso = c.extras.listar("notificaciones").find((n) => n.tipo === "CUPO_ASIGNADO_ESPERA");
+  assert.match(aviso.texto, /envío del comprobante está pendiente/);
+});
+
+test("Si el paciente asignado cancela por WhatsApp, la hora pasa al siguiente de la lista", async () => {
+  const c = await aplicacion();
+  await esperaEnPsicologia(c, C);
+  await esperaEnPsicologia(c, B);
+  await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  const primera = await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA);
+  assert.equal(primera.rut, C);
+  await c.agendamiento.cancelar(primera.id, "WHATSAPP");
+  assert.equal((await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA))?.rut, B);
+});
+
+test("Si nadie calza con el horario, la hora queda retenida para decidir a mano", async () => {
+  const c = await aplicacion();
+  prefiereTarde(c, await esperaEnPsicologia(c));
+  await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  assert.equal(await c.citaRepo.buscarActivaPorBloque(BLOQUE_PSICOLOGIA), null);
+  assert.equal(await estaLibre(c, BLOQUE_PSICOLOGIA, "Psicología"), false);
+  assert.deepEqual((await c.espera.retenidos(1)).map((b) => b.id), [BLOQUE_PSICOLOGIA]);
 });
 
 test("Hora cancelada sin nadie esperando: se libera sola, como siempre", async () => {
@@ -95,12 +162,13 @@ test("Especialidad sin lista de espera: la hora cancelada se libera sola", async
   assert.equal(await estaLibre(c, BLOQUE_MEDICINA, "Medicina General"), true);
 });
 
-test("Asignar un cupo retenido: crea la cita, cierra la solicitud y quita la retención", async () => {
+test("Asignar a mano un cupo retenido: crea la cita, cierra la solicitud y quita la retención", async () => {
   const c = await aplicacion();
-  const e = await esperaEnPsicologia(c);
+  prefiereTarde(c, await esperaEnPsicologia(c));
   await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+  const e = await esperaEnPsicologia(c, B);
   const cita = await c.espera.asignar({ idSolicitud: e.id, idBloque: BLOQUE_PSICOLOGIA, idUsuario: "u2" });
-  assert.equal(cita.rut, C);
+  assert.equal(cita.rut, B);
   assert.equal(cita.estadoReserva, "ACTIVA");
   assert.equal((await c.espera.retenidos(1)).length, 0);
   assert.equal((await c.catalogo.espera()).find((x) => x.id === e.id).estado, "ASIGNADA");
@@ -108,7 +176,7 @@ test("Asignar un cupo retenido: crea la cita, cierra la solicitud y quita la ret
 
 test("Soltar a la agenda pública: la hora vuelve a estar disponible y deja de estar retenida", async () => {
   const c = await aplicacion();
-  await esperaEnPsicologia(c);
+  prefiereTarde(c, await esperaEnPsicologia(c));
   await cancelarBloque(c, BLOQUE_PSICOLOGIA);
   await c.espera.soltar({ idBloque: BLOQUE_PSICOLOGIA });
   assert.equal(await estaLibre(c, BLOQUE_PSICOLOGIA, "Psicología"), true);
@@ -135,8 +203,9 @@ test("TENS/TONS: la pantalla de espera avisa los cupos disponibles y permite sol
   try {
     const vacia = await s.get("/tens/espera");
     assert.doesNotMatch(vacia, /<section class="espera-cupos"/, "sin cupos retenidos no aparece el panel");
-    await esperaEnPsicologia(c);
+    prefiereTarde(c, await esperaEnPsicologia(c));
     await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+    await esperaEnPsicologia(c, B);
     const h = await s.get("/tens/espera");
     const panel = h.match(/<section class="espera-cupos"[\s\S]*?<\/section>/)?.[0] || "";
     assert.match(panel, /Cupos disponibles para la lista de espera/);
@@ -146,5 +215,18 @@ test("TENS/TONS: la pantalla de espera avisa los cupos disponibles y permite sol
     await s.post("/tens/espera/soltar", { idBloque: BLOQUE_PSICOLOGIA });
     assert.equal(await estaLibre(c, BLOQUE_PSICOLOGIA, "Psicología"), true);
     assert.doesNotMatch(await s.get("/tens/espera"), /<section class="espera-cupos"/);
+  } finally { await s.cerrar(); }
+});
+
+test("TENS/TONS: la pantalla de espera muestra las horas asignadas automáticamente", async () => {
+  const c = await aplicacion();
+  const s = await sitio(c);
+  try {
+    await esperaEnPsicologia(c);
+    await cancelarBloque(c, BLOQUE_PSICOLOGIA);
+    const h = await s.get("/tens/espera");
+    assert.match(h, /1 hora asignada automáticamente/);
+    assert.match(h, /asignada automáticamente a Paciente C/);
+    assert.match(h, /el sistema se la asigna sola al primer paciente de la lista/);
   } finally { await s.cerrar(); }
 });

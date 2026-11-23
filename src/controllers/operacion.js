@@ -312,7 +312,7 @@ function crearControladorOperacion(aplicacion) {
         ...(admin
           ? [{ id: "profesionales", nivel: "crit", titulo: "Citas con profesional inactivo", detalle: "Reservas futuras sin reemplazo asignado.", filas: profInactivos, origen: "/admin/cancelaciones", accion: "Abrir cancelaciones" }]
           : []),
-        { nivel: "crit", titulo: "Mensajes con error de envío", detalle: "Comunicaciones que requieren revisión o reenvío.", n: comErr.length, href: `${base}/comunicaciones?estado=Error` },
+        { nivel: "crit", titulo: "Mensajes con error de envío", detalle: admin ? "Comunicaciones que requieren revisión o reenvío." : "El mensaje no llegó: llama al paciente desde Confirmaciones.", n: comErr.length, href: admin ? "/admin/comunicaciones?estado=Error" : "/tens/confirmaciones" },
         { nivel: "aviso", titulo: "Lista de espera con cupo disponible", detalle: "Hay horas libres compatibles con la solicitud.", n: esperaConCupo.length, href: `${base}/espera?pendiente=con-cupo` },
         { nivel: "aviso", titulo: "Solicitudes en espera hace más de 30 días", detalle: "Requieren revisar la prioridad o contactar al paciente.", n: esperaAntigua.length, href: `${base}/espera?pendiente=antigua` },
         ...(admin ? [] : [{ nivel: "aviso", titulo: "Documentos por revisar", detalle: "Documentos administrativos pendientes de verificar.", n: docsPend.length, href: "/tens/documentos?pendiente=1#documentos-registrados" }]),
@@ -822,7 +822,7 @@ function crearControladorOperacion(aplicacion) {
       if (!["WhatsApp", "Llamada", "Presencial"].includes(d.canal))
         throw new Error("Canal de solicitud inválido.");
       const cita = await servicioOperacion.exigirCita(u, d.idCita);
-      await agendamiento.cancelar(cita.id, "ASISTIDA");
+      await agendamiento.cancelar(cita.id, "ASISTIDA", { liberarCupo: d.destino !== "Bloqueado" });
       const bloque = await catalogo.bloque(cita.idBloque);
       if (d.destino === "Bloqueado") {
         await catalogo.cambiarPublicacion({
@@ -878,7 +878,7 @@ function crearControladorOperacion(aplicacion) {
         u,
         q,
         mensaje: aplicacion.sesiones.tomarAviso(token, "/tens/espera"),
-        avisos: aplicacion.extras.listar("notificaciones").filter((n) => n.tipo === "CUPO_LIBERADO" && !n.leida && n.idPoliclinico === +u.idPoliclinico),
+        avisos: aplicacion.extras.listar("notificaciones").filter((n) => ["CUPO_LIBERADO", "CUPO_ASIGNADO_ESPERA"].includes(n.tipo) && !n.leida && n.idPoliclinico === +u.idPoliclinico),
         ctx: {
           ...(await contexto()),
           listaProfs:(await catalogo.profesionales()).filter(p=>servicioOperacion.lugares(p).includes(+u.idPoliclinico)),
@@ -931,7 +931,7 @@ function crearControladorOperacion(aplicacion) {
     comunicaciones: async ({ usuario: u, consulta = new URLSearchParams() }) => {
       const admin = u.rol === "ADMINISTRACION",
         errores = consulta.get("estado") === "Error",
-        ruta = admin ? "/admin/comunicaciones" : "/tens/comunicaciones",
+        ruta = "/admin/comunicaciones",
         lista = extras
           .listar("comunicaciones")
           .filter((m) => (admin || m.idPoliclinico === +u.idPoliclinico) && (!errores || m.estado === "Error"));
@@ -976,7 +976,7 @@ function crearControladorOperacion(aplicacion) {
       };
     },
     comunicacion: safe(
-      "/tens/comunicaciones",
+      "/tens/agenda",
       async ({ usuario: u, cuerpo: d }) => {
         const cita = await servicioOperacion.exigirCita(u, d.idCita);
         if (!["WhatsApp", "Correo"].includes(d.canal))
@@ -987,9 +987,8 @@ function crearControladorOperacion(aplicacion) {
         if (!["TELEMEDICINA", "ADMINISTRACION"].includes(u.rol))
           throw new Error("FUERA_DE_SEDE");
         await servicioOperacion.comunicar(u, cita, d.canal, tipo);
-        if (tipo === "Enlace de atención" && d.origen === "reserva" && u.rol === "TELEMEDICINA")
-          return redirect(detalleReserva(cita.id, d.volverAgenda));
-        return redirect(u.rol === "ADMINISTRACION" ? "/admin/comunicaciones" : "/tens/comunicaciones");
+        if (u.rol === "TELEMEDICINA") return redirect(detalleReserva(cita.id, d.volverAgenda));
+        return redirect("/admin/comunicaciones");
       },
     ),
     enlace: safe(volverAgenda, async ({ usuario: u, cuerpo: d, token }) => {

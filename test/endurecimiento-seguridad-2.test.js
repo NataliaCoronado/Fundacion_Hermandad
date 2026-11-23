@@ -30,7 +30,7 @@ const envejecer = (auth, ms) => { for (const [k, lista] of auth.intentos) auth.i
 const loginHttp = (base, correo, clave, xff) =>
   fetch(`${base}/login`, { method: "POST", redirect: "manual", headers: xff ? { "x-forwarded-for": xff } : {}, body: new URLSearchParams({ correo, clave }) });
 
-// ---- Ventana de 15 minutos y reinicio tras éxito ----
+// Ventana de 15 minutos y reinicio tras éxito
 test("login: los fallos dejan de contar al cumplirse la ventana de 15 minutos y el mapa se limpia", async () => {
   const c = crearContenedor();
   await c.inicializar();
@@ -64,7 +64,7 @@ test("login: el barrido elimina las listas vencidas y el correo no puede inflar 
   assert.strictEqual(c.auth.intentos.size, 0);
 });
 
-// ---- Login por HTTP: IP real del cliente ----
+// Login por HTTP: IP real del cliente
 test("login HTTP con TRUST_PROXY=1: limita por la última IP de X-Forwarded-For y 429 al exceder", async () => {
   await conEntorno({ TRUST_PROXY: "1" }, async () => {
     const s = await levantar();
@@ -86,7 +86,7 @@ test("login HTTP sin TRUST_PROXY: X-Forwarded-For se ignora", async () => {
   } finally { await s.cerrar(); }
 });
 
-// ---- Errores de infraestructura no se disfrazan de credenciales ----
+// Errores de infraestructura no se disfrazan de credenciales
 test("login: una falla de la base no se muestra como 401 ni filtra el mensaje interno", async () => {
   const s = await levantar((c) => { c.catalogo.usuarioPorCorreo = () => { throw new Error("connect ECONNREFUSED 127.0.0.1:5432"); }; });
   const silencio = console.error; console.error = () => {};
@@ -106,7 +106,7 @@ test("mensajes: los errores de infraestructura no se muestran tal cual a un anó
   } finally { console.error = silencio; }
 });
 
-// ---- Descarga de archivos ----
+// Descarga de archivos
 test("fotos: un error de lectura no tumba el servidor", async () => {
   const dir = path.join(__dirname, "..", "datos", "fotos");
   const nombre = `profesional-error-${process.pid}.jpg`;
@@ -124,7 +124,7 @@ test("fotos: un error de lectura no tumba el servidor", async () => {
   } finally { console.error = silencio; await s.cerrar(); fs.rmSync(carpeta, { recursive: true, force: true }); }
 });
 
-// ---- Control de sede ----
+// Control de sede
 async function escenario() {
   const c = crearContenedor();
   await c.inicializar();
@@ -173,7 +173,7 @@ test("rutas: toda ruta /tens/* declara el área tens, para que el control de sed
   assert.deepStrictEqual(mal, []);
 });
 
-// ---- Primer administrador en producción ----
+// Primer administrador en producción
 test("producción: se puede crear el primer administrador con un enlace de un solo uso", async () => {
   await conEntorno({ NODE_ENV: "production", CLAVE_DEMO: undefined }, async () => {
     const { crearEnlaceAdministrador } = require("../src/herramientas/crearAdministrador");

@@ -84,7 +84,6 @@ function crearRutas(aplicacion) {
     post("/tens/reagendar", "tens", controladorOperacion.reagendar),
     get("/tens/espera", "tens", controladorOperacion.espera),
     post("/tens/espera/gestion", "tens", controladorOperacion.esperaGestion),
-    get("/tens/comunicaciones", "tens", controladorOperacion.comunicaciones),
     post("/tens/comunicacion", "tens", controladorOperacion.comunicacion),
     post("/tens/enlace", "tens", controladorOperacion.enlace),
     post("/tens/documentos/archivar", "tens", controladorOperacion.documentoArchivar),

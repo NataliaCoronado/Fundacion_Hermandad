@@ -4,6 +4,7 @@ const { hoy } = require("../herramientas/tiempo");
 
 const ESTADOS_VIGENTES = ["EN_ESPERA", "CUPO_OFRECIDO"];
 const ESPECIALIDADES_CON_LISTA_POR_DEFECTO = ["Psicología", "Kinesiología"];
+const ORDEN_PRIORIDAD = { Alta: 0, Media: 1, Normal: 2 };
 
 function especialidadTieneLista(meta, especialidad) {
   const definida = meta?.especialidades?.[especialidad]?.listaEspera;
@@ -25,6 +26,18 @@ class EsperaServicio {
 
   tieneLista(especialidad) {
     return especialidadTieneLista(this.meta, especialidad);
+  }
+
+  // Prioridad y preferencia horaria se guardan aparte, en los datos de operación.
+  datosDeSolicitud(e) {
+    return this.meta?.espera?.[e.id] || {};
+  }
+
+  calzaConPreferencia(e, bloque) {
+    const preferencia = e.preferencia || this.datosDeSolicitud(e).preferencia || "";
+    if (/mañana/i.test(preferencia) && bloque.hora >= "12:00") return false;
+    if (/tarde/i.test(preferencia) && bloque.hora < "12:00") return false;
+    return true;
   }
 
   async datosDelBloque(bloque) {
@@ -133,12 +146,7 @@ class EsperaServicio {
         ...retenidos
           .filter((b) => b.idPoliclinico === e.idPoliclinico && b.especialidad === e.especialidad)
           .map((b) => ({ ...b, retenido: true })),
-      ].filter(
-        (b) =>
-          b.fecha >= hoy() &&
-          (!/mañana/i.test(e.preferencia || "") || b.hora < "12:00") &&
-          (!/tarde/i.test(e.preferencia || "") || b.hora >= "12:00"),
-      );
+      ].filter((b) => b.fecha >= hoy() && this.calzaConPreferencia(e, b));
       salida.push({ ...e, cupos });
     }
     return salida;
@@ -159,11 +167,7 @@ class EsperaServicio {
     ];
     if (
       !compatibles.some(
-        (b) =>
-          b.id === Number(idBloque) &&
-          b.fecha >= hoy() &&
-          (!/mañana/i.test(e.preferencia || "") || b.hora < "12:00") &&
-          (!/tarde/i.test(e.preferencia || "") || b.hora >= "12:00"),
+        (b) => b.id === Number(idBloque) && b.fecha >= hoy() && this.calzaConPreferencia(e, b),
       )
     )
       throw new Error("BLOQUE_NO_DISPONIBLE");
@@ -186,6 +190,50 @@ class EsperaServicio {
     }
     await this.catalogo.actualizarEspera(e.id, "ASIGNADA");
     return cita;
+  }
+
+  // Asignación automática (validada con las mandantes el 22/11/2026): la hora que
+  // quedó retenida se entrega al primer paciente de la lista que calce con ella.
+  // Orden: prioridad (Alta, Media, Normal), luego quien lleva más tiempo esperando.
+  // La TENS/TONS puede cambiarlo después a mano (reprogramar, cancelar o asignar).
+  // Si nadie calza (por ejemplo, por su preferencia de horario), la hora sigue
+  // retenida y se decide a mano, como antes.
+  async candidatosPara(bloque) {
+    const { especialidad, idPoliclinico } = await this.datosDelBloque(bloque);
+    return (await this.catalogo.espera())
+      .filter(
+        (e) =>
+          e.estado === "EN_ESPERA" &&
+          e.idPoliclinico === idPoliclinico &&
+          e.especialidad === especialidad &&
+          this.calzaConPreferencia(e, bloque),
+      )
+      .sort(
+        (a, b) =>
+          (ORDEN_PRIORIDAD[this.datosDeSolicitud(a).prioridad] ?? 2) -
+            (ORDEN_PRIORIDAD[this.datosDeSolicitud(b).prioridad] ?? 2) ||
+          String(a.registradaEn).localeCompare(String(b.registradaEn)) ||
+          a.id - b.id,
+      );
+  }
+
+  async asignarAutomaticamente(idBloque, idUsuarioRespaldo = null) {
+    const bloque = await this.catalogo.bloque(idBloque);
+    if (!bloque?.retenidoEspera) return null;
+    for (const solicitud of await this.candidatosPara(bloque)) {
+      try {
+        const cita = await this.asignar({
+          idSolicitud: solicitud.id,
+          idBloque: bloque.id,
+          idUsuario: solicitud.registradaPor || idUsuarioRespaldo,
+        });
+        ((this.meta.espera ||= {})[solicitud.id] ||= {}).estadoOperativo = "Reservado";
+        return { cita, solicitud, bloque };
+      } catch {
+        // Ese paciente no pudo recibir la hora (por ejemplo, ficha inactiva): se prueba con el siguiente.
+      }
+    }
+    return null;
   }
 
   async retirar(idSolicitud) {

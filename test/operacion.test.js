@@ -293,6 +293,30 @@ test("HTTP: flujo, reserva, reagendamiento y cancelación conservan auditoría",
     await s.cerrar();
   }
 });
+test("HTTP: cancelar y bloquear un cupo no lo asigna a la lista de espera", async () => {
+  const s = await sitio();
+  try {
+    const solicitud = await s.c.espera.registrar({
+      rut: "33333333-3", idPoliclinico: 1, especialidad: "Psicología", idUsuario: "u2",
+    });
+    const cita = await s.c.agendamiento.agendar({
+      rut: "11111111-1", idBloque: 9, idUsuario: "u2",
+    });
+    const respuesta = await s.req("/tens/cancelar", s.t, {
+      idCita: cita.id, motivo: "Solicitud del paciente", canal: "Llamada", destino: "Bloqueado",
+    });
+    assert.equal(respuesta.status, 302);
+    const cancelada = await s.c.citaRepo.buscarPorId(cita.id);
+    assert.equal(cancelada.estadoReserva, "CANCELADA");
+    assert.equal(cancelada.origenCancelacion, "ASISTIDA");
+    assert.equal(await s.c.citaRepo.buscarActivaPorBloque(9), null);
+    assert.equal((await s.c.catalogo.bloque(9)).estado, "Bloqueado");
+    assert.equal((await s.c.catalogo.espera()).find((e) => e.id === solicitud.id).estado, "EN_ESPERA");
+    assert.ok(!s.c.extras.listar("notificaciones").some((aviso) => aviso.idBloque === 9));
+  } finally {
+    await s.cerrar();
+  }
+});
 test("HTTP: Lista del día filtra por RUT, mantiene filtros y registra llegada desde la Agenda", async () => {
   const s = await sitio();
   try {

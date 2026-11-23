@@ -7,7 +7,6 @@ const { crearContenedor } = require('../src/armarAplicacion');
 const { crearDbPsql, ejecutarSql } = require('./helpers/dbPsql');
 const { hoy, lunesDe, sumarDias } = require('../src/herramientas/tiempo');
 
-// El SQL de muestra pone las horas el lunes y el martes de la semana siguiente a la carga.
 const LUNES = sumarDias(lunesDe(hoy()), 7), MARTES = sumarDias(LUNES, 1), MIERCOLES = sumarDias(LUNES, 2);
 
 const ARGS = process.env.PSQL_TEST_ARGS;

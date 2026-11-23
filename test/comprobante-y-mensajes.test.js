@@ -108,8 +108,7 @@ test("TENS/TONS no envía mensajes: no hay «Crear recordatorio» ni «Reenviar�
     await comprobanteDeCita1(c, "WEB");
     const antes = c.extras.listar("comunicaciones").length;
     const pantalla = await s.get("/tens/comunicaciones", s.tens);
-    assert.doesNotMatch(pantalla.html, /Crear recordatorio/);
-    assert.doesNotMatch(pantalla.html, /action="\/tens\/comunicacion"/);
+    assert.notEqual(pantalla.estado, 200, "la bandeja de Comunicaciones ya no existe para TENS/TONS");
     await s.post("/tens/comunicacion", { idCita: 1, canal: "WhatsApp", tipo: "Recordatorio" }, s.tens);
     assert.equal(c.extras.listar("comunicaciones").length, antes, "no se creó ningún mensaje");
   } finally { await s.cerrar(); }

@@ -7,7 +7,6 @@ RUN npm ci --omit=dev
 COPY src ./src
 COPY scripts ./scripts
 COPY public ./public
-# La carpeta de datos (adjuntos y estado) debe poder escribirla el usuario sin privilegios.
 RUN mkdir -p /app/datos && chown -R node:node /app/datos
 ENV PORT=3000
 EXPOSE 3000 3001

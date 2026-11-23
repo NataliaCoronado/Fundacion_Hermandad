@@ -216,6 +216,7 @@ class RepositorioCatalogoEnMemoria {
       idPoliclinico: e.idPoliclinico,
       especialidad: e.especialidad,
       registradaEn: e.registradaEn,
+      registradaPor: e.idUsuario ?? null,
       estado: "EN_ESPERA",
     };
     this.datos.espera.push(esperaNueva);

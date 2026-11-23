@@ -1030,7 +1030,8 @@ function espera({ u, ctx, lista, q: consulta, admin = false, avisos = [], reteni
     )
     .sort((a, b) => a.registradaEn.localeCompare(b.registradaEn));
   const idsRetenidos = new Set(retenidos.map((b) => b.id));
-  avisos = avisos.filter((a) => !idsRetenidos.has(a.idBloque));
+  const asignadasSolas = avisos.filter((a) => a.tipo === "CUPO_ASIGNADO_ESPERA");
+  avisos = avisos.filter((a) => a.tipo !== "CUPO_ASIGNADO_ESPERA" && !idsRetenidos.has(a.idBloque));
   const cuando = (b) => `${new Date(`${b.fecha}T12:00:00`).toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" })} · ${b.hora}`;
   const candidatos = (b) => lista.filter((e) => e.cupos.some((c) => c.id === b.id)).sort((x, y) => String(x.registradaEn).localeCompare(String(y.registradaEn)));
   const cuposRetenidos = retenidos.length
@@ -1047,14 +1048,16 @@ function espera({ u, ctx, lista, q: consulta, admin = false, avisos = [], reteni
         .join("")}</ul></section>`
     : "";
   const liberadas = avisos.length ? `<section class="espera-liberadas" aria-label="Horas liberadas"><b>${avisos.length === 1 ? "Se liberó 1 hora" : `Se liberaron ${avisos.length} horas`}</b><ul>${avisos.map((a) => `<li>${E(String(a.texto || "").replace(/^Cupo liberado:\s*/, "").replace(/\s*Revisa la lista de espera\.$/, ""))}</li>`).join("")}</ul><p>Asigna la hora a quien lleva más tiempo esperando esa especialidad.</p></section>` : "";
+  const automaticas = asignadasSolas.length ? `<section class="espera-liberadas espera-automaticas" aria-label="Horas asignadas automáticamente"><b>${asignadasSolas.length === 1 ? "1 hora asignada automáticamente" : `${asignadasSolas.length} horas asignadas automáticamente`}</b><ul>${asignadasSolas.map((a) => `<li>${E(a.texto || "")}</li>`).join("")}</ul></section>` : "";
   return page(
     u,
     admin ? "Supervisión de lista de espera" : "Lista de espera",
     cab(
       admin
-        ? "El paciente permanece en la lista aunque no responda. Las horas canceladas de las especialidades con lista de espera quedan retenidas hasta que TENS/TONS las asigne o las suelte."
-        : "El paciente permanece en la lista aunque no responda. Cuando se cancela una hora de una especialidad con lista de espera, queda retenida aquí hasta que tú la asignes o la sueltes.",
+        ? "Cuando se cancela una hora de una especialidad con lista de espera, el sistema se la asigna sola al primer paciente de la lista (por prioridad y tiempo de espera) y le envía el comprobante. TENS/TONS siempre puede cambiarla a mano. Si nadie calza con el horario, la hora queda retenida hasta que TENS/TONS la asigne o la suelte."
+        : "Cuando se cancela una hora de una especialidad con lista de espera, el sistema se la asigna sola al primer paciente de la lista (por prioridad y tiempo de espera) y le envía el comprobante. Si hay que cambiarla, hazlo desde la agenda. Si nadie calza con el horario, la hora queda aquí para que tú la asignes o la sueltes.",
     ) +
+      automaticas +
       cuposRetenidos +
       liberadas +
       (admin ? "" : `<details class="espera-nueva"><summary class="btn">Agregar a la lista de espera</summary><form class="form-grid" method="post" action="/tens/espera">${input("rut", "RUT del paciente", "", "text", "required")}${hidden({ idPoliclinico: u.idPoliclinico })}${select("especialidad", "Especialidad", opcionesTexto(ctx.especialidades || []))}${select("prioridad", "Prioridad", opcionesTexto(["Normal", "Media", "Alta"]))}${input("preferencia", "Preferencia de horario")}<button type="submit">Registrar</button></form></details>`) +
