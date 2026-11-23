@@ -1,8 +1,13 @@
 'use strict';
 
 const { SEDES, profesionalesDeMuestra } = require('./informacionDeSedes');
+const { hoy, lunesDe, sumarDias } = require('../herramientas/tiempo');
 
+// Las horas de muestra caen siempre el lunes y el martes de la semana siguiente a hoy,
+// de modo que los datos nunca quedan en el pasado.
 function crearDatos() {
+  const hoyTxt = hoy();
+  const lunes = sumarDias(lunesDe(hoyTxt), 7);
   const policlinicos = SEDES.map(({ id, nombre, comuna, telemedicina }) => ({ id, nombre, comuna, telemedicina }));
   const comunas = require('./comunas').completar([...new Set(policlinicos.filter((p) => !p.telemedicina).map((p) => p.comuna))].map((nombre, i) => ({ id: i + 1, nombre })));
   const profesionales = profesionalesDeMuestra();
@@ -15,7 +20,7 @@ function crearDatos() {
   const bloques = [];
   let sigBloque = 1;
   for (const p of profesionales) {
-    for (const fecha of ['2026-11-23', '2026-11-24']) {
+    for (const fecha of [lunes, sumarDias(lunes, 1)]) {
       for (const hora of ['09:00', '09:30', '10:00', '10:30']) {
         bloques.push({ id: sigBloque++, idProfesional: p.id, fecha, hora, publicado: true });
       }
@@ -26,7 +31,7 @@ function crearDatos() {
     { id: 2, rut: '22222222-2', idBloque: 2, estadoReserva: 'ACTIVA', estadoConfirmacion: 'CONFIRMADA', asistencia: null, origenCancelacion: null, idProfesionalReemplazo: null },
   ];
   const espera = [
-    { id: 1, rut: '33333333-3', idPoliclinico: 2, especialidad: 'Kinesiología', registradaEn: '2026-11-16', estado: 'EN_ESPERA' },
+    { id: 1, rut: '33333333-3', idPoliclinico: 2, especialidad: 'Kinesiología', registradaEn: hoyTxt, estado: 'EN_ESPERA' },
   ];
   const usuarios = [
     { id: 'u1', nombre: 'Administración', correo: 'admin@ejemplo.cl', rol: 'ADMINISTRACION', idPoliclinico: null, activo: true },

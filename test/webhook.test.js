@@ -1,4 +1,5 @@
 "use strict";
+require("./helpers/reloj");
 const test = require("node:test");
 const assert = require("node:assert");
 const crypto = require("node:crypto");

@@ -5,6 +5,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { crearContenedor } = require('../src/armarAplicacion');
 const { crearDbPsql, ejecutarSql } = require('./helpers/dbPsql');
+const { hoy, lunesDe, sumarDias } = require('../src/herramientas/tiempo');
+
+// El SQL de muestra pone las horas el lunes y el martes de la semana siguiente a la carga.
+const LUNES = sumarDias(lunesDe(hoy()), 7), MARTES = sumarDias(LUNES, 1), MIERCOLES = sumarDias(LUNES, 2);
 
 const ARGS = process.env.PSQL_TEST_ARGS;
 const BD = 'hermandad_prueba_app';
@@ -67,15 +71,15 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   assert.ok(carac.nacionalidades.some((x) => x.nombre === 'Venezolana'));
   assert.ok((await c.reportes.porProfesional()).length >= 47);
 
-  const libres24 = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).filter((b) => b.idProfesional === 1).length;
-  assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: '2026-11-24', hasta: '2026-11-24', publicar: false }), libres24);
-  assert.strictEqual((await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).filter((b) => b.idProfesional === 1).length, 0);
-  assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: '2026-11-24', hasta: '2026-11-24', publicar: true }), libres24);
+  const libres24 = (await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: MARTES })).filter((b) => b.idProfesional === 1).length;
+  assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: MARTES, hasta: MARTES, publicar: false }), libres24);
+  assert.strictEqual((await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: MARTES })).filter((b) => b.idProfesional === 1).length, 0);
+  assert.strictEqual(await c.catalogo.cambiarPublicacion({ idProfesional: 1, desde: MARTES, hasta: MARTES, publicar: true }), libres24);
   assert.ok((await c.catalogo.bloque(1)).publicado, 'el cupo con cita sigue publicado');
   await assert.rejects(() => c.pacientes.crear({ rut, nombres: 'Ana', apellidos: 'Prueba', fechaNacimiento: '1990-01-01', genero: 'FEMENINO', telefono: '+56911112222', direccion: 'Calle 1', idComuna: 1, consentimiento: true }), /PACIENTE_EXISTE/);
-  const nuevo = await c.catalogo.crearBloque({ idProfesional: 1, fecha: '2026-11-25', hora: '09:00', publicado: true });
+  const nuevo = await c.catalogo.crearBloque({ idProfesional: 1, fecha: MIERCOLES, hora: '09:00', publicado: true });
   assert.strictEqual(nuevo.hora, '09:00');
-  await assert.rejects(() => c.catalogo.crearBloque({ idProfesional: 1, fecha: '2026-11-25', hora: '09:00', publicado: true }), /BLOQUE_DUPLICADO/);
+  await assert.rejects(() => c.catalogo.crearBloque({ idProfesional: 1, fecha: MIERCOLES, hora: '09:00', publicado: true }), /BLOQUE_DUPLICADO/);
   await assert.rejects(() => c.catalogo.crearBloque({ idProfesional: 1, fecha: '2027-06-01', hora: '09:00', publicado: true }), /SIN_AGENDA/);
   await c.espera.registrar({ rut: C, idPoliclinico: 2, especialidad: 'Kinesiología', idUsuario: tens.id }).catch((e) => assert.match(e.message, /YA_EN_ESPERA/));
   await assert.rejects(() => c.espera.registrar({ rut: A, idPoliclinico: 2, especialidad: 'Odontología', idUsuario: tens.id }), /ESPECIALIDAD_NO_EN_SEDE/);
@@ -85,10 +89,10 @@ test('PostgreSQL: repositorios y reglas con la base real', { skip: !ARGS && 'def
   const asignada = await c.espera.asignar({ idSolicitud: vig[0].id, idBloque: vig[0].cupos[0].id, idUsuario: tens.id });
   assert.strictEqual(asignada.estadoReserva, 'ACTIVA');
 
-  const r = await c.cambios.ausencia({ idProfesional: 1, fecha: '2026-11-24', motivo: 'Licencia', idUsuario: admUser.id });
+  const r = await c.cambios.ausencia({ idProfesional: 1, fecha: MARTES, motivo: 'Licencia', idUsuario: admUser.id });
   assert.strictEqual(r.bloquesCerrados, 4);
-  assert.ok(!(await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: '2026-11-24' })).some((b) => b.idProfesional === 1));
-  await c.cambios.reemplazo({ idProfesional: 1, idReemplazo: 1 + 0, fecha: '2026-11-23', motivo: 'x', idUsuario: admUser.id }).catch((e) => assert.match(e.message, /REEMPLAZO_IGUAL/));
+  assert.ok(!(await c.agendamiento.bloquesDisponibles({ idPoliclinico: 1, fecha: MARTES })).some((b) => b.idProfesional === 1));
+  await c.cambios.reemplazo({ idProfesional: 1, idReemplazo: 1 + 0, fecha: LUNES, motivo: 'x', idUsuario: admUser.id }).catch((e) => assert.match(e.message, /REEMPLAZO_IGUAL/));
 
   await c.catalogo.setProfesionalActivo(2, false);
   assert.strictEqual((await c.catalogo.profesional(2)).activo, false);

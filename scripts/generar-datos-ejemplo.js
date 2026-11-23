@@ -21,6 +21,11 @@ ${SEDES.flatMap((s) => s.especialidades.map((e) => ` (${s.id},${idEsp(e)})`)).jo
 
 `;
 
+// Fechas relativas a la fecha en que se carga el SQL: las horas caen el lunes y el martes de la
+// semana siguiente (igual que los datos en memoria) y la agenda cubre desde hace 30 días hasta 60 días.
+const LUNES = "(date_trunc('week', CURRENT_DATE)::date + 7)";
+const DESDE_AGENDA = '(CURRENT_DATE - 30)';
+const HASTA_AGENDA = '(CURRENT_DATE + 60)';
 const horas = [['09:00', '09:30'], ['09:30', '10:00'], ['10:00', '10:30'], ['10:30', '11:00']];
 const seccion2 = `INSERT INTO profesional (rut, nombres, apellidos, correo_institucional) VALUES
 ${profs.map((p) => ` ('${18000000 + p.id}-${dv(18000000 + p.id)}','Profesional','${p.id}','profesional${p.id}@ejemplo.cl')`).join(',\n')};
@@ -29,13 +34,13 @@ INSERT INTO profesional_asignacion (id_profesional, id_policlinico, id_especiali
 ${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)})`).join(',\n')};
 
 INSERT INTO agenda (id_profesional, id_policlinico, id_especialidad, vigente_desde, vigente_hasta, hora_inicio, hora_termino, duracion_min, estado_publicacion, creado_por) VALUES
-${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)},'2026-11-01','2026-12-31','09:00','11:00',30,'PUBLICADA','${ADMIN}')`).join(',\n')};
+${profs.map((p) => ` (${p.id},${p.idPoliclinico},${idEsp(p.especialidad)},${DESDE_AGENDA},${HASTA_AGENDA},'09:00','11:00',30,'PUBLICADA','${ADMIN}')`).join(',\n')};
 
 INSERT INTO agenda_dia (id_agenda, dia_semana) VALUES
 ${profs.flatMap((p) => [1, 2].map((d) => ` (${p.id},${d})`)).join(',\n')};
 
 INSERT INTO bloque_horario (id_agenda, fecha, hora_inicio, hora_termino, estado) VALUES
-${profs.flatMap((p) => ['2026-11-23', '2026-11-24'].flatMap((f) => horas.map(([a, b]) => ` (${p.id},'${f}','${a}','${b}','DISPONIBLE')`))).join(',\n')};
+${profs.flatMap((p) => [LUNES, `${LUNES} + 1`].flatMap((f) => horas.map(([a, b]) => ` (${p.id},${f},'${a}','${b}','DISPONIBLE')`))).join(',\n')};
 
 `;
 
